@@ -1405,6 +1405,14 @@
   .preset-tag{ font-size:10px; padding:1px 5px; border-radius:4px; }
   .preset-rec{ font-size:10px; color:var(--muted); }
   .preset-add{ font-family:var(--pixel); font-size:11px; color:var(--gold); }
+  .preset-del{ font-family:var(--pixel); font-size:10px; color:var(--danger); cursor:pointer; padding:0 2px; }
+  .preset-del:hover{ color:#ff6677; }
+  .preset-item.custom{ background:rgba(255,210,74,.06); }
+  .preset-save-btn{ grid-column:1/-1; width:100%; padding:8px; border:1px dashed var(--gold); background:rgba(255,210,74,.08); color:var(--gold); border-radius:7px; cursor:pointer; font-family:var(--vt); font-size:14px; }
+  .preset-save-btn:hover{ background:rgba(255,210,74,.16); }
+  .preset-subtitle{ grid-column:1/-1; font-family:var(--pixel); font-size:7px; color:var(--muted); margin:4px 0 1px; letter-spacing:.5px; }
+  .date-badge{ font-size:10px; padding:1px 5px; border-radius:4px; background:rgba(120,160,255,.15); color:#9ab8ff; border:1px solid rgba(120,160,255,.3); }
+  .date-badge.future{ background:rgba(160,160,180,.12); color:var(--muted); border-color:rgba(160,160,180,.25); }
 
   /* ===== RANKINGS TOTAIS (v6) ===== */
   .rank-totals{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-bottom:6px; }
@@ -1551,7 +1559,10 @@
             <button class="pixel-btn btn-gold" onclick="addMission()">CRIAR</button>
           </div>
           <div class="form-row">
+            <input type="date" id="mission-date" title="📅 Data da missão (calendário) — opcional">
             <input type="time" id="mission-time" title="Horário-limite (opcional)">
+          </div>
+          <div class="form-row">
             <select id="mission-rec" title="Repetição">
               <option value="">Sem repetir (única)</option>
               <option value="daily">🔁 Todo dia</option>
@@ -1835,6 +1846,8 @@
       <option value="hard">Difícil</option>
       <option value="legendary">Lendário</option>
     </select>
+    <label class="cust-label">📅 Data (calendário, opcional)</label>
+    <input type="date" id="edit-m-date" class="cust-input">
     <label class="cust-label">Horário-limite (opcional)</label>
     <input type="time" id="edit-m-time" class="cust-input">
     <label class="cust-label">Repetição</label>
@@ -1938,6 +1951,8 @@ const G = {
   perfectStreak: 0,
   xpEarned: 0,
   dayFailSeen: {},
+  graceDate: '',          // v6.1: penalidades só valem a partir desta data (amanhã)
+  customTemplates: [],    // v6.1: missões prontas criadas pelo usuário
   allDoneToday: false,
   skillsUnlocked: [],
   skillCooldowns: {},
@@ -2573,7 +2588,9 @@ function recurLabel(r){ return {daily:'🔁 todo dia', weekdays:'📅 dias útei
 function missionRecur(m){ return m.recur || (m.recurring ? 'daily' : ''); }
 function missionDueOn(m, date){
   const r = missionRecur(m);
-  if(!r) return !m.done;            // missão única: ativa até concluir
+  const ds = todayStr(date);
+  if(m.date && ds < m.date) return false;   // agendada p/ uma data futura → ainda não está ativa
+  if(!r) return !m.done;            // missão única: ativa até concluir (a partir da data, se houver)
   const dow = date.getDay();        // 0=dom ... 6=sáb
   if(r==='daily') return true;
   if(r==='weekdays') return dow>=1 && dow<=5;
@@ -2668,6 +2685,7 @@ function editMission(i){
   catSel.value = m.cat;
   document.getElementById('edit-m-diff').value = m.diff;
   document.getElementById('edit-m-time').value = m.time || '';
+  document.getElementById('edit-m-date').value = m.date || '';
   document.getElementById('edit-m-rec').value = missionRecur(m);
   document.getElementById('mission-edit-modal').classList.add('show');
 }
@@ -2680,6 +2698,7 @@ function saveMissionEdit(){
   m.cat  = document.getElementById('edit-m-cat').value;
   m.diff = document.getElementById('edit-m-diff').value;
   m.time = document.getElementById('edit-m-time').value || '';
+  m.date = document.getElementById('edit-m-date').value || '';
   const rec = document.getElementById('edit-m-rec').value;
   m.recur = rec; m.recurring = !!rec;
   closeMissionEdit(); renderMissions(); save();
@@ -2714,10 +2733,16 @@ function renderMissions() {
     const recBadge = r ? `<span class="rec-badge">${recurLabel(r)}</span>` : '';
     const folga = r && !dueToday(m);
     const folgaBadge = folga ? `<span class="rec-badge" style="color:var(--muted)">💤 folga hoje</span>` : '';
+    let dateBadge = '';
+    if(m.date){
+      const future = todayStr() < m.date;
+      const [yy,mo,dd] = m.date.split('-');
+      dateBadge = `<span class="date-badge ${future?'future':''}">📅 ${dd}/${mo}${future?' (agendada)':''}</span>`;
+    }
     return `<div class="mission-item ${m.done?'mission-done':''} ${folga?'mission-rest':''}" style="border-left:3px solid ${col}">
       <span class="mission-cat-icon">${m.cat}</span>
       <div class="mission-info">
-        <div class="mission-name">${m.name} ${recBadge}${folgaBadge}${timeBadge}</div>
+        <div class="mission-name">${m.name} ${recBadge}${dateBadge}${folgaBadge}${timeBadge}</div>
         <div class="mission-meta">${icImg('lulacoin',11)} ${m.aiValue!=null?(m.aiValue+' LC · +'+m.aiXp+' XP'):(d.coins[0]+'-'+d.coins[1]+' LC · +'+d.xp+' XP')} · <span style="color:var(--green)">✅${st.done}</span> <span style="color:var(--danger)">❌${st.failed}</span></div>
       </div>
       <span class="diff-badge ${d.class}">${d.label}</span>
@@ -2987,16 +3012,49 @@ function addMission() {
   const cat = document.getElementById('mission-cat').value;
   const diff = document.getElementById('mission-diff').value;
   const time = (document.getElementById('mission-time')||{}).value || '';
+  const date = (document.getElementById('mission-date')||{}).value || '';
   const recur = (document.getElementById('mission-rec')||{}).value || '';
   const xpRaw = parseInt((document.getElementById('mission-xp')||{}).value);
   const lcRaw = parseInt((document.getElementById('mission-lc')||{}).value);
   const aiXp = (!isNaN(xpRaw) && xpRaw>0) ? xpRaw : null;
   const aiValue = (!isNaN(lcRaw) && lcRaw>0) ? lcRaw : null;
-  G.missions.unshift({name, cat, diff, time, recur, recurring:!!recur, done:false, id:Date.now(), stats:{done:0,failed:0}, createdAt:Date.now(), aiValue, aiXp});
+  G.missions.unshift({name, cat, diff, time, date, recur, recurring:!!recur, done:false, id:Date.now(), stats:{done:0,failed:0}, createdAt:Date.now(), aiValue, aiXp});
   input.value = '';
-  ['mission-time','mission-rec','mission-xp','mission-lc'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['mission-time','mission-date','mission-rec','mission-xp','mission-lc'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   renderMissions(); save();
   showToast("Nova missão criada!", "info");
+}
+
+// salva a missão que está no formulário como "pronta" (template do usuário)
+function saveCurrentAsTemplate(){
+  const name = (document.getElementById('mission-input').value||'').trim();
+  if(!name){ showToast('Escreva o nome da missão pra salvar como pronta!','dmg'); return; }
+  const cat = document.getElementById('mission-cat').value;
+  const diff = document.getElementById('mission-diff').value;
+  const recur = (document.getElementById('mission-rec')||{}).value || '';
+  const time = (document.getElementById('mission-time')||{}).value || '';
+  const xpRaw = parseInt((document.getElementById('mission-xp')||{}).value);
+  const lcRaw = parseInt((document.getElementById('mission-lc')||{}).value);
+  if(!Array.isArray(G.customTemplates)) G.customTemplates = [];
+  if(G.customTemplates.some(t=>t.name===name)){ showToast('Você já tem uma missão pronta com esse nome!','dmg'); return; }
+  G.customTemplates.unshift({name, cat, diff, recur, time,
+    aiXp:(!isNaN(xpRaw)&&xpRaw>0)?xpRaw:null, aiValue:(!isNaN(lcRaw)&&lcRaw>0)?lcRaw:null});
+  save(); renderPresets();
+  // garante que a seção fique visível
+  const pl=document.getElementById('preset-list'); if(pl) pl.classList.remove('collapsed');
+  showToast('⭐ "'+name+'" salva nas suas missões prontas!','heal');
+}
+function addCustomPreset(i){
+  const t = (G.customTemplates||[])[i]; if(!t) return;
+  if(G.missions.some(m=>m.name===t.name)){ showToast('Essa missão já está na lista!','dmg'); return; }
+  G.missions.unshift({name:t.name, cat:t.cat, diff:t.diff, time:t.time||'', date:'', recur:t.recur||'', recurring:!!t.recur, done:false, id:Date.now(), stats:{done:0,failed:0}, createdAt:Date.now(), aiValue:t.aiValue||null, aiXp:t.aiXp||null});
+  renderMissions(); save();
+  showToast('✅ '+t.name+' adicionada!','info');
+}
+function deleteCustomTemplate(i){
+  if(!Array.isArray(G.customTemplates)) return;
+  G.customTemplates.splice(i,1);
+  save(); renderPresets();
 }
 
 // monta um prompt pronto pra colar numa IA (ChatGPT/Claude) que devolve XP e LulaCoins
@@ -3018,9 +3076,27 @@ function copyAiPrompt(){
 // ===== MISSÕES PRÉ-PRONTAS =====
 function renderPresets(){
   const el = document.getElementById('preset-list'); if(!el) return;
-  el.innerHTML = MISSION_TEMPLATES.map((t,i)=>{
-    const d = DIFFS[t.diff];
-    const col = catColor(t.cat);
+  const customs = Array.isArray(G.customTemplates) ? G.customTemplates : [];
+  let html = `<button class="preset-save-btn" onclick="saveCurrentAsTemplate()">⭐ Salvar a missão do formulário como pronta</button>`;
+  // minhas (criadas pelo usuário) — com botão de excluir
+  if(customs.length){
+    html += `<div class="preset-subtitle">⭐ MINHAS PRONTAS</div>`;
+    html += customs.map((t,i)=>{
+      const d = DIFFS[t.diff]||DIFFS.medium; const col = catColor(t.cat);
+      return `<div class="preset-item custom" style="border-color:${col}55">
+        <span class="preset-cat">${t.cat}</span>
+        <span class="preset-name" onclick="addCustomPreset(${i})" style="cursor:pointer">${t.name}</span>
+        <span class="preset-tag diff-${t.diff}">${d.label}</span>
+        <span class="preset-rec">${recurLabel(t.recur)||'única'}</span>
+        <span class="preset-add" onclick="addCustomPreset(${i})" style="cursor:pointer">+</span>
+        <span class="preset-del" title="Excluir" onclick="deleteCustomTemplate(${i})">✕</span>
+      </div>`;
+    }).join('');
+  }
+  // sugestões fixas do jogo
+  html += `<div class="preset-subtitle">💡 SUGESTÕES</div>`;
+  html += MISSION_TEMPLATES.map((t,i)=>{
+    const d = DIFFS[t.diff]; const col = catColor(t.cat);
     return `<button class="preset-item" onclick="addPreset(${i})" style="border-color:${col}55">
       <span class="preset-cat">${t.cat}</span>
       <span class="preset-name">${t.name}</span>
@@ -3029,6 +3105,7 @@ function renderPresets(){
       <span class="preset-add">+</span>
     </button>`;
   }).join('');
+  el.innerHTML = html;
 }
 function addPreset(i){
   const t = MISSION_TEMPLATES[i]; if(!t) return;
@@ -4552,7 +4629,7 @@ function showToast(msg, type='') {
 }
 
 // ===== SAVE / LOAD (localStorage) =====
-const SAVE_KEY = 'broxa_forge_save_v3';  // v3: novo conjunto de atributos — saves antigos ignorados (começa do zero)
+const SAVE_KEY = 'broxa_forge_save_v4';  // v4: reset geral — começa a valer a partir de amanhã (graceDate)
 function save(){
   try{
     const data = {
@@ -4575,6 +4652,7 @@ function save(){
       duelSeen:G.duelSeen, nudgeSeen:G.nudgeSeen,
       weekMissions:G.weekMissions, weekMark:G.weekMark,
       xpEarned:G.xpEarned, dayFailSeen:G.dayFailSeen,
+      graceDate:G.graceDate, customTemplates:G.customTemplates,
       manoBank:G.manoBank, debts:G.debts
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -4623,6 +4701,8 @@ function load(){
     G.weekMark = G.weekMark || '';
     G.xpEarned = G.xpEarned || 0;
     G.dayFailSeen = G.dayFailSeen || {};
+    G.graceDate = G.graceDate || '';
+    G.customTemplates = Array.isArray(G.customTemplates) ? G.customTemplates : [];
     if(!Array.isArray(G.dungeonProgress)) G.dungeonProgress = [0,0,0,0,0,0];
     equipSlots(); // normaliza equipamento (compat saves antigos: número → {weapon,armor,accessory})
     return true;
@@ -4811,6 +4891,11 @@ function checkDailyReset(){
   G.allDoneToday = false;
   G.skillCooldowns = {}; // cooldowns resetam a cada dia
   G.didToday = false;
+  // carência: penalidades só valem a partir de graceDate (o jogo "começa a valer amanhã")
+  const inGrace = G.graceDate && G.lastResetDate < G.graceDate;
+  if(inGrace){
+    if(failures>0) showToast(`🕊️ Dia de preparação — sem punição hoje. As cobranças começam a valer amanhã!`, 'info');
+  } else {
   if(failures>0){
     const pen = Math.min(45, failures*8);
     G.hp = Math.max(0, G.hp - pen);
@@ -4830,6 +4915,7 @@ function checkDailyReset(){
     G.dayFailSeen[G.lastResetDate+':'+G.profile.name] = true; // não me nerfo pela minha própria falha
     try{ db.ref('forge_dayfail/'+G.lastResetDate+'/'+G.profile.name).set({missed, ts:Date.now()}); }catch(e){}
   }
+  } // fim do else (fora da carência)
   G.lastResetDate = today;
   G.day = computeDay();
   save();
@@ -5499,6 +5585,9 @@ function selectCharacterConfirmed(name) {
   if(overlay) overlay.remove();
   G.startTs = Date.now();
   G.lastResetDate = todayStr();
+  // penalidades só começam a valer amanhã (hoje é dia de montar as missões, sem punição)
+  const _tomorrow = new Date(); _tomorrow.setDate(_tomorrow.getDate()+1);
+  G.graceDate = todayStr(_tomorrow);
   G.missions = [
     {name:"Fazer exercícios hoje", cat:"💪", diff:"medium", time:"", recurring:true, done:false, id:1, stats:{done:0,failed:0}, createdAt:Date.now()},
     {name:"Estudar 30 minutos", cat:"📚", diff:"easy", time:"", recurring:true, done:false, id:2, stats:{done:0,failed:0}, createdAt:Date.now()},
@@ -5613,7 +5702,7 @@ function init() {
       dungeonProgress:[0,0,0,0,0,0], dungeonsCleared:0, raidApplied:'',
       history:[], ledger:[], rewardsLog:[], startTs:0, lastResetDate:'',
       didToday:false, discordWebhook:'', currentZone:0,
-      perfectStreak:0, xpEarned:0, dayFailSeen:{}, allDoneToday:false, skillsUnlocked:[], skillCooldowns:{},
+      perfectStreak:0, xpEarned:0, dayFailSeen:{}, graceDate:'', customTemplates:[], allDoneToday:false, skillsUnlocked:[], skillCooldowns:{},
       furyTurns:0, sacredShield:false, notifLastSent:0, lastPurchases:[], lastPunishments:[],
       dailyCh:null, todayCounters:null, dayLog:[], theme:'classic', themesUnlocked:['classic']
     });
