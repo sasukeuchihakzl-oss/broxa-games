@@ -5417,19 +5417,9 @@ function drawCharPreview(ctx, w, h, p) {
   ctx.fillRect(cx-3*scale, h*0.20, 6*scale, 2*scale);
 }
 
-function promptCharPassword(name) {
-  const pwd = PLAYER_PASSWORDS[name];
-  const input = prompt(`🔐 Senha de ${name}:`);
-  if(input === pwd) {
-    selectCharacterConfirmed(name);
-  } else {
-    showToast('❌ Senha incorreta!', 'dmg');
-  }
-}
-
 function selectCharacter(name) {
-  if(PLAYER_PASSWORDS[name]) {
-    promptCharPassword(name);
+  if(PLAYER_PASSWORDS[name]){
+    askPasswordOnLoad(name, ()=>selectCharacterConfirmed(name), ()=>{/* fica na seleção */});
   } else {
     selectCharacterConfirmed(name);
   }
@@ -5498,6 +5488,50 @@ function finishInit() {
   showToast("⚔ Bem-vindo de volta, " + (G.profile?.name||'') + "!");
 }
 
+function askPasswordOnLoad(name, onSuccess, onFail){
+  const pwd = PLAYER_PASSWORDS[name];
+  if(!pwd){ onSuccess(); return; }
+  // Modal customizado pra senha (não dá pra cancelar)
+  const overlay = document.createElement('div');
+  overlay.id = 'pwd-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:#0a0814;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;font-family:var(--vt);';
+  overlay.innerHTML = `
+    <div style="font-family:var(--pixel);font-size:14px;color:var(--gold);text-shadow:0 0 12px var(--gold);">🔐 SENHA DE ${name.toUpperCase()}</div>
+    <input id="pwd-input" type="password" autofocus style="font-family:var(--vt);font-size:22px;padding:12px 18px;background:#15101e;border:2px solid var(--gold);color:var(--text);border-radius:6px;text-align:center;letter-spacing:4px;width:260px;outline:none;">
+    <div id="pwd-err" style="color:#ff3344;font-size:14px;min-height:18px;"></div>
+    <div style="display:flex;gap:8px;">
+      <button id="pwd-ok" style="font-family:var(--pixel);font-size:9px;padding:10px 18px;background:var(--gold);color:#000;border:none;cursor:pointer;border-radius:4px;">ENTRAR</button>
+      <button id="pwd-back" style="font-family:var(--pixel);font-size:9px;padding:10px 18px;background:transparent;color:var(--muted);border:1px solid var(--muted);cursor:pointer;border-radius:4px;">TROCAR PERFIL</button>
+    </div>
+    <div style="color:var(--muted);font-size:12px;">Acesso protegido — só os heróis podem entrar</div>
+  `;
+  document.body.appendChild(overlay);
+  const inp = overlay.querySelector('#pwd-input');
+  const err = overlay.querySelector('#pwd-err');
+  const okBtn = overlay.querySelector('#pwd-ok');
+  const backBtn = overlay.querySelector('#pwd-back');
+  setTimeout(()=>inp.focus(), 100);
+  let tries = 0;
+  function tryLogin(){
+    if(inp.value === pwd){
+      overlay.remove();
+      onSuccess();
+    } else {
+      tries++;
+      err.textContent = '❌ Senha incorreta'+(tries>=3?' ('+tries+' tentativas)':'');
+      inp.value = '';
+      inp.style.borderColor = '#ff3344';
+      setTimeout(()=>{ inp.style.borderColor = 'var(--gold)'; }, 600);
+    }
+  }
+  okBtn.onclick = tryLogin;
+  inp.onkeydown = e => { if(e.key==='Enter') tryLogin(); };
+  backBtn.onclick = ()=>{
+    overlay.remove();
+    onFail();
+  };
+}
+
 function init() {
   const loaded = load();
   const name = G.profile?.name || '';
@@ -5517,7 +5551,12 @@ function init() {
     showCharSelect();
     return;
   }
-  finishInit();
+  // tem save válido → pede senha antes de entrar
+  askPasswordOnLoad(name, ()=>finishInit(), ()=>{
+    // Trocar perfil: limpa estado e mostra seleção (mas mantém o save no localStorage)
+    G.profile = null;
+    showCharSelect();
+  });
 }
 
 init();
