@@ -1394,6 +1394,34 @@
   .victory-prog{ height:9px; background:#07050e; border-radius:5px; overflow:hidden; border:1px solid rgba(0,0,0,.6); margin:8px 0 4px; }
   .victory-prog-fill{ height:100%; transition:width .6s ease; box-shadow:0 0 8px rgba(255,255,255,.3); }
   .victory-prog-label{ font-size:12px; color:var(--muted); }
+
+  /* ===== MISSÕES PRONTAS (v6) ===== */
+  .preset-list{ display:grid; grid-template-columns:1fr 1fr; gap:5px; margin-bottom:6px; }
+  .preset-list.collapsed{ display:none; }
+  .preset-item{ display:flex; align-items:center; gap:6px; padding:6px 8px; background:rgba(255,255,255,.03); border:1px solid var(--border); border-radius:7px; cursor:pointer; color:var(--text); font-family:var(--vt); font-size:14px; text-align:left; transition:border-color .15s, background .15s; }
+  .preset-item:hover{ background:rgba(255,255,255,.07); border-color:var(--gold)!important; }
+  .preset-cat{ font-size:16px; }
+  .preset-name{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .preset-tag{ font-size:10px; padding:1px 5px; border-radius:4px; }
+  .preset-rec{ font-size:10px; color:var(--muted); }
+  .preset-add{ font-family:var(--pixel); font-size:11px; color:var(--gold); }
+
+  /* ===== RANKINGS TOTAIS (v6) ===== */
+  .rank-totals{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-bottom:6px; }
+  .rank-tot-col{ background:rgba(255,255,255,.03); border:1px solid var(--border); border-radius:8px; padding:7px 6px; }
+  .rank-tot-head{ font-family:var(--pixel); font-size:7px; color:var(--gold); text-align:center; margin-bottom:6px; letter-spacing:.5px; }
+  .rank-tot-row{ display:flex; align-items:center; gap:4px; font-size:13px; padding:2px 0; }
+  .rank-tot-row.me{ color:var(--cyan); font-weight:bold; }
+  .rank-tot-pos{ width:16px; color:var(--muted); font-size:11px; }
+  .rank-tot-name{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .rank-tot-val{ color:var(--gold); }
+  @media(max-width:560px){ .rank-totals{ grid-template-columns:1fr; } .preset-list{ grid-template-columns:1fr; } }
+
+  /* ===== ESPIAR: MISSÕES DO AMIGO (v6) ===== */
+  .spy-miss-row{ display:flex; align-items:center; gap:6px; font-size:14px; padding:3px 4px; border-bottom:1px solid rgba(255,255,255,.04); }
+  .spy-miss-row .mk{ font-size:15px; }
+  .spy-miss-done{ color:var(--green); }
+  .spy-miss-todo{ color:var(--muted); }
 </style>
 </head>
 <body>
@@ -1533,10 +1561,17 @@
             </select>
           </div>
           <div class="form-row">
-            <button class="pixel-btn btn-purple" style="flex:1" onclick="aiAssist()">🤖 AVALIAR COM IA (preço da tarefa)</button>
+            <input type="number" id="mission-xp" min="0" placeholder="XP (opcional)" title="XP manual — deixe vazio p/ usar a dificuldade" style="flex:1">
+            <input type="number" id="mission-lc" min="0" placeholder="LulaCoins (opcional)" title="LulaCoins manual — deixe vazio p/ usar a dificuldade" style="flex:1">
           </div>
-          <div id="ai-result" style="display:none"></div>
+          <div class="form-row">
+            <button class="pixel-btn btn-purple" style="flex:1" onclick="copyAiPrompt()">🤖 PERGUNTAR A UMA IA (copia prompt)</button>
+          </div>
+          <div class="config-hint" style="margin-top:4px">Deixe XP/LC vazios pra usar a dificuldade. Ou clique acima, cole numa IA, e digite os valores que ela retornar.</div>
         </div>
+        <div class="section-title" style="cursor:pointer" onclick="document.getElementById('preset-list').classList.toggle('collapsed')">📋 MISSÕES PRONTAS <span style="font-size:11px;color:var(--muted)">(clique p/ abrir)</span></div>
+        <div id="preset-list" class="preset-list collapsed"></div>
+        <div class="sep"></div>
         <div class="section-title">🎯 DESAFIOS DE HOJE</div>
         <div id="daily-challenges" class="daily-ch-list"></div>
         <div class="sep"></div>
@@ -1604,8 +1639,11 @@
         <div class="section-title">⚔ ARENA SOCIAL (cutucar / duelar)</div>
         <div id="arena-box" class="arena-box"></div>
         <div class="sep"></div>
-        <div class="section-title">🏆 RANKING ONLINE</div>
+        <div class="section-title">🏆 RANKING ONLINE (por nível)</div>
         <div class="rank-list" id="ranking-list"></div>
+        <div class="sep"></div>
+        <div class="section-title">📊 RANKINGS TOTAIS</div>
+        <div id="ranking-totals" class="rank-totals"></div>
         <div class="sep"></div>
         <div class="section-title">💸 GASTOS DE MOEDAS</div>
         <div id="ranking-spent" class="hist-box"></div>
@@ -1723,6 +1761,10 @@
   <div class="modal-box">
     <div class="modal-title" id="spy-title">👁 ESPIANDO: ???</div>
     <div class="spy-last-seen" id="spy-lastseen"></div>
+    <div class="spy-section">
+      <div class="section-title">📋 MISSÕES DE HOJE</div>
+      <div id="spy-missions" class="hist-box"></div>
+    </div>
     <div class="spy-section">
       <div class="section-title">🛒 ÚLTIMAS COMPRAS / RESGATES</div>
       <div id="spy-purchases" class="hist-box"></div>
@@ -1891,6 +1933,8 @@ const G = {
   currentZone: 0,
   // v3: streak perfeito + skills + notificações
   perfectStreak: 0,
+  xpEarned: 0,
+  dayFailSeen: {},
   allDoneToday: false,
   skillsUnlocked: [],
   skillCooldowns: {},
@@ -1921,10 +1965,10 @@ const G = {
 };
 
 const DIFFS = {
-  easy:      {label:"Fácil",     coins:[10,20],  xp:15,  class:"diff-easy"},
-  medium:    {label:"Médio",     coins:[35,60],  xp:40,  class:"diff-medium"},
-  hard:      {label:"Difícil",   coins:[80,130], xp:90,  class:"diff-hard"},
-  legendary: {label:"Lendário",  coins:[200,400],xp:250, class:"diff-legendary"}
+  easy:      {label:"Fácil",     coins:[12,22],  xp:18,  class:"diff-easy"},
+  medium:    {label:"Médio",     coins:[40,68],  xp:48,  class:"diff-medium"},
+  hard:      {label:"Difícil",   coins:[90,150], xp:105, class:"diff-hard"},
+  legendary: {label:"Lendário",  coins:[220,400],xp:280, class:"diff-legendary"}
 };
 
 // ===== CATEGORIAS (ajustadas: nome, cor, atributos que sobem) =====
@@ -1970,34 +2014,58 @@ function nextEvo(lvl){ const i=evoTierIdx(lvl); return EVOLUTIONS[i+1]||null; }
 
 // ===== RECOMPENSAS DA VIDA REAL (gasta moedas) =====
 const REAL_REWARDS = [
-  {id:'tv',        emoji:'📺', name:'1h de Televisão',     cost:120, desc:'Uma hora de TV liberada'},
-  {id:'game',      emoji:'🎮', name:'1h de Videogame',     cost:150, desc:'Uma hora de jogo liberada'},
-  {id:'snack',     emoji:'🍔', name:'Um Lanche',           variable:'price', desc:'Custo conforme o preço (R$)'},
-  {id:'manos',     emoji:'🍻', name:'Saída com os Manos',  variable:'outing', desc:'Estimado por tempo + gasto'},
-  {id:'sexo',      emoji:'🔥', name:'Sexo',                cost:600, desc:'A recompensa suprema'},
-  {id:'punheta',   emoji:'✊', name:'Punheta',             cost:200, desc:'Alívio rápido'},
-  {id:'atoa',      emoji:'😴', name:'Dia à Toa',           cost:1000, desc:'Um dia sem cobranças'},
-  {id:'alcool',    emoji:'🍺', name:'Beber Álcool',        cost:350, desc:'Uma bebida'},
-  {id:'maconha',   emoji:'🌿', name:'Fumar Maconha',       cost:400, desc:'Relaxar'},
-  {id:'fumar',     emoji:'🚬', name:'Fumar',               cost:150, desc:'Um cigarro'},
-  {id:'carro',     emoji:'🚗', name:'Andar de Carro',      cost:250, desc:'Um rolê de carro'},
-  {id:'mogar',     emoji:'🤙', name:'Mogar o Craudo',      cost:80,  desc:'Zoar o Craudo'},
-  {id:'aguaquente',emoji:'☕', name:'Tomar Água Quente',   cost:20,  desc:'Saúde baratinha'},
-  {id:'suco',      emoji:'🥤', name:'Suco / Refrigerante', cost:60,  desc:'Bebida gelada'},
-  {id:'doce',      emoji:'🍬', name:'Comer Doce',          cost:90,  desc:'Açúcar'},
-  {id:'shop',      emoji:'🛍️', name:'Shopping',            variable:'price', desc:'Custo conforme o gasto (R$)'}
+  // baratinhas (do dia a dia)
+  {id:'banhoquente',emoji:'🚿', name:'Banho na Água Quente', cost:25,  desc:'Aquele banho quente gostoso'},
+  {id:'mogar',     emoji:'🤙', name:'Mogar o Craudo',       cost:45,  desc:'Zoar o Craudo'},
+  {id:'suco',      emoji:'🥤', name:'Suco/Refri no Almoço',  cost:50,  desc:'Bebida gelada na refeição'},
+  {id:'doce',      emoji:'🍬', name:'Comer Doce',            cost:70,  desc:'Açúcar liberado'},
+  {id:'tv',        emoji:'📺', name:'1h de Televisão',       cost:90,  desc:'Uma hora de TV liberada'},
+  {id:'fumar',     emoji:'🚬', name:'Fumar',                 cost:110, desc:'Um cigarro'},
+  {id:'game',      emoji:'🎮', name:'1h de Videogame',       cost:120, desc:'Uma hora de jogo liberada'},
+  {id:'carro',     emoji:'🚗', name:'Andar de Carro',        cost:150, desc:'Um rolê de carro'},
+  // médias / vícios
+  {id:'alcool',    emoji:'🍺', name:'Beber Álcool',          cost:260, desc:'Uma bebida'},
+  {id:'sexo',      emoji:'🔥', name:'Sexo',                  cost:280, desc:'A recompensa suprema'},
+  {id:'maconha',   emoji:'🌿', name:'Fumar Maconha',         cost:300, desc:'Relaxar'},
+  {id:'punheta',   emoji:'✊', name:'Punheta',               cost:360, desc:'Alívio rápido (sai caro)'},
+  // caras
+  {id:'atoa',      emoji:'😴', name:'Dia à Toa',             cost:800, desc:'Um dia sem cobranças'},
+  // variáveis (conforme o gasto real)
+  {id:'snack',     emoji:'🍔', name:'Um Lanche',             variable:'price', desc:'Custo conforme o preço (R$)'},
+  {id:'manos',     emoji:'🍻', name:'Saída com os Manos',    variable:'outing', desc:'Estimado por tempo + gasto'},
+  {id:'shop',      emoji:'🛍️', name:'Shopping',              variable:'price', desc:'Custo conforme o gasto (R$)'}
 ];
 
 // ===== HÁBITOS NEGATIVOS (punições) =====
 const HABITS = [
-  {id:'proc', emoji:'🦥', name:'Procrastinei',     hp:10, coins:15},
-  {id:'junk', emoji:'🍟', name:'Furei a dieta',    hp:8,  coins:10},
-  {id:'late', emoji:'🌙', name:'Dormi tarde',      hp:12, coins:10},
-  {id:'skip', emoji:'🚫', name:'Pulei o treino',   hp:10, coins:12},
-  {id:'doom', emoji:'📱', name:'Scroll infinito',  hp:6,  coins:8},
-  {id:'rage', emoji:'😡', name:'Estourei à toa',   hp:8,  coins:5},
-  {id:'nomiss', emoji:'📋', name:'Não cumpri missões', hp:14, coins:20, xp:20},
-  {id:'nocob',  emoji:'💸', name:'Não cobrei os manos', hp:6,  coins:25}
+  {id:'proc', emoji:'🦥', name:'Procrastinei',     hp:10, coins:15, xp:18},
+  {id:'junk', emoji:'🍟', name:'Furei a dieta',    hp:8,  coins:10, xp:12},
+  {id:'late', emoji:'🌙', name:'Dormi tarde',      hp:12, coins:10, xp:15},
+  {id:'skip', emoji:'🚫', name:'Pulei o treino',   hp:10, coins:12, xp:16},
+  {id:'doom', emoji:'📱', name:'Scroll infinito',  hp:6,  coins:8,  xp:10},
+  {id:'rage', emoji:'😡', name:'Estourei à toa',   hp:8,  coins:5,  xp:8},
+  {id:'nomiss', emoji:'📋', name:'Não cumpri missões', hp:14, coins:20, xp:25},
+  {id:'nocob',  emoji:'💸', name:'Não cobrei os manos', hp:6,  coins:25, xp:10}
+];
+
+// ===== MISSÕES PRÉ-PRONTAS (templates p/ adicionar com 1 clique) =====
+const MISSION_TEMPLATES = [
+  {name:"Treinar 30 min",         cat:"💪", diff:"medium",    recur:"daily"},
+  {name:"Beber 2L de água",       cat:"🥗", diff:"easy",      recur:"daily"},
+  {name:"Ler 20 páginas",         cat:"📚", diff:"medium",    recur:"daily"},
+  {name:"Estudar 1 hora",         cat:"📚", diff:"hard",      recur:"weekdays"},
+  {name:"Dormir antes das 23h",   cat:"🔄", diff:"medium",    recur:"daily"},
+  {name:"Acordar cedo",           cat:"🔄", diff:"easy",      recur:"daily"},
+  {name:"Meditar 10 min",         cat:"🧘", diff:"easy",      recur:"daily"},
+  {name:"Arrumar o quarto",       cat:"🏠", diff:"easy",      recur:"daily"},
+  {name:"Sem celular 1h (foco)",  cat:"🎯", diff:"medium",    recur:"daily"},
+  {name:"Correr 5km",             cat:"💪", diff:"hard",      recur:"3x"},
+  {name:"Comer uma fruta",        cat:"🥗", diff:"easy",      recur:"daily"},
+  {name:"Falar com a família",    cat:"❤️", diff:"easy",      recur:"weekends"},
+  {name:"Revisar finanças",       cat:"💰", diff:"medium",    recur:"weekends"},
+  {name:"Avançar no trabalho",    cat:"💼", diff:"hard",      recur:"weekdays"},
+  {name:"Alongar antes de dormir",cat:"💪", diff:"easy",      recur:"daily"},
+  {name:"Planejar o dia",         cat:"🎯", diff:"easy",      recur:"daily"}
 ];
 
 // ===== inimigos = obstáculos internos do progresso =====
@@ -2444,7 +2512,8 @@ function updateUI() {
   if(perfEl && perfMEl) {
     if(pS >= 1) {
       const m = Math.round((1 + pS * 0.1) * 10) / 10;
-      perfMEl.textContent = 'x'+m.toFixed(1);
+      perfMEl.textContent = pS+'d x'+m.toFixed(1);
+      perfEl.title = pS+' dia(s) perfeito(s) seguidos — bônus de x'+m.toFixed(1)+' em XP e LulaCoins!';
       perfEl.classList.add('active');
     } else {
       perfEl.classList.remove('active');
@@ -2817,136 +2886,6 @@ function renderHeroEquip(){
 }
 
 // ============================================================
-// 🤖 IA AVALIADORA DE TAREFAS — entende o pedido e diz o preço
-// ============================================================
-function _norm(s){ return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
-const ATTR_NAMES = {"💪":"Físico/Saúde","🧠":"Inteligência","🛡️":"Disciplina","❤️":"Relacionamento","🔄":"Rotina"};
-const AI_CATS = [
-  {cat:'📚', name:'Estudo',      base:3, mins:35, kw:['estud','ler','leitura','livro','prova','faculdade','aula','curso','licao','lição','redacao','redação','ingles','inglês','idioma','matematica','matemática','escrever','anki','revisar','revisão','vestibular','concurso','apostila','resumo','flashcard','questao','questões','simulado','caderno','pesquisar','tcc','monografia','tutorial','documentacao','documentação','duolingo','gramatica']},
-  {cat:'💪', name:'Físico',      base:4, mins:45, kw:['treino','treinar','academia','muscul','correr','corrida','caminh','exercicio','exercício','flexao','flexão','abdominal','alongar','alongamento','pedalar','nadar','natacao','natação','futebol','luta','jiujitsu','boxe','muay','bike','gym','cardio','agachamento','crossfit','funcional','esteira','supino','levantar peso','pular corda','calistenia','trote','pedalada','spinning']},
-  {cat:'🥗', name:'Saúde',       base:2, mins:15, kw:['agua','água','beber agua','dieta','fruta','legume','salada','comer bem','vitamina','medico','médico','dentista','remedio','remédio','saudavel','saudável','jejum','low carb','proteina','proteína','marmita','suplemento','consulta','exame','vacina','dormir cedo','parar de fumar','refeicao','refeição']},
-  {cat:'🧘', name:'Mente',       base:2, mins:15, kw:['meditar','meditacao','meditação','respirar','respiracao','journaling','diario','diário','gratidao','gratidão','terapia','mindfulness','calma','relaxar','autoconhecimento','desconectar','silencio','silêncio','pausa mental','ansiedade','autocuidado']},
-  {cat:'🏠', name:'Casa',        base:3, mins:30, kw:['limpar','faxina','louca','louça','arrumar','quarto','cozinha','lixo','organizar','lavar','roupa','varrer','casa','passar roupa','banheiro','aspirar','tirar po','tirar pó','jardim','consertar','mercado','compras de casa']},
-  {cat:'🔄', name:'Rotina',      base:1, mins:12, kw:['acordar','rotina','agenda','planejar','banho','escovar','escovar os dentes','cama','dormir','sono','cedo','despertar','skincare','arrumar a mochila','preparar','checklist','levantar cedo','manha','manhã','noturna']},
-  {cat:'❤️', name:'Relações',   base:2, mins:30, kw:['ligar','visitar','familia','família','amigo','amigos','namorad','encontro','conversar','mano','cobrar','ajudar','presente','sair com','call','mensagem','responder','reencontrar','pais','mae','mãe','pai','irmao','irmão','date','aniversario','aniversário']},
-  {cat:'🎯', name:'Foco',        base:3, mins:35, kw:['foco','focar','concentrar','pomodoro','sem celular','sem distracao','sem distração','deep work','produtiv','priorizar','disciplina','nao procrastinar','não procrastinar','parar de enrolar','desligar notificacoes','modo aviao','modo avião','bloquear apps']},
-  {cat:'💼', name:'Trabalho',    base:4, mins:60, kw:['trabalho','trampo','reuniao','reunião','email','e-mail','cliente','projeto','relatorio','relatório','entrega','deadline','freela','codar','programar','servico','serviço','curriculo','currículo','apresentacao','apresentação','call de trabalho','demanda','ticket','pull request','deploy','bug','feature']},
-  {cat:'💰', name:'Finanças',    base:2, mins:20, kw:['pagar','conta','boleto','economizar','investir','orcamento','orçamento','poupar','financ','imposto','divida','dívida','planilha','fatura','cartao','cartão','renda extra','vender','controle de gastos','nota fiscal','declaracao','declaração']},
-  {cat:'🌱', name:'Crescimento', base:3, mins:30, kw:['aprender','habito','hábito','meta','objetivo','desafio','zona de conforto','melhorar','evoluir','networking','mentoria','curso novo','projeto pessoal','side project','portfolio','portfólio','sair da zona']}
-];
-const AI_HARD = ['inteir','intera','toda ','todo ','complet','pesad','grande','maraton','intens','dificil','difícil','profund','muito','exaust','extrem','varias','várias','varios','vários','puxad','sem parar','dobrado','desafiador','hardcore'];
-const AI_EASY = ['rapid','rápid','rapidinho','leve','simples','facil','fácil','pouco','basic','básic','curtinho','apenas','um pouco','tranquil','de boa','so um','só um','rapidao','rapidão'];
-function _aiMinutes(t){
-  let m=t.match(/(\d+)\s*(h|hr|hrs|hora|horas)\b/); if(m) return parseInt(m[1])*60;
-  m=t.match(/(\d+)\s*(m|min|mins|minuto|minutos)\b/); if(m) return parseInt(m[1]);
-  if(/meia hora/.test(t)) return 30;
-  if(/uma hora e meia/.test(t)) return 90;
-  if(/uma hora/.test(t)) return 60;
-  if(/duas horas/.test(t)) return 120;
-  if(/tres horas|três horas/.test(t)) return 180;
-  return null;
-}
-function _aiNums(t){
-  const out={reps:0, km:0, pages:0, series:0};
-  let m;
-  if(m=t.match(/(\d+)\s*km\b/)) out.km=parseInt(m[1]);
-  if(m=t.match(/(\d+)\s*(pagina|paginas|páginas|pag)\b/)) out.pages=parseInt(m[1]);
-  if(m=t.match(/(\d+)\s*(capitulo|capitulos|capítulo|capítulos|cap)\b/)) out.pages=Math.max(out.pages,parseInt(m[1])*12);
-  if(m=t.match(/(\d+)\s*(serie|series|séries|set|sets)\b/)) out.series=parseInt(m[1]);
-  if(m=t.match(/(\d+)\s*(flexao|flexoes|flexões|abdominal|abdominais|agachamento|agachamentos|repeticao|repeticoes|repetições|rep|reps)\b/)) out.reps=parseInt(m[1]);
-  return out;
-}
-function aiEvaluate(raw){
-  const t=_norm(raw);
-  // 1) categoria por pontuação ponderada de palavras-chave
-  let best=AI_CATS.find(c=>c.cat==='💼'), bestScore=-1, hitWord='';
-  const ranked=[];
-  for(const c of AI_CATS){
-    let sc=0, hw='';
-    for(const k of c.kw){ if(t.includes(_norm(k))){ sc += (k.length>5?2.2:k.length>3?1.4:1); if(!hw) hw=k.trim(); } }
-    ranked.push({c,sc,hw});
-    if(sc>bestScore){ bestScore=sc; best=c; hitWord=hw; }
-  }
-  ranked.sort((a,b)=>b.sc-a.sc);
-  let secondName=''; if(ranked[1] && ranked[1].sc>0 && ranked[1].sc>=bestScore*0.6 && ranked[1].c!==best) secondName=ranked[1].c.name;
-
-  // 2) duração (explícita ou derivada de quantidade)
-  let minutes=_aiMinutes(t); const minGiven=minutes!=null;
-  const nums=_aiNums(t);
-  if(minutes==null){
-    if(nums.km>0) minutes=Math.round(nums.km*6.5);
-    else if(nums.pages>0) minutes=Math.round(nums.pages*2.2);
-    else if(nums.reps>0) minutes=Math.max(8, Math.round(nums.reps*0.4));
-    else if(nums.series>0) minutes=Math.round(nums.series*10);
-    else minutes=best.mins;
-  }
-  minutes=Math.max(3, Math.min(600, minutes));
-
-  // 3) esforço
-  let effort=best.base, hardHits=0, easyHits=0;
-  AI_HARD.forEach(w=>{ if(t.includes(w)){ effort+=1.5; hardHits++; } });
-  AI_EASY.forEach(w=>{ if(t.includes(w)){ effort-=1.3; easyHits++; } });
-  if(nums.km>=10) effort+=2.5; else if(nums.km>=5) effort+=1.5; else if(nums.km>0) effort+=0.7;
-  if(nums.reps>=50) effort+=1.5; else if(nums.reps>=20) effort+=0.8;
-  if(nums.series>=4) effort+=1.2; else if(nums.series>0) effort+=0.5;
-  if(nums.pages>=30) effort+=1.4; else if(nums.pages>=10) effort+=0.7;
-  if(minutes>=180) effort+=3.2; else if(minutes>=120) effort+=2.3; else if(minutes>=60) effort+=1.4; else if(minutes>=40) effort+=0.7;
-  // tarefa composta (várias etapas)
-  const parts=t.split(/\s+e\s+|\s*\+\s*|,|\bdepois\b|\bentao\b|\bentão\b/).map(s=>s.trim()).filter(s=>s.length>2);
-  const multi=parts.length>=2; if(multi) effort+=Math.min(2, (parts.length-1)*0.8);
-  if(bestScore>=4) effort+=0.6; else if(bestScore>=2) effort+=0.3;
-  effort=Math.max(1, Math.min(14, effort));
-
-  // 4) recompensa
-  let coins=Math.round(effort*8 + minutes*0.95);
-  coins=Math.max(8, Math.min(500, coins));
-  const xp=Math.round(coins*1.08);
-  const diff = coins<30?'easy' : coins<85?'medium' : coins<180?'hard' : 'legendary';
-  const diffLabel=DIFFS[diff].label;
-
-  // 5) confiança
-  let conf=48 + bestScore*8 + (minGiven?16:0) + hardHits*3 + easyHits*3 + ((nums.km||nums.reps||nums.pages||nums.series)?8:0);
-  conf=Math.max(35, Math.min(99, Math.round(conf)));
-
-  // 6) atributos preenchidos
-  const aks=catAttrs(best.cat);
-  const attrTxt=aks.map(a=>a+' '+(ATTR_NAMES[a]||'')).join(' · ');
-
-  // 7) explicação detalhada
-  const detail=[];
-  detail.push((minGiven?'duração informada':'duração estimada')+' ~'+minutes+' min');
-  if(nums.km) detail.push(nums.km+' km');
-  if(nums.reps) detail.push(nums.reps+' repetições');
-  if(nums.series) detail.push(nums.series+' séries');
-  if(nums.pages) detail.push(nums.pages+' páginas');
-  if(multi) detail.push(parts.length+' etapas');
-  if(hardHits) detail.push('tarefa puxada');
-  if(easyHits) detail.push('tarefa leve');
-  const reason='Identifiquei <b>'+best.cat+' '+best.name+'</b>'+(secondName?' (com toque de '+secondName+')':'')+(bestScore>0?' — pista: "'+hitWord+'"':'')+'. '
-    +'Considerei: '+detail.join(', ')+'. '
-    +'Esforço <b>'+effort.toFixed(1)+'/14</b> → vale <b>'+diffLabel+'</b>.'
-    +(aks.length?' Enche: <b>'+attrTxt+'</b>.':'');
-
-  return {cat:best.cat, catName:best.name, minutes, effort:+effort.toFixed(1), coins, xp, diff, diffLabel, conf, reason, attrs:aks, attrTxt};
-}
-let _lastAI=null;
-function aiAssist(){
-  const name=(document.getElementById('mission-input').value||'').trim();
-  if(!name){ showToast('Escreva a tarefa pra IA avaliar!','dmg'); return; }
-  const e=aiEvaluate(name);
-  _lastAI={name:name, coins:e.coins, xp:e.xp};
-  const cs=document.getElementById('mission-cat'); if(cs) cs.value=e.cat;
-  const ds=document.getElementById('mission-diff'); if(ds) ds.value=e.diff;
-  const box=document.getElementById('ai-result'); if(!box) return;
-  box.style.cssText='display:block;margin-top:8px;border:1px solid var(--purple);border-radius:8px;padding:10px;background:linear-gradient(180deg, rgba(170,68,255,.14), rgba(170,68,255,.03));box-shadow:0 4px 14px rgba(0,0,0,.4)';
-  box.innerHTML='<div style="font-family:var(--pixel);font-size:8px;color:var(--purple);display:flex;justify-content:space-between;align-items:center;margin-bottom:7px"><span>🤖 AVALIAÇÃO DA IA</span><span style="font-family:var(--vt);font-size:12px;color:var(--cyan)">confiança '+e.conf+'%</span></div>'
-    +'<div style="font-size:21px;color:var(--gold);font-weight:bold;text-shadow:var(--ink);display:flex;align-items:center;gap:5px">'+icImg('lulacoin',18)+' '+e.coins+' <span style="font-size:12px;color:var(--muted)">LulaCoins</span> <span style="font-size:13px;color:var(--xp-blue)">· +'+e.xp+' XP</span></div>'
-    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin:7px 0;font-size:12px"><span style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);border-radius:4px;padding:2px 6px">'+e.cat+' '+e.catName+'</span><span class="diff-badge '+DIFFS[e.diff].class+'">'+e.diffLabel+'</span><span style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);border-radius:4px;padding:2px 6px">⏱ ~'+e.minutes+'min</span>'+(e.attrTxt?'<span style="background:rgba(63,211,106,.12);border:1px solid rgba(63,211,106,.3);color:#7ee59a;border-radius:4px;padding:2px 6px">↑ '+e.attrTxt+'</span>':'')+'</div>'
-    +'<div style="font-size:13px;color:var(--text);line-height:1.55">'+e.reason+'</div>'
-    +'<button class="pixel-btn btn-green" style="width:100%;margin-top:8px" onclick="addMission()">✅ CRIAR ESSA MISSÃO</button>';
-}
-
-// ============================================================
 // 🤝 BANCO DO GRUPO — empréstimos e dívidas entre os 3
 // ============================================================
 function teamMates(){ const me=G.profile&&G.profile.name; return ONLINE_PLAYERS.filter(n=>n!==me); }
@@ -3046,15 +2985,55 @@ function addMission() {
   const diff = document.getElementById('mission-diff').value;
   const time = (document.getElementById('mission-time')||{}).value || '';
   const recur = (document.getElementById('mission-rec')||{}).value || '';
-  G.missions.unshift({name, cat, diff, time, recur, recurring:!!recur, done:false, id:Date.now(), stats:{done:0,failed:0}, createdAt:Date.now(),
-    aiValue:(_lastAI && _lastAI.name===name)?_lastAI.coins:null, aiXp:(_lastAI && _lastAI.name===name)?_lastAI.xp:null});
-  _lastAI=null;
-  var _aib=document.getElementById('ai-result'); if(_aib) _aib.style.display='none';
+  const xpRaw = parseInt((document.getElementById('mission-xp')||{}).value);
+  const lcRaw = parseInt((document.getElementById('mission-lc')||{}).value);
+  const aiXp = (!isNaN(xpRaw) && xpRaw>0) ? xpRaw : null;
+  const aiValue = (!isNaN(lcRaw) && lcRaw>0) ? lcRaw : null;
+  G.missions.unshift({name, cat, diff, time, recur, recurring:!!recur, done:false, id:Date.now(), stats:{done:0,failed:0}, createdAt:Date.now(), aiValue, aiXp});
   input.value = '';
-  if(document.getElementById('mission-time')) document.getElementById('mission-time').value = '';
-  if(document.getElementById('mission-rec')) document.getElementById('mission-rec').value = '';
+  ['mission-time','mission-rec','mission-xp','mission-lc'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   renderMissions(); save();
   showToast("Nova missão criada!", "info");
+}
+
+// monta um prompt pronto pra colar numa IA (ChatGPT/Claude) que devolve XP e LulaCoins
+function copyAiPrompt(){
+  const name = (document.getElementById('mission-input').value||'').trim() || '[descreva sua tarefa aqui]';
+  const prompt = `Você avalia tarefas de um jogo de produtividade. Avalie a dificuldade/esforço da tarefa abaixo e responda APENAS com dois números no formato "XP: <n> | LulaCoins: <n>".\n`+
+    `Referência: tarefa fácil ~18 XP / 18 LC, média ~48/55, difícil ~105/120, épica ~280/320. Ajuste pelo tempo e esforço.\n`+
+    `Tarefa: "${name}"`;
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(prompt).then(()=>{
+      showToast('📋 Prompt copiado! Cole numa IA e digite o XP/LC que ela retornar.','info');
+    }).catch(()=>showToast('Copie manualmente: '+prompt,'info'));
+  } else {
+    showToast('Copie: '+prompt,'info');
+  }
+  try{ window.open('https://chatgpt.com/','_blank'); }catch(e){}
+}
+
+// ===== MISSÕES PRÉ-PRONTAS =====
+function renderPresets(){
+  const el = document.getElementById('preset-list'); if(!el) return;
+  el.innerHTML = MISSION_TEMPLATES.map((t,i)=>{
+    const d = DIFFS[t.diff];
+    const col = catColor(t.cat);
+    return `<button class="preset-item" onclick="addPreset(${i})" style="border-color:${col}55">
+      <span class="preset-cat">${t.cat}</span>
+      <span class="preset-name">${t.name}</span>
+      <span class="preset-tag diff-${t.diff}">${d.label}</span>
+      <span class="preset-rec">${recurLabel(t.recur)||'única'}</span>
+      <span class="preset-add">+</span>
+    </button>`;
+  }).join('');
+}
+function addPreset(i){
+  const t = MISSION_TEMPLATES[i]; if(!t) return;
+  // evita duplicar missão com mesmo nome
+  if(G.missions.some(m=>m.name===t.name)){ showToast('Essa missão já está na lista!','dmg'); return; }
+  G.missions.unshift({name:t.name, cat:t.cat, diff:t.diff, time:'', recur:t.recur, recurring:!!t.recur, done:false, id:Date.now(), stats:{done:0,failed:0}, createdAt:Date.now(), aiValue:null, aiXp:null});
+  renderMissions(); save();
+  showToast('✅ '+t.name+' adicionada!','info');
 }
 
 function completeMission(i) {
@@ -3138,6 +3117,7 @@ function deleteMission(i) {
 function gainXP(amount) {
   amount = Math.round(amount * prestigeXpMult());   // bônus permanente de prestígio (v4 #10)
   G.xp += amount;
+  G.xpEarned = (G.xpEarned||0) + amount;            // XP acumulado p/ ranking total (v6)
   while(G.xp >= G.xpNext){
     G.xp -= G.xpNext;
     const prevTitle = titleFor(G.level);
@@ -3695,6 +3675,7 @@ function listenRivals() {
   listenSeason();
   listenDuels();
   listenNudges();
+  listenDayFails();
 }
 
 function syncOnline() {
@@ -3711,6 +3692,10 @@ function syncOnline() {
     perfectStreak: G.perfectStreak || 0,
     power: myPower(),
     evo: evoOf(G.level).name,
+    xpEarned: G.xpEarned || 0,
+    // missões de hoje (feitas/não feitas) p/ os amigos acompanharem (v6 #10)
+    todayMissions: G.missions.filter(m=>missionRecur(m) && dueToday(m)).map(m=>({n:m.name, c:m.cat, d:!!m.done})),
+    dayDate: todayStr(),
     // destaque por período (v4.1) — com carimbo p/ ignorar contador de período passado
     todayCount: (G.todayCounters&&G.todayCounters.missions)||0, todayMark: todayStr(),
     weekCount: G.weekMissions||0, weekMark: weekId(),
@@ -3731,7 +3716,8 @@ function saveAndInitFirebase() {
   if(!raw) { showToast('Cole o config do Firebase!', 'dmg'); return; }
   try {
     const cfg = JSON.parse(raw);
-    if(!cfg.apiKey || !cfg.databaseURL) throw new Error('Faltam campos');
+    if(!cfg.databaseURL) throw new Error('Falta o databaseURL');
+    if(!cfg.apiKey) cfg.apiKey = 'no-auth';   // Realtime DB em modo teste não exige apiKey real
     localStorage.setItem('broxa_fb_config', JSON.stringify(cfg));
     initFirebase(cfg);
     showToast('🔥 Firebase conectado!', 'heal');
@@ -3765,6 +3751,18 @@ function openSpy(name) {
   document.getElementById('spy-title').textContent = '👁 ESPIANDO: ' + name.toUpperCase();
   const ago = d.updatedAt ? Math.round((Date.now()-d.updatedAt)/60000) + ' min atrás' : '?';
   document.getElementById('spy-lastseen').textContent = '🕐 Última sync: ' + ago;
+  // missões de hoje (feitas / não feitas)
+  const sm = document.getElementById('spy-missions');
+  if(sm){
+    const tm = (d.dayDate===todayStr()) ? (d.todayMissions||[]) : [];
+    if(!tm.length){
+      sm.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:4px">'+(d.dayDate===todayStr()?'Nenhuma missão recorrente hoje.':'Sem dados de hoje ainda.')+'</div>';
+    } else {
+      const done = tm.filter(m=>m.d).length;
+      sm.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:3px">${done}/${tm.length} concluídas hoje</div>` +
+        tm.map(m=>`<div class="spy-miss-row"><span class="mk ${m.d?'spy-miss-done':'spy-miss-todo'}">${m.d?'✅':'⬜'}</span><span class="${m.d?'spy-miss-done':'spy-miss-todo'}">${m.c||''} ${m.n}</span></div>`).join('');
+    }
+  }
   // compras
   const purchases = d.lastPurchases || [];
   document.getElementById('spy-purchases').innerHTML = purchases.length
@@ -4271,6 +4269,42 @@ function applyNudge(v){
   save();
 }
 const NUDGE_MSGS = ['Bora fazer missão, preguiçoso! 💪','Tá perdendo no ranking, corre! 🏃','Cadê a disciplina hoje? 👀','Não amarela não, mano! 🔥','Tô na sua cola no ranking 😏','Mexe esse corpo, guerreiro! ⚔'];
+
+// ===== NERF COLETIVO: amigo furou o dia → todos sofrem (v6 #11) =====
+let dayFailListener = null;
+function listenDayFails(){
+  if(!db) return; const myName=G.profile?.name||''; if(!ONLINE_PLAYERS.includes(myName)) return;
+  if(dayFailListener) dayFailListener.off();
+  dayFailListener = db.ref('forge_dayfail');
+  dayFailListener.on('value', snap=>{
+    const data = snap.val() || {};
+    if(!G.dayFailSeen) G.dayFailSeen = {};
+    Object.entries(data).forEach(([date, players])=>{
+      if(!players) return;
+      Object.entries(players).forEach(([pname, info])=>{
+        const key = date+':'+pname;
+        if(G.dayFailSeen[key]) return;
+        // marca como visto sem aplicar se: for eu mesmo, ou for antigo (> 36h)
+        if(pname===myName || !info || (Date.now()-(info.ts||0) > 36*3600*1000)){
+          G.dayFailSeen[key] = true; return;
+        }
+        G.dayFailSeen[key] = true;
+        applyDayFailNerf(pname, info.missed||1);
+      });
+    });
+    save();
+  });
+}
+function applyDayFailNerf(name, missed){
+  const hpLoss = 25, xpLoss = 30, lcLoss = 25;
+  G.hp = Math.max(0, G.hp - hpLoss);
+  loseXP(xpLoss);
+  G.coins = Math.max(0, G.coins - lcLoss);
+  addLedger('out', lcLoss, 'Nerf coletivo ('+name+' furou o dia)');
+  showToast(`😞 ${name} furou o dia (${missed} missão(ões))! Todos levam nerf: -${hpLoss}HP -${xpLoss}XP -${lcLoss}LC`,'dmg');
+  try{ if('Notification' in window && Notification.permission==='granted') new Notification('😞 Nerf coletivo!', {body:name+' não cumpriu as missões. Todos perderam HP/XP/LC.'}); }catch(e){}
+  if(G.hp<=0) triggerDeath(); else updateUI();
+}
 function sendNudge(name){
   if(!db){ showToast('Conecte o Firebase para cutucar!','dmg'); return; }
   const myName=G.profile?.name||''; if(!ONLINE_PLAYERS.includes(myName)) return;
@@ -4428,7 +4462,7 @@ function switchTab(name, btn) {
   else if(name==='ranking'){ renderHighlights(); renderRanking(); renderRaid(); renderSeason(); renderArena(); }
   else if(name==='history') renderHistory();
   else if(name==='inventory') renderInventory();
-  else if(name==='missions') renderMissions();
+  else if(name==='missions'){ renderMissions(); renderPresets(); }
   else if(name==='skills') renderSkillTree();
   else if(name==='stats') renderDashboard();
 }
@@ -4537,6 +4571,7 @@ function save(){
       seasonId:G.seasonId, seasonTitles:G.seasonTitles, seasonMissions:G.seasonMissions,
       duelSeen:G.duelSeen, nudgeSeen:G.nudgeSeen,
       weekMissions:G.weekMissions, weekMark:G.weekMark,
+      xpEarned:G.xpEarned, dayFailSeen:G.dayFailSeen,
       manoBank:G.manoBank, debts:G.debts
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -4583,6 +4618,8 @@ function load(){
     G.nudgeSeen = G.nudgeSeen || 0;
     G.weekMissions = G.weekMissions || 0;
     G.weekMark = G.weekMark || '';
+    G.xpEarned = G.xpEarned || 0;
+    G.dayFailSeen = G.dayFailSeen || {};
     if(!Array.isArray(G.dungeonProgress)) G.dungeonProgress = [0,0,0,0,0,0];
     equipSlots(); // normaliza equipamento (compat saves antigos: número → {weapon,armor,accessory})
     return true;
@@ -4783,6 +4820,13 @@ function checkDailyReset(){
     groupCover(40, 'Menos de 60% das missões do dia');
     showToast(`📉 Menos de 60% das missões! -40 XP e -40 LC`, 'dmg');
   }
+  // avisa o grupo se NÃO cumpri todas as missões do dia → nerf coletivo (v6 #11)
+  if(db && ONLINE_PLAYERS.includes(G.profile?.name) && dueCount>0 && doneCount<dueCount){
+    const missed = dueCount - doneCount;
+    G.dayFailSeen = G.dayFailSeen || {};
+    G.dayFailSeen[G.lastResetDate+':'+G.profile.name] = true; // não me nerfo pela minha própria falha
+    try{ db.ref('forge_dayfail/'+G.lastResetDate+'/'+G.profile.name).set({missed, ts:Date.now()}); }catch(e){}
+  }
   G.lastResetDate = today;
   G.day = computeDay();
   save();
@@ -4795,7 +4839,7 @@ function renderRanking(){
   const pStrk = G.perfectStreak || 0;
   const me = {
     name: myName + ' (você)', id: myName,
-    level:G.level, xp:G.xp, missions:G.totalMissions,
+    level:G.level, xp:G.xp, xpEarned:G.xpEarned||0, missions:G.totalMissions,
     coins:G.coins, spent:spentTotal(), color:G.profile?.armor||'#888',
     perfectStreak:pStrk, me:true
   };
@@ -4806,15 +4850,15 @@ function renderRanking(){
     rivals = ONLINE_PLAYERS.filter(n => n !== myName).map(n => {
       const d = onlineData[n];
       if(d) return {
-        name:n, id:n, level:d.level||1, xp:0, missions:d.totalMissions||0,
+        name:n, id:n, level:d.level||1, xp:0, xpEarned:d.xpEarned||0, missions:d.totalMissions||0,
         coins:d.coins||0, spent:0, color:d.profileColor||'#888',
         perfectStreak:d.perfectStreak||0, online:true
       };
-      return {name:n, id:n, level:1, xp:0, missions:0, coins:0, spent:0, color:'#444', perfectStreak:0, offline:true};
+      return {name:n, id:n, level:1, xp:0, xpEarned:0, missions:0, coins:0, spent:0, color:'#444', perfectStreak:0, offline:true};
     });
   } else {
     rivals = ONLINE_PLAYERS.filter(n => n !== myName).map(n => ({
-      name:n, id:n, level:1, xp:0, missions:0, coins:0, spent:0,
+      name:n, id:n, level:1, xp:0, xpEarned:0, missions:0, coins:0, spent:0,
       color: CHAR_PRESETS[n]?.armor || '#444', perfectStreak:0, offline:true
     }));
   }
@@ -4836,6 +4880,26 @@ function renderRanking(){
       ${p.perfectStreak>0?`<span class="rank-stat" style="color:var(--cyan)">⭐${p.perfectStreak}d</span>`:''}
       ${!p.me && p.online ? `<button class="spy-btn" onclick="openSpy('${p.id}')">👁 ESPIAR</button>` : ''}
     </div>`).join('');
+
+  // ===== RANKINGS TOTAIS (coins, xp, tarefas) =====
+  const totEl = document.getElementById('ranking-totals');
+  if(totEl){
+    const col = (title, key, fmt)=>{
+      const sorted = [...all].sort((a,b)=>(b[key]||0)-(a[key]||0));
+      const medals=['🥇','🥈','🥉'];
+      return `<div class="rank-tot-col"><div class="rank-tot-head">${title}</div>`+
+        sorted.map((p,i)=>`<div class="rank-tot-row ${p.me?'me':''}">
+          <span class="rank-tot-pos">${medals[i]||('#'+(i+1))}</span>
+          <span class="rank-dot" style="background:${p.color}"></span>
+          <span class="rank-tot-name">${p.me?'Você':p.name}</span>
+          <span class="rank-tot-val">${fmt(p[key]||0)}</span>
+        </div>`).join('')+`</div>`;
+    };
+    totEl.innerHTML =
+      col('💰 LULACOINS','coins', v=>v) +
+      col('⭐ XP TOTAL','xpEarned', v=>v) +
+      col('📋 TAREFAS','missions', v=>v);
+  }
 
   const sp = document.getElementById('ranking-spent');
   if(sp){
@@ -5460,6 +5524,7 @@ function finishInit() {
   checkDailyReset();
   G.day = computeDay();
   renderMissions();
+  renderPresets();
   renderEquipped();
   renderHabits();
   updateUI();
@@ -5544,7 +5609,7 @@ function init() {
       dungeonProgress:[0,0,0,0,0,0], dungeonsCleared:0, raidApplied:'',
       history:[], ledger:[], rewardsLog:[], startTs:0, lastResetDate:'',
       didToday:false, discordWebhook:'', currentZone:0,
-      perfectStreak:0, allDoneToday:false, skillsUnlocked:[], skillCooldowns:{},
+      perfectStreak:0, xpEarned:0, dayFailSeen:{}, allDoneToday:false, skillsUnlocked:[], skillCooldowns:{},
       furyTurns:0, sacredShield:false, notifLastSent:0, lastPurchases:[], lastPunishments:[],
       dailyCh:null, todayCounters:null, dayLog:[], theme:'classic', themesUnlocked:['classic']
     });
