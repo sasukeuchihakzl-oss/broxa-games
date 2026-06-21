@@ -3638,6 +3638,11 @@ function resurrect(method) {
 
 // ===== ONLINE RANKING (Firebase) =====
 const ONLINE_PLAYERS = ['Rodrigo', 'Mizuki', 'Craudo'];
+const PLAYER_PASSWORDS = {
+  'Rodrigo': '172935',
+  'Mizuki': 'Estravagante',
+  'Craudo': 'Gupenca'
+};
 const CHAR_PRESETS = {
   Rodrigo: {skin:'#ffc890', hair:'#2a1a10', armor:'#3f7bd6', cape:'#c43340'},
   Mizuki:  {skin:'#f0b080', hair:'#1a1a2a', armor:'#aa44ff', cape:'#ff88aa'},
@@ -5412,7 +5417,25 @@ function drawCharPreview(ctx, w, h, p) {
   ctx.fillRect(cx-3*scale, h*0.20, 6*scale, 2*scale);
 }
 
+function promptCharPassword(name) {
+  const pwd = PLAYER_PASSWORDS[name];
+  const input = prompt(`🔐 Senha de ${name}:`);
+  if(input === pwd) {
+    selectCharacterConfirmed(name);
+  } else {
+    showToast('❌ Senha incorreta!', 'dmg');
+  }
+}
+
 function selectCharacter(name) {
+  if(PLAYER_PASSWORDS[name]) {
+    promptCharPassword(name);
+  } else {
+    selectCharacterConfirmed(name);
+  }
+}
+
+function selectCharacterConfirmed(name) {
   const preset = CHAR_PRESETS[name];
   G.profile = { name, ...preset };
   const overlay = document.getElementById('char-select');
@@ -5426,8 +5449,8 @@ function selectCharacter(name) {
     {name:"Dormir antes das 23h", cat:"🔄", diff:"medium", time:"23:00", recurring:true, done:false, id:4, stats:{done:0,failed:0}, createdAt:Date.now()}
   ];
   G.inventory = [
-    {name:"Espada de Ferro",emoji:"⚔️",type:"weapon",atk:8,count:1},
-    {name:"Poção Menor",emoji:"🧪",type:"consumable",hp:25,count:2}
+    {name:"Espada de Ferro",emoji:"⚔️",art:"sword",type:"weapon",atk:8,rarity:"uncommon",count:1},
+    {name:"Poção Menor",emoji:"🧪",art:"potion",type:"consumable",hp:25,rarity:"common",count:2}
   ];
   save();
   finishInit();
