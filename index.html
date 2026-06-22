@@ -3819,7 +3819,12 @@ function listenRivals() {
   if(fbListener) fbListener.off();
   fbListener = db.ref('forge_players');
   fbListener.on('value', snap => {
-    onlineData = snap.val() || {};
+    const val = snap.val();
+    if(val && Object.keys(val).length){
+      onlineData = val;
+      // cache local: mantém os últimos dados conhecidos p/ mostrar mesmo offline
+      try{ localStorage.setItem('broxa_online_cache', JSON.stringify(onlineData)); }catch(e){}
+    }
     const myName = G.profile?.name || '';
     const others = ONLINE_PLAYERS.filter(n => n !== myName && onlineData[n]).length;
     setFbStatus(true, `Online · ${others} rival(is) conectado(s)`);
@@ -5882,6 +5887,8 @@ function finishInit() {
   setTimeout(checkNextMissionReminder, 90000);   // primeiro lembrete ~1,5 min após abrir
   // reavalia atraso dos manos (depende da hora) a cada 2 min, mesmo sem mudança no Firebase
   setInterval(function(){ try{ renderLateBanner(); checkRivalOverdue(); renderTeamMissions(); }catch(e){} }, 120000);
+  // carrega o cache dos manos (últimos dados conhecidos) p/ mostrar mesmo sem internet
+  try{ const oc = localStorage.getItem('broxa_online_cache'); if(oc){ const d=JSON.parse(oc); if(d && Object.keys(d).length) onlineData = d; } }catch(e){}
   try {
     const savedCfg = localStorage.getItem('broxa_fb_config');
     let cfg = null;
@@ -6021,7 +6028,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v22';
+  window.APP_VERSION = '2026.06.22 • v23';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
