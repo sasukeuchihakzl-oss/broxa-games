@@ -5814,8 +5814,20 @@ init();
 <!-- PWA: registra o service worker (offline + instalável) -->
 <script>
   if ('serviceWorker' in navigator) {
+    // AUTO-UPDATE: toda vez que abrir, checa versão nova; se houver, troca e recarrega 1x sozinho.
+    var hadController = !!navigator.serviceWorker.controller;  // já tinha versão rodando antes?
+    var refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function(){
+      if (refreshing) return;
+      if (!hadController) return;        // 1ª instalação: não precisa recarregar
+      refreshing = true;
+      location.reload();                 // versão nova assumiu → recarrega limpo
+    });
     window.addEventListener('load', function(){
-      navigator.serviceWorker.register('sw.js').catch(function(err){
+      navigator.serviceWorker.register('sw.js').then(function(reg){
+        reg.update();                                  // procura versão nova ao abrir
+        setInterval(function(){ reg.update(); }, 900000);  // e a cada 15 min em sessões longas
+      }).catch(function(err){
         console.warn('SW não registrado:', err);
       });
     });
@@ -5853,7 +5865,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v12';
+  window.APP_VERSION = '2026.06.22 • v13';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
