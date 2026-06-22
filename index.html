@@ -3766,16 +3766,18 @@ function resurrect(method) {
 }
 
 // ===== ONLINE RANKING (Firebase) =====
-const ONLINE_PLAYERS = ['Rodrigo', 'Mizuki', 'Craudo'];
+const ONLINE_PLAYERS = ['Rodrigo', 'Mizuki', 'Craudo', 'Ana'];
 const PLAYER_PASSWORDS = {
   'Rodrigo': '172935',
   'Mizuki': 'Estravagante',
-  'Craudo': 'Gupenca'
+  'Craudo': 'Gupenca',
+  'Ana': 'Ana@1234'
 };
 const CHAR_PRESETS = {
   Rodrigo: {skin:'#ffc890', hair:'#2a1a10', armor:'#3f7bd6', cape:'#c43340'},
   Mizuki:  {skin:'#f0b080', hair:'#1a1a2a', armor:'#aa44ff', cape:'#ff88aa'},
-  Craudo:  {skin:'#e0a060', hair:'#5a3a1e', armor:'#d63f3f', cape:'#ff8c00'}
+  Craudo:  {skin:'#e0a060', hair:'#5a3a1e', armor:'#d63f3f', cape:'#ff8c00'},
+  Ana:     {skin:'#ffd0b8', hair:'#4a2a2a', armor:'#22c1a0', cape:'#ffcc44'}
 };
 let db = null;
 let onlineData = {};
@@ -5984,7 +5986,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v16';
+  window.APP_VERSION = '2026.06.22 • v17';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
