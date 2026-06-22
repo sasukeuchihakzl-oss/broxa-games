@@ -3983,7 +3983,10 @@ function renderTeamMissions(){
     const fresh = d && d.dayDate===todayStr();
     const tm = fresh ? (d.todayMissions||[]) : [];
     const pend = tm.filter(m=>!m.d);
-    const done = tm.filter(m=>m.d).length;
+    const doneListed = tm.filter(m=>m.d).length;
+    // contagem OFICIAL de feitas hoje: todayCount (toda versão envia) — robusto contra app desatualizado
+    const todayCountAuth = (d && d.todayMark===todayStr()) ? (d.todayCount||0) : 0;
+    const doneAuth = Math.max(doneListed, todayCountAuth);
     const col = (d&&d.profileColor)||'#888';
     // última sincronização (dados velhos = não dá pra confiar)
     const mins = (d&&d.updatedAt) ? Math.round((Date.now()-d.updatedAt)/60000) : null;
@@ -3993,10 +3996,10 @@ function renderTeamMissions(){
     const seenBadge = `<span class="tm-seen${stale?' stale':''}">${stale?'⚠️ ':'🟢 '}${seenTxt}</span>`;
     html += `<div class="tm-player" style="border-color:${col}55">
       <div class="tm-head"><span class="tm-name" style="color:${col}">${n}</span>
-        <span class="tm-count">${done}/${tm.length} feitas hoje</span></div>
+        <span class="tm-count">✅ ${doneAuth} feita${doneAuth!==1?'s':''} · ⬜ ${pend.length} pendente${pend.length!==1?'s':''}</span></div>
       <div class="tm-seen-row">${seenBadge}</div>`;
-    if(!fresh){ html += `<div class="tm-empty">${stale?'dados desatualizados — pediu pra ele abrir o app?':'sem dados de hoje ainda'}</div>`; }
-    else if(!tm.length){ html += `<div class="tm-empty">nenhuma missão hoje ainda</div>`; }
+    if(!fresh && doneAuth===0){ html += `<div class="tm-empty">${stale?'dados desatualizados — pediu pra ele abrir o app?':'sem dados de hoje ainda'}</div>`; }
+    else if(!tm.length && doneAuth===0){ html += `<div class="tm-empty">nenhuma missão hoje ainda</div>`; }
     else {
       // mostra TODAS de hoje: ✅ feitas + ⬜ pendentes (⚠️ atrasadas)
       html += tm.map(m=>{
@@ -4007,10 +4010,13 @@ function renderTeamMissions(){
           <span class="tm-time">${m.t?(late?'⏰ atrasou '+m.t:'⏰ '+m.t):''}</span>
         </div>`;
       }).join('');
+      // feitas que o app dele (desatualizado) não detalhou, mas contou no todayCount
+      const hidden = doneAuth - doneListed;
+      if(hidden>0) html += `<div class="tm-miss done"><span>✅ +${hidden} concluída${hidden>1?'s':''} hoje</span><span class="tm-time" title="app dele desatualizado — não detalha os nomes">app desatu.</span></div>`;
       const lateCount = pend.filter(rivalMissionLate).length;
       if(pend.length){
         html += `<button class="tm-nudge${lateCount?' urgent':''}" onclick="sendNudge('${n}')">👊 Cobrar ${n}${lateCount?' ('+lateCount+' atrasada'+(lateCount>1?'s':'')+')':''}</button>`;
-      } else {
+      } else if(doneAuth>0){
         html += `<div class="tm-empty" style="color:var(--green)">✅ fez tudo hoje!</div>`;
       }
     }
@@ -5986,9 +5992,9 @@ init();
       location.reload();                 // versão nova assumiu → recarrega limpo
     });
     window.addEventListener('load', function(){
-      navigator.serviceWorker.register('sw.js').then(function(reg){
-        reg.update();                                  // procura versão nova ao abrir
-        setInterval(function(){ reg.update(); }, 900000);  // e a cada 15 min em sessões longas
+      navigator.serviceWorker.register('sw.js', {updateViaCache:'none'}).then(function(reg){
+        reg.update();                                  // procura versão nova ao abrir (sempre fresco, sem cache)
+        setInterval(function(){ reg.update(); }, 300000);  // e a cada 5 min em sessões longas
       }).catch(function(err){
         console.warn('SW não registrado:', err);
       });
@@ -6028,7 +6034,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v23';
+  window.APP_VERSION = '2026.06.22 • v24';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
