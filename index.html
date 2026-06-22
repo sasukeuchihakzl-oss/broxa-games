@@ -2168,7 +2168,8 @@ const HABITS = [
   {id:'doom', emoji:'📱', name:'Scroll infinito',  hp:6,  coins:8,  xp:10},
   {id:'rage', emoji:'😡', name:'Estourei à toa',   hp:8,  coins:5,  xp:8},
   {id:'nomiss', emoji:'📋', name:'Não cumpri missões', hp:14, coins:20, xp:25},
-  {id:'nocob',  emoji:'💸', name:'Não cobrei os manos', hp:6,  coins:25, xp:10}
+  {id:'nocob',  emoji:'💸', name:'Não cobrei os manos', hp:6,  coins:25, xp:10},
+  {id:'fixlc70', emoji:'🪙', name:'Corrigir bugs de lulacoins', hp:0, coins:70, xp:0}
 ];
 
 // ===== MISSÕES PRÉ-PRONTAS (templates p/ adicionar com 1 clique) =====
@@ -4891,7 +4892,7 @@ function save(){
       xpEarned:G.xpEarned, dayFailSeen:G.dayFailSeen,
       graceDate:G.graceDate, customTemplates:G.customTemplates,
       manoBank:G.manoBank, debts:G.debts,
-      migratedDefaults:G.migratedDefaults, nextReminderLast:G.nextReminderLast, fix70Rodrigo:G.fix70Rodrigo
+      migratedDefaults:G.migratedDefaults, nextReminderLast:G.nextReminderLast
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     G._lastSaveTs = Date.now();
@@ -4912,11 +4913,6 @@ function load(){
       const legacyDefaults = ["Fazer exercícios hoje","Estudar 30 minutos","Beber 2L de água","Dormir antes das 23h"];
       G.missions = G.missions.filter(m=> !legacyDefaults.includes(m.name));
       G.migratedDefaults = true;
-    }
-    // correção única: Rodrigo devolve 70 LC ganhos de um desafio que foi removido
-    if(!G.fix70Rodrigo && G.profile && G.profile.name==='Rodrigo'){
-      G.coins = Math.max(0, (G.coins||0) - 70);
-      G.fix70Rodrigo = true;
     }
     G.profile = G.profile || defaultProfile();
     G.history = G.history || []; G.ledger = G.ledger || []; G.rewardsLog = G.rewardsLog || [];
@@ -6034,7 +6030,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v24';
+  window.APP_VERSION = '2026.06.22 • v25';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
