@@ -1090,6 +1090,20 @@
 
   /* ===== DESTAQUES por período (v4.1) ===== */
   .highlights-box{ display:flex; flex-direction:column; gap:7px; }
+  /* ===== MISSÕES DOS MANOS ===== */
+  .team-missions-box{ display:flex; flex-direction:column; gap:8px; }
+  .tm-player{ border:1px solid var(--border); border-radius:11px; padding:8px 10px; background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(0,0,0,.22)); }
+  .tm-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; }
+  .tm-name{ font-family:var(--pixel); font-size:9px; }
+  .tm-count{ font-size:12px; color:var(--muted); }
+  .tm-empty{ font-size:13px; color:var(--muted); padding:2px; }
+  .tm-miss{ display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:14px; color:var(--text); padding:3px 4px; border-bottom:1px solid rgba(255,255,255,.04); }
+  .tm-miss .tm-time{ font-size:12px; color:var(--cyan); white-space:nowrap; }
+  .tm-miss.late{ color:var(--danger); }
+  .tm-miss.late .tm-time{ color:var(--danger); font-weight:bold; }
+  .tm-nudge{ margin-top:6px; width:100%; padding:7px; border:1px solid var(--gold); border-radius:7px; background:rgba(240,192,64,.12); color:var(--gold); font-family:var(--pixel); font-size:8px; cursor:pointer; }
+  .tm-nudge.urgent{ border-color:var(--danger); background:rgba(255,51,68,.15); color:var(--danger); animation:glow-pulse .8s ease infinite alternate; }
+  .tm-nudge:active{ transform:translateY(1px); }
   .hl-card{ display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:11px; border:1px solid var(--border); background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(0,0,0,.22)); }
   .hl-card.me{ border-color:#ffd24a88; background:linear-gradient(180deg,rgba(255,210,74,.12),rgba(0,0,0,.25)); box-shadow:0 0 14px #ffd24a33; }
   .hl-ico{ font-size:24px; filter:drop-shadow(0 2px 3px rgba(0,0,0,.6)); }
@@ -1703,6 +1717,9 @@
         </div>
         <div class="section-title">🏅 DESTAQUES DO GRUPO</div>
         <div id="highlights-box" class="highlights-box"></div>
+        <div class="sep"></div>
+        <div class="section-title">📋 MISSÕES DOS MANOS (cobre quem atrasar!)</div>
+        <div id="team-missions-box" class="team-missions-box"></div>
         <div class="sep"></div>
         <div id="season-box" class="season-box"></div>
         <div class="sep"></div>
@@ -3789,6 +3806,8 @@ function listenRivals() {
     const others = ONLINE_PLAYERS.filter(n => n !== myName && onlineData[n]).length;
     setFbStatus(true, `Online · ${others} rival(is) conectado(s)`);
     renderHighlights();
+    renderTeamMissions();
+    checkRivalOverdue();
     renderRanking();
     renderRaid();
     renderSeason();
@@ -3818,8 +3837,12 @@ function syncOnline() {
     power: myPower(),
     evo: evoOf(G.level).name,
     xpEarned: G.xpEarned || 0,
-    // missões de hoje (feitas/não feitas) p/ os amigos acompanharem (v6 #10)
-    todayMissions: G.missions.filter(m=>missionRecur(m) && dueToday(m)).map(m=>({n:m.name, c:m.cat, d:!!m.done})),
+    // missões de hoje (feitas/não feitas + horário) p/ os amigos acompanharem e cobrarem
+    todayMissions: G.missions.filter(m=>{
+      if(m.date && todayStr() < m.date) return false;                                   // agendada p/ data futura
+      if(missionRecur(m)) return missionDueOn(Object.assign({}, m, {done:false}), new Date()); // recorrente devida hoje
+      return !m.done;                                                                   // única: enquanto pendente
+    }).map(m=>({n:m.name, c:m.cat, d:!!m.done, t:m.time||''})),
     dayDate: todayStr(),
     // destaque por período (v4.1) — com carimbo p/ ignorar contador de período passado
     todayCount: (G.todayCounters&&G.todayCounters.missions)||0, todayMark: todayStr(),
@@ -3902,6 +3925,62 @@ function openSpy(name) {
   document.getElementById('spy-stats').innerHTML =
     `Nível ${d.level} · ${d.totalMissions} missões · ${d.streak} streak · ${d.perfectStreak||0} dias perfeitos<br>${d.coins} LC · ${d.gems} gemas`;
   document.getElementById('spy-modal').classList.add('show');
+}
+
+// ===== MISSÕES DOS MANOS (ver pendências + atrasos + cobrar) =====
+// atraso calculado no lado de QUEM VÊ (funciona mesmo se o mano fechou o app):
+// usa o horário sincronizado da missão vs. hora atual.
+function rivalMissionLate(m){
+  if(m.d || !m.t) return false;
+  const now=new Date(); const hm=now.getHours()*60+now.getMinutes();
+  const p=String(m.t).split(':'); return hm > (+p[0])*60+(+p[1]);
+}
+function renderTeamMissions(){
+  const el=document.getElementById('team-missions-box'); if(!el) return;
+  const myName=G.profile?.name||'';
+  const others=ONLINE_PLAYERS.filter(n=>n!==myName);
+  let html='';
+  others.forEach(n=>{
+    const d=onlineData[n];
+    const fresh = d && d.dayDate===todayStr();
+    const tm = fresh ? (d.todayMissions||[]) : [];
+    const pend = tm.filter(m=>!m.d);
+    const done = tm.filter(m=>m.d).length;
+    const col = (d&&d.profileColor)||'#888';
+    html += `<div class="tm-player" style="border-color:${col}55">
+      <div class="tm-head"><span class="tm-name" style="color:${col}">${n}</span>
+        <span class="tm-count">${done}/${tm.length} feitas hoje</span></div>`;
+    if(!fresh){ html += `<div class="tm-empty">sem dados de hoje ainda</div>`; }
+    else if(!pend.length){ html += `<div class="tm-empty" style="color:var(--green)">✅ fez tudo hoje!</div>`; }
+    else {
+      html += pend.map(m=>{
+        const late=rivalMissionLate(m);
+        return `<div class="tm-miss${late?' late':''}">
+          <span>${late?'⚠️':'⬜'} ${m.c||''} ${m.n}</span>
+          <span class="tm-time">${m.t?(late?'⏰ atrasou '+m.t:'⏰ '+m.t):''}</span>
+        </div>`;
+      }).join('');
+      const lateCount = pend.filter(rivalMissionLate).length;
+      html += `<button class="tm-nudge${lateCount?' urgent':''}" onclick="sendNudge('${n}')">👊 Cobrar ${n}${lateCount?' ('+lateCount+' atrasada'+(lateCount>1?'s':'')+')':''}</button>`;
+    }
+    html += `</div>`;
+  });
+  el.innerHTML = html || '<div class="tm-empty">Nenhum mano conectado ainda.</div>';
+}
+// notifica quando um mano está atrasado (pra cobrar) — 1x por missão/dia
+let _lateSeen = {};
+function checkRivalOverdue(){
+  if(!('Notification' in window) || Notification.permission!=='granted') return;
+  const myName=G.profile?.name||''; const today=todayStr();
+  ONLINE_PLAYERS.filter(n=>n!==myName).forEach(n=>{
+    const d=onlineData[n]; if(!d || d.dayDate!==today) return;
+    (d.todayMissions||[]).forEach(m=>{
+      if(!rivalMissionLate(m)) return;
+      const key=n+'|'+m.n+'|'+today;
+      if(_lateSeen[key]) return; _lateSeen[key]=1;
+      gameNotify('⚠️ '+n+' atrasou uma missão!', `${m.c||''} ${m.n} (era ${m.t}) — cobra ele! Se não cumprir, todos perdem. 😱`, {tag:'late-'+n, renotify:true});
+    });
+  });
 }
 
 // ===== RAID CO-OP SEMANAL (os 3 juntos) =====
@@ -4625,7 +4704,7 @@ function switchTab(name, btn) {
   else if(name==='world') renderWorld();
   else if(name==='shop') renderShop();
   else if(name==='rewards') renderRewards();
-  else if(name==='ranking'){ renderHighlights(); renderRanking(); renderRaid(); renderSeason(); renderArena(); }
+  else if(name==='ranking'){ renderHighlights(); renderTeamMissions(); renderRanking(); renderRaid(); renderSeason(); renderArena(); }
   else if(name==='history') renderHistory();
   else if(name==='inventory') renderInventory();
   else if(name==='missions'){ renderMissions(); renderPresets(); }
@@ -5865,7 +5944,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v13';
+  window.APP_VERSION = '2026.06.22 • v14';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
