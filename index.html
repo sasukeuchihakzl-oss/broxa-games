@@ -4349,7 +4349,7 @@ function applyDuelResult(v){
     G.coins = Math.max(0, G.coins-(v.bet||0)); addLedger('out', v.bet||0, 'Duelo perdido vs '+v.from);
     showToast(`💀 ${v.from} te desafiou e venceu o duelo. -${v.bet} LC`,'dmg');
   }
-  try{ if('Notification' in window && Notification.permission==='granted') new Notification('⚔ Duelo!', {body:`${v.from} te desafiou — ${v.winner===myName?'você venceu!':'você perdeu.'}`}); }catch(e){}
+  gameNotify('⚔ Duelo!', `${v.from} te desafiou — ${v.winner===myName?'você venceu!':'você perdeu.'}`, {tag:'duel'});
   if(db) db.ref('forge_duel/'+myName).remove().catch(()=>{});
   updateUI(); save();
 }
@@ -4389,7 +4389,7 @@ function applyNudge(v){
   if((G.nudgeSeen||0) >= v.at) return;
   G.nudgeSeen = v.at;
   showToast(`👊 ${v.from} te cutucou: "${v.msg}"`,'info');
-  try{ if('Notification' in window && Notification.permission==='granted') new Notification('👊 '+v.from+' te cutucou!', {body:v.msg}); }catch(e){}
+  gameNotify('👊 '+v.from+' te cutucou!', v.msg, {tag:'nudge', renotify:true});
   if(db) db.ref('forge_nudge/'+(G.profile?.name||'')).remove().catch(()=>{});
   save();
 }
@@ -4427,7 +4427,7 @@ function applyDayFailNerf(name, missed){
   G.coins = Math.max(0, G.coins - lcLoss);
   addLedger('out', lcLoss, 'Nerf coletivo ('+name+' furou o dia)');
   showToast(`😞 ${name} furou o dia (${missed} missão(ões))! Todos levam nerf: -${hpLoss}HP -${xpLoss}XP -${lcLoss}LC`,'dmg');
-  try{ if('Notification' in window && Notification.permission==='granted') new Notification('😞 Nerf coletivo!', {body:name+' não cumpriu as missões. Todos perderam HP/XP/LC.'}); }catch(e){}
+  gameNotify('😞 Nerf coletivo!', name+' não cumpriu as missões. Todos perderam HP/XP/LC.', {tag:'nerf'});
   if(G.hp<=0) triggerDeath(); else updateUI();
 }
 function sendNudge(name){
@@ -4534,6 +4534,22 @@ function requestNotifPerm() {
   }
 }
 
+// notificação que FUNCIONA NO CELULAR: usa o service worker (PWA);
+// no PC cai pro Notification normal. Use sempre esta no lugar de `new Notification`.
+function gameNotify(title, body, extra){
+  if(!('Notification' in window) || Notification.permission !== 'granted') return;
+  const opts = Object.assign({ body:body||'', icon:'icon-192.png', badge:'icon-192.png' }, extra||{});
+  try{
+    if(navigator.serviceWorker && navigator.serviceWorker.ready){
+      navigator.serviceWorker.ready
+        .then(reg => reg.showNotification(title, opts))
+        .catch(()=>{ try{ new Notification(title, opts); }catch(e){} });
+    } else {
+      new Notification(title, opts);
+    }
+  }catch(e){ try{ new Notification(title, opts); }catch(e2){} }
+}
+
 function checkNotification() {
   if(!('Notification' in window) || Notification.permission !== 'granted') return;
   if(G.didToday) return;
@@ -4543,11 +4559,7 @@ function checkNotification() {
   if(G.notifLastSent && now - G.notifLastSent < 7200000) return; // máx 1 a cada 2h
   G.notifLastSent = now;
   save();
-  try {
-    new Notification('⚔ Forge of Life', {
-      body: `${(G.profile&&G.profile.name)||'Herói'}, você ainda não fez missões hoje! Seu HP vai decair!`,
-    });
-  } catch(e) {}
+  gameNotify('⚔ Forge of Life', `${(G.profile&&G.profile.name)||'Herói'}, você ainda não fez missões hoje! Seu HP vai decair!`, {tag:'hp-warn'});
 }
 
 // lembretes por horário: notifica na hora exata da missão com time definido
@@ -4562,7 +4574,7 @@ function checkMissionReminders(){
     const parts = m.time.split(':'); const target = (+parts[0])*60 + (+parts[1]);
     if(hm >= target && hm <= target+1 && m._notifDate !== today){
       m._notifDate = today;
-      try{ new Notification('⏰ Hora da missão!', {body:`${m.cat} ${m.name} — bora fazer agora!`}); }catch(e){}
+      gameNotify('⏰ Hora da missão!', `${m.cat} ${m.name} — bora fazer agora!`, {tag:'mission-time'});
     }
   });
 }
@@ -4585,7 +4597,7 @@ function checkNextMissionReminder(){
   const h = new Date().getHours();
   if(h < 9 || h >= 23) return;                                  // silêncio à noite/madrugada
   const now = Date.now();
-  if(G.nextReminderLast && now - G.nextReminderLast < 2400000) return;   // no máx 1 a cada 40 min
+  if(G.nextReminderLast && now - G.nextReminderLast < 1800000) return;   // no máx 1 a cada 30 min
   const m = nextPendingMission();
   if(!m) return;                                                // tudo feito → não incomoda
   G.nextReminderLast = now; save();
@@ -4593,12 +4605,7 @@ function checkNextMissionReminder(){
   const doneCount = dueList.filter(x=>x.done).length;
   const when = m.time ? ` (⏰ ${m.time})` : '';
   const name = (G.profile&&G.profile.name)||'Herói';
-  try{
-    new Notification('📋 Próxima missão', {
-      body: `${name}, falta: ${m.cat} ${m.name}${when}\n${doneCount}/${dueList.length} feitas hoje — bora! 💪`,
-      tag: 'next-mission', renotify: true
-    });
-  }catch(e){}
+  gameNotify('📋 Próxima missão', `${name}, falta: ${m.cat} ${m.name}${when}\n${doneCount}/${dueList.length} feitas hoje — bora! 💪`, {tag:'next-mission', renotify:true});
 }
 
 // ===== TABS =====
@@ -5846,7 +5853,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v11';
+  window.APP_VERSION = '2026.06.22 • v12';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
