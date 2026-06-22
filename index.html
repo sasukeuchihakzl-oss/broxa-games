@@ -1475,59 +1475,6 @@
   .spy-miss-row .mk{ font-size:15px; }
   .spy-miss-done{ color:var(--green); }
   .spy-miss-todo{ color:var(--muted); }
-
-  /* ============================================================
-     ✦✦ MOBILE LAYOUT v2 — fica POR ÚLTIMO p/ vencer as regras acima
-        (corrige: retrato espremido, abas em 2 linhas, header amontoado)
-     ============================================================ */
-  @media (max-width:760px){
-    #game-root{ max-width:100%; padding:6px 8px; }
-
-    /* --- HEADER: empilha e centraliza --- */
-    .game-header{ flex-direction:column; align-items:center; gap:6px; text-align:center; padding:10px; }
-    .game-title{ font-size:9px; line-height:1.5; }
-    .header-stats{ width:100%; justify-content:center; flex-wrap:wrap; gap:12px; }
-    .header-sub{ justify-content:center; }
-
-    /* --- RETRATO DO HERÓI: vira um card-retrato centralizado (não espremido) --- */
-    .char-sprite{
-      max-width:230px; margin-left:auto; margin-right:auto;
-      aspect-ratio:3/4; height:auto;
-    }
-    .hero-img{ height:100%; }
-    /* canvas de evolução/aura acompanha */
-    .char-panel{ padding:10px; }
-    .char-title{ font-size:12px; }
-
-    /* --- ABAS: UMA linha rolável (vence o flex-wrap:wrap anterior) --- */
-    .tab-bar{
-      flex-wrap:nowrap !important; overflow-x:auto; overflow-y:hidden;
-      -webkit-overflow-scrolling:touch; scrollbar-width:none;
-      padding-bottom:2px; gap:4px;
-    }
-    .tab-bar::-webkit-scrollbar{ display:none; }
-    .tab-btn{
-      flex:0 0 auto !important; width:auto; min-width:0;
-      padding:9px 12px; font-size:8px; white-space:nowrap;
-      border-bottom:1px solid var(--border);
-    }
-
-    /* --- respiro geral: nada colado --- */
-    .tab-content{ padding:10px 8px; }
-    .form-row{ flex-wrap:wrap; gap:8px; }
-    .form-row select, .form-row input{ flex:1 1 auto; min-width:120px; min-height:42px; }
-    button{ min-height:42px; }
-    /* modais ocupam quase a tela toda, com rolagem */
-    .modal-box, .modal > div{ max-width:94vw !important; }
-  }
-
-  /* telas bem estreitas: grids de 2 col viram 1 col p/ não espremer */
-  @media (max-width:440px){
-    .habits-list, .shop-grid, .zone-grid, .skill-tree-grid{ grid-template-columns:1fr; }
-    .inv-grid{ grid-template-columns:repeat(4,1fr); }
-    .dash-kpis, .sys-grid, .themes-grid{ grid-template-columns:1fr 1fr; }
-    .char-sprite{ max-width:200px; }
-  }
 </style>
 </head>
 <body>
