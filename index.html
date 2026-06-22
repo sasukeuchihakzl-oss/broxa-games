@@ -2661,6 +2661,10 @@ function allocAttr(icon){
 // ===== RECORRÊNCIA INTELIGENTE =====
 function recurLabel(r){ return {daily:'🔁 todo dia', weekdays:'📅 dias úteis', weekends:'🌅 fim de semana', '3x':'3️⃣ 3x/sem'}[r] || ''; }
 function missionRecur(m){ return m.recur || (m.recurring ? 'daily' : ''); }
+// BÔNUS DE ROTINA: quanto mais frequente o compromisso, maior a recompensa
+// (premia constância). Missão única = sem bônus.
+function recurMult(m){ return ({daily:1.30, weekdays:1.25, '3x':1.15, weekends:1.10})[missionRecur(m)] || 1.0; }
+function recurBonusLabel(m){ const mu=recurMult(m); return mu>1 ? `+${Math.round((mu-1)*100)}% rotina` : ''; }
 function missionDueOn(m, date){
   const r = missionRecur(m);
   const ds = todayStr(date);
@@ -2808,7 +2812,8 @@ function renderMissions() {
       timeBadge = `<span class="time-badge ${overdue?'overdue':''}">⏰ ${m.time}${overdue?' atrasada':''}</span>`;
     }
     const r = missionRecur(m);
-    const recBadge = r ? `<span class="rec-badge">${recurLabel(r)}</span>` : '';
+    const recBonus = recurBonusLabel(m);
+    const recBadge = r ? `<span class="rec-badge">${recurLabel(r)}${recBonus?` <span style="color:var(--gold)">${recBonus}</span>`:''}</span>` : '';
     const folga = r && !dueToday(m);
     const folgaBadge = folga ? `<span class="rec-badge" style="color:var(--muted)">💤 folga hoje</span>` : '';
     let dateBadge = '';
@@ -3190,10 +3195,11 @@ function completeMission(i) {
   // multiplicador do streak perfeito (a partir do dia 2: +10% por dia)
   const pStreak = G.perfectStreak || 0;
   const perfMult = pStreak >= 1 ? Math.round((1 + pStreak * 0.1) * 10) / 10 : 1.0;
+  const recMult = recurMult(m);   // bônus de rotina (constância)
   const baseCoins = (m.aiValue!=null) ? m.aiValue : (d.coins[0] + Math.floor(Math.random()*(d.coins[1]-d.coins[0])));
   const baseXp = (m.aiXp!=null) ? m.aiXp : d.xp;
-  const coins = Math.floor(baseCoins * perfMult);
-  const xp = Math.floor(baseXp * perfMult);
+  const coins = Math.floor(baseCoins * perfMult * recMult);
+  const xp = Math.floor(baseXp * perfMult * recMult);
   G.coins += coins; addLedger('in', coins, 'Missão: '+m.name);
   G.totalMissions++;
   G.streak++;
@@ -3227,7 +3233,10 @@ function completeMission(i) {
   bonusAttrs.forEach(attr => { if(G.attrs[attr]) G.attrs[attr].val++; });
 
   gainXP(xp);
-  const multStr = perfMult > 1 ? ` (x${perfMult.toFixed(1)})` : '';
+  const parts = [];
+  if(perfMult > 1) parts.push(`🔥x${perfMult.toFixed(1)}`);
+  if(recMult > 1) parts.push(`🔁+${Math.round((recMult-1)*100)}%`);
+  const multStr = parts.length ? ` (${parts.join(' ')})` : '';
   showToast(`+${coins} LC +${xp} XP!${multStr}`);
   if(bonusAttrs.length) showToast(`+1 ${G.attrs[bonusAttrs[0]].name}`, "info");
 
@@ -5827,7 +5836,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v7';
+  window.APP_VERSION = '2026.06.22 • v8';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
