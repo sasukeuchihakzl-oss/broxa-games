@@ -2770,6 +2770,7 @@ function renderDailyChallenges(){
 // ===== EDITAR / REORDENAR MISSÕES =====
 let _editIdx = -1;
 function editMission(i){
+  return;   // editar missão desativado (evita alterações que bagunçam o progresso)
   const m = G.missions[i]; if(!m) return;
   _editIdx = i;
   const catSel = document.getElementById('edit-m-cat');
@@ -2848,9 +2849,7 @@ function renderMissions() {
           <button class="m-move" title="Subir" onclick="moveMission(${i},-1)">▲</button>
           <button class="m-move" title="Descer" onclick="moveMission(${i},1)">▼</button>
         </div>
-        <button class="pixel-btn btn-cyan btn-sm" title="Editar" onclick="editMission(${i})">✎</button>
         ${!m.done ? `<button class="pixel-btn btn-green btn-sm" title="Concluir" onclick="completeMission(${i})">✓</button>` : '<span style="color:var(--green);font-size:14px">✓</span>'}
-        <button class="pixel-btn btn-red btn-sm" title="Excluir" onclick="deleteMission(${i})">✕</button>
       </div>
     </div>`;
   }).join('');
@@ -3271,11 +3270,7 @@ function completeMission(i) {
 }
 
 function deleteMission(i) {
-  const m = G.missions[i]; if(!m) return;
-  if(!confirm(`Excluir a missão "${m.name}"?`)) return;
-  G.missions.splice(i,1);
-  renderMissions(); save();
-  showToast('🗑 Missão excluída','info');
+  return;   // excluir missão desativado (evita perda de progresso / trapaça)
 }
 
 function gainXP(amount) {
@@ -4885,7 +4880,7 @@ function save(){
       xpEarned:G.xpEarned, dayFailSeen:G.dayFailSeen,
       graceDate:G.graceDate, customTemplates:G.customTemplates,
       manoBank:G.manoBank, debts:G.debts,
-      migratedDefaults:G.migratedDefaults, nextReminderLast:G.nextReminderLast
+      migratedDefaults:G.migratedDefaults, nextReminderLast:G.nextReminderLast, fix70Rodrigo:G.fix70Rodrigo
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     G._lastSaveTs = Date.now();
@@ -4906,6 +4901,11 @@ function load(){
       const legacyDefaults = ["Fazer exercícios hoje","Estudar 30 minutos","Beber 2L de água","Dormir antes das 23h"];
       G.missions = G.missions.filter(m=> !legacyDefaults.includes(m.name));
       G.migratedDefaults = true;
+    }
+    // correção única: Rodrigo devolve 70 LC ganhos de um desafio que foi removido
+    if(!G.fix70Rodrigo && G.profile && G.profile.name==='Rodrigo'){
+      G.coins = Math.max(0, (G.coins||0) - 70);
+      G.fix70Rodrigo = true;
     }
     G.profile = G.profile || defaultProfile();
     G.history = G.history || []; G.ledger = G.ledger || []; G.rewardsLog = G.rewardsLog || [];
@@ -6021,7 +6021,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v21';
+  window.APP_VERSION = '2026.06.22 • v22';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
