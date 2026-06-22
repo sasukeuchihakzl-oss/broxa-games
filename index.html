@@ -1475,6 +1475,29 @@
   .spy-miss-row .mk{ font-size:15px; }
   .spy-miss-done{ color:var(--green); }
   .spy-miss-todo{ color:var(--muted); }
+
+  /* ============================================================
+     ✦ MOBILE — apenas RESPIRO (espaçamento/fonte). SEM mexer na
+       estrutura/layout. Fica por último p/ vencer as regras acima.
+     ============================================================ */
+  @media (max-width:760px){
+    .tab-content{ padding:13px 11px; line-height:1.5; }
+    /* cards de lista: mais ar dentro e entre eles */
+    .mission-item,.dungeon-card,.shop-item,.zone-card{ padding:12px 12px; margin-bottom:9px; }
+    .preset-item{ padding:10px 11px; font-size:15px; }
+    .habit-btn{ padding:11px 11px; font-size:15px; }
+    .inv-slot{ padding:6px; }
+    /* texto base um tico maior (VT323 é bem condensada) */
+    .mission-name,.reward-name,.shop-item-name,.dungeon-name,.zone-name{ font-size:15px; line-height:1.35; }
+    /* títulos de seção menos colados */
+    .section-title{ margin:12px 0 8px; }
+    /* formulário e botões com alvo de toque confortável */
+    .form-row{ gap:9px; }
+    .form-row input,.form-row select{ min-height:44px; font-size:15px; }
+    .pixel-btn{ padding:11px 13px; }
+    /* abas: um pouco mais altas, sem apertar */
+    .tab-btn{ padding:10px 9px; }
+  }
 </style>
 </head>
 <body>
