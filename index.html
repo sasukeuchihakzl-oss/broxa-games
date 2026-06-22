@@ -5794,10 +5794,18 @@ function selectCharacter(name) {
 }
 
 function selectCharacterConfirmed(name) {
-  const preset = CHAR_PRESETS[name];
-  G.profile = { name, ...preset };
   const overlay = document.getElementById('char-select');
   if(overlay) overlay.remove();
+  // 🛡️ ANTI-PERDA: se JÁ existe um save deste mesmo jogador, NÃO zera nada — só entra no jogo.
+  // (antes, re-selecionar o personagem apagava missões e inventário do save existente)
+  const restored = load();
+  if(restored && G.profile && G.profile.name === name && Array.isArray(G.missions)){
+    finishInit();
+    return;
+  }
+  // jogador NOVO (sem save) → inicializa do zero
+  const preset = CHAR_PRESETS[name];
+  G.profile = { name, ...preset };
   G.startTs = Date.now();
   G.lastResetDate = todayStr();
   // penalidades só começam a valer amanhã (hoje é dia de montar as missões, sem punição)
@@ -5990,7 +5998,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v19';
+  window.APP_VERSION = '2026.06.22 • v20';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
