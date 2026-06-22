@@ -2831,7 +2831,6 @@ function renderMissions() {
         </div>
         <button class="pixel-btn btn-cyan btn-sm" title="Editar" onclick="editMission(${i})">✎</button>
         ${!m.done ? `<button class="pixel-btn btn-green btn-sm" title="Concluir" onclick="completeMission(${i})">✓</button>` : '<span style="color:var(--green);font-size:14px">✓</span>'}
-        <button class="pixel-btn btn-red btn-sm" title="Excluir" onclick="deleteMission(${i})">✕</button>
       </div>
     </div>`;
   }).join('');
@@ -3255,8 +3254,8 @@ function completeMission(i) {
 }
 
 function deleteMission(i) {
-  G.missions.splice(i,1);
-  renderMissions(); save();
+  // anti-trapaça: excluir missão foi desativado (ninguém apaga p/ fugir da punição)
+  return;
 }
 
 function gainXP(amount) {
@@ -4717,7 +4716,8 @@ function save(){
       weekMissions:G.weekMissions, weekMark:G.weekMark,
       xpEarned:G.xpEarned, dayFailSeen:G.dayFailSeen,
       graceDate:G.graceDate, customTemplates:G.customTemplates,
-      manoBank:G.manoBank, debts:G.debts
+      manoBank:G.manoBank, debts:G.debts,
+      migratedDefaults:G.migratedDefaults
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     G._lastSaveTs = Date.now();
@@ -4733,6 +4733,12 @@ function load(){
     const ach = d.achievements;
     Object.assign(G, d);
     if(Array.isArray(ach)) ACHIEVEMENTS.forEach((a,i)=>{ a.unlocked = !!ach[i]; });
+    // limpeza única: remove as missões padrão antigas (anti-trapaça já não deixa apagar manual)
+    if(!G.migratedDefaults && Array.isArray(G.missions)){
+      const legacyDefaults = ["Fazer exercícios hoje","Estudar 30 minutos","Beber 2L de água","Dormir antes das 23h"];
+      G.missions = G.missions.filter(m=> !legacyDefaults.includes(m.name));
+      G.migratedDefaults = true;
+    }
     G.profile = G.profile || defaultProfile();
     G.history = G.history || []; G.ledger = G.ledger || []; G.rewardsLog = G.rewardsLog || [];
     G.attrPoints = G.attrPoints || 0;
@@ -5821,7 +5827,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v6';
+  window.APP_VERSION = '2026.06.22 • v7';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
