@@ -4567,6 +4567,40 @@ function checkMissionReminders(){
   });
 }
 
+// próxima missão pendente de hoje (com horário tem prioridade, pela ordem do relógio)
+function nextPendingMission(){
+  const due = (G.missions||[]).filter(m=> !m.done && (!missionRecur(m) || dueToday(m)));
+  if(!due.length) return null;
+  const withTime = due.filter(m=>m.time).sort((a,b)=>{
+    const pa=a.time.split(':'), pb=b.time.split(':');
+    return ((+pa[0])*60+(+pa[1])) - ((+pb[0])*60+(+pb[1]));
+  });
+  return withTime[0] || due[0];
+}
+
+// LEMBRETE RECORRENTE: fica lembrando da próxima missão (não é mensagem única).
+// Para sozinho quando tudo de hoje estiver feito. Usa tag p/ atualizar, não empilhar.
+function checkNextMissionReminder(){
+  if(!('Notification' in window) || Notification.permission !== 'granted') return;
+  const h = new Date().getHours();
+  if(h < 9 || h >= 23) return;                                  // silêncio à noite/madrugada
+  const now = Date.now();
+  if(G.nextReminderLast && now - G.nextReminderLast < 2400000) return;   // no máx 1 a cada 40 min
+  const m = nextPendingMission();
+  if(!m) return;                                                // tudo feito → não incomoda
+  G.nextReminderLast = now; save();
+  const dueList = (G.missions||[]).filter(x=> !missionRecur(x) || dueToday(x));
+  const doneCount = dueList.filter(x=>x.done).length;
+  const when = m.time ? ` (⏰ ${m.time})` : '';
+  const name = (G.profile&&G.profile.name)||'Herói';
+  try{
+    new Notification('📋 Próxima missão', {
+      body: `${name}, falta: ${m.cat} ${m.name}${when}\n${doneCount}/${dueList.length} feitas hoje — bora! 💪`,
+      tag: 'next-mission', renotify: true
+    });
+  }catch(e){}
+}
+
 // ===== TABS =====
 function switchTab(name, btn) {
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
@@ -4699,7 +4733,7 @@ function save(){
       xpEarned:G.xpEarned, dayFailSeen:G.dayFailSeen,
       graceDate:G.graceDate, customTemplates:G.customTemplates,
       manoBank:G.manoBank, debts:G.debts,
-      migratedDefaults:G.migratedDefaults
+      migratedDefaults:G.migratedDefaults, nextReminderLast:G.nextReminderLast
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     G._lastSaveTs = Date.now();
@@ -5683,6 +5717,9 @@ function finishInit() {
   setTimeout(requestNotifPerm, 3000);
   setInterval(checkNotification, 3600000);
   setInterval(checkMissionReminders, 60000);
+  // lembrete recorrente da próxima missão: verifica a cada 10 min (a função se auto-limita a 1/40min)
+  setInterval(checkNextMissionReminder, 600000);
+  setTimeout(checkNextMissionReminder, 90000);   // primeiro lembrete ~1,5 min após abrir
   try {
     const savedCfg = localStorage.getItem('broxa_fb_config');
     let cfg = null;
@@ -5809,7 +5846,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v10';
+  window.APP_VERSION = '2026.06.22 • v11';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
