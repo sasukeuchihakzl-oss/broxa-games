@@ -5,7 +5,7 @@
    - Mesma origem (GET): cache-first com atualização em segundo plano (stale-while-revalidate).
    - Firebase / fontes (cross-origin): passa direto pela rede (não cacheia dados ao vivo).
    Pra forçar atualização do app, suba o número da versão abaixo. */
-const VERSION = 'fol-v4';
+const VERSION = 'fol-v5';
 const SHELL = [
   './',
   './index.html',
@@ -36,10 +36,17 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   const sameOrigin = url.origin === self.location.origin;
 
-  // Navegação (abrir o app): rede primeiro, cai pro index.html offline.
+  // Navegação (abrir o app): SEMPRE busca HTML fresco (ignora cache do navegador);
+  // só cai pro index.html do cache se estiver offline.
   if (req.mode === 'navigate') {
     e.respondWith(
-      fetch(req).catch(() => caches.match('./index.html'))
+      fetch(req, { cache: 'reload' })
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(VERSION).then((c) => c.put('./index.html', copy));
+          return res;
+        })
+        .catch(() => caches.match('./index.html'))
     );
     return;
   }

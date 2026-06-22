@@ -1939,6 +1939,13 @@
     <div id="sys-info" class="hist-box" style="margin-bottom:10px"></div>
     <div class="section-title">🎨 TEMA DA INTERFACE</div>
     <div id="themes-grid" class="themes-grid" style="margin-bottom:10px"></div>
+    <div class="section-title">📲 APP DO CELULAR</div>
+    <div class="sys-grid" style="grid-template-columns:1fr 1fr">
+      <button class="pixel-btn btn-cyan" onclick="forceUpdate()">🔄 ATUALIZAR<br>VERSÃO</button>
+      <button class="pixel-btn btn-green" onclick="installApp()">📲 INSTALAR<br>APP</button>
+    </div>
+    <div id="app-ver-hint" class="config-hint" style="margin-top:6px"></div>
+
     <div class="section-title">💾 GERENCIAR SAVE</div>
     <div class="sys-grid">
       <button class="pixel-btn btn-green" onclick="manualSave()">💾 SALVAR<br>AGORA</button>
@@ -5817,34 +5824,84 @@ init();
   <b>"Adicionar à Tela de Início"</b>. Depois abra pelo ícone — o jogo abre em tela cheia.
 </div>
 <script>
+  // ===== versão do app (mude junto com o VERSION do sw.js) =====
+  window.APP_VERSION = '2026.06.21 • v5';
+
   (function(){
     var btn = document.getElementById('pwa-install-btn');
     var iosTip = document.getElementById('pwa-ios-tip');
-    // já instalado / rodando como app? não mostra nada.
     var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-    if (standalone) return;
 
-    // Android/Chrome: captura o evento e mostra botão de 1 toque.
-    var deferred = null;
+    // Android/Chrome: captura o evento de instalação (guarda no window p/ o botão do menu usar).
+    window.__deferredPrompt = null;
     window.addEventListener('beforeinstallprompt', function(e){
       e.preventDefault();
-      deferred = e;
-      btn.style.display = 'inline-flex';
+      window.__deferredPrompt = e;
+      if (!standalone) btn.style.display = 'inline-flex';
     });
-    btn.addEventListener('click', function(){
-      if (!deferred) return;
-      deferred.prompt();
-      deferred.userChoice.finally(function(){ deferred = null; btn.style.display='none'; });
-    });
-    window.addEventListener('appinstalled', function(){ btn.style.display='none'; });
+    btn.addEventListener('click', function(){ window.installApp(); });
+    window.addEventListener('appinstalled', function(){ btn.style.display='none'; window.__deferredPrompt=null; });
 
     // iOS Safari: não tem beforeinstallprompt → mostra a dica 1x.
-    var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    var isSafari = /^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent);
-    if (isIOS && isSafari && !localStorage.getItem('pwa_ios_tip_seen')){
-      setTimeout(function(){ iosTip.style.display='block'; localStorage.setItem('pwa_ios_tip_seen','1'); }, 2500);
+    if (!standalone){
+      var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      var isSafari = /^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent);
+      if (isIOS && isSafari && !localStorage.getItem('pwa_ios_tip_seen')){
+        setTimeout(function(){ iosTip.style.display='block'; localStorage.setItem('pwa_ios_tip_seen','1'); }, 2500);
+      }
     }
   })();
+
+  // ===== BOTÃO: ATUALIZAR VERSÃO (fura o cache na marra) =====
+  window.forceUpdate = async function(){
+    try { if (typeof manualSave === 'function') manualSave(); } catch(e){}   // garante o save antes
+    var ok = confirm('Baixar a versão mais nova do jogo?\n\nSeu progresso NÃO será perdido (o save fica guardado).');
+    if (!ok) return;
+    try {
+      if ('serviceWorker' in navigator){
+        var regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(function(r){ return r.unregister(); }));
+      }
+      if (window.caches){
+        var keys = await caches.keys();
+        await Promise.all(keys.map(function(k){ return caches.delete(k); }));
+      }
+    } catch(e){}
+    // recarrega limpo, ignorando qualquer cache antigo
+    var base = location.href.split('?')[0].split('#')[0];
+    location.replace(base + '?u=' + Date.now());
+  };
+
+  // ===== BOTÃO: INSTALAR / BAIXAR APP =====
+  window.installApp = function(){
+    var dp = window.__deferredPrompt;
+    if (dp){
+      dp.prompt();
+      dp.userChoice.finally(function(){ window.__deferredPrompt = null;
+        var b=document.getElementById('pwa-install-btn'); if(b) b.style.display='none'; });
+      return;
+    }
+    var standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+    if (standalone){ alert('✅ O app já está instalado neste celular.'); return; }
+    var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    if (isIOS){
+      alert('📲 Instalar no iPhone:\n\n1. Toque em Compartilhar (□↑) na barra do Safari\n2. Escolha "Adicionar à Tela de Início"\n\n(precisa ser o Safari, não funciona no Chrome do iPhone)');
+    } else {
+      alert('📲 Instalar no Android:\n\n1. Abra o menu do navegador (⋮)\n2. Toque em "Instalar app" ou "Adicionar à tela inicial"\n\nSe não aparecer, recarregue a página e tente de novo.');
+    }
+  };
+
+  // mostra a versão atual dentro do menu Sistema quando abrir
+  window.addEventListener('DOMContentLoaded', function(){
+    var prev = window.openSystem;
+    if (typeof prev === 'function'){
+      window.openSystem = function(){
+        prev.apply(this, arguments);
+        var h = document.getElementById('app-ver-hint');
+        if (h) h.innerHTML = 'Versão instalada: <b>' + (window.APP_VERSION||'?') + '</b>. Toque em <b>ATUALIZAR</b> se um amigo já estiver numa versão mais nova.';
+      };
+    }
+  });
 </script>
 </body>
 </html>
