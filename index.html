@@ -1648,9 +1648,6 @@
         <div class="section-title" style="cursor:pointer" onclick="document.getElementById('preset-list').classList.toggle('collapsed')">📋 MISSÕES PRONTAS <span style="font-size:11px;color:var(--muted)">(clique p/ abrir)</span></div>
         <div id="preset-list" class="preset-list collapsed"></div>
         <div class="sep"></div>
-        <div class="section-title">🎯 DESAFIOS DE HOJE</div>
-        <div id="daily-challenges" class="daily-ch-list"></div>
-        <div class="sep"></div>
         <div class="section-title">MISSÕES ATIVAS</div>
         <div class="mission-list" id="mission-list"></div>
         <div class="sep"></div>
@@ -2717,23 +2714,7 @@ function pickDailyChallenges(seedStr){
   for(let i=idx.length-1;i>0;i--){ h=(h*1103515245+12345)>>>0; const j=h%(i+1); const tmp=idx[i]; idx[i]=idx[j]; idx[j]=tmp; }
   return idx.slice(0,3).map(i=>DAILY_CHALLENGES[i].id);
 }
-function checkDailyChallenges(){
-  ensureToday();
-  let changed=false;
-  (G.dailyCh.picks||[]).forEach(id=>{
-    if(G.dailyCh.claimed.includes(id)) return;
-    const ch = DAILY_CHALLENGES.find(c=>c.id===id); if(!ch) return;
-    if(challCounter(ch.key) >= ch.goal){
-      G.dailyCh.claimed.push(id);
-      G.coins += ch.coins; addLedger('in', ch.coins, 'Desafio: '+ch.desc);
-      showToast(`🎯 Desafio cumprido! +${ch.coins} LC +${ch.xp} XP`,'heal');
-      gainXP(ch.xp);
-      changed=true;
-    }
-  });
-  if(changed) save();
-  renderDailyChallenges();
-}
+function checkDailyChallenges(){ /* desafios de hoje removidos (não dão mais bônus) */ }
 function renderDailyChallenges(){
   const el = document.getElementById('daily-challenges'); if(!el) return;
   ensureToday();
@@ -5828,7 +5809,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v9';
+  window.APP_VERSION = '2026.06.22 • v10';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
