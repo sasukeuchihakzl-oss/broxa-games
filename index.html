@@ -5763,5 +5763,65 @@ init();
     });
   }
 </script>
+<!-- PWA: botão "Instalar App" (fácil de achar) -->
+<style>
+  #pwa-install-btn{
+    position:fixed; right:12px; bottom:12px; z-index:99999;
+    padding:11px 15px; border:2px solid #f0c040; border-radius:12px;
+    background:linear-gradient(180deg,#3a265c,#0a0814); color:#f0c040;
+    font-family:'Press Start 2P',monospace; font-size:9px; cursor:pointer;
+    box-shadow:0 6px 18px rgba(0,0,0,.5), 0 0 14px rgba(240,192,64,.35);
+    display:none; align-items:center; gap:7px;
+    padding-bottom:calc(11px + env(safe-area-inset-bottom));
+    animation:pwaPulse 1.8s ease-in-out infinite;
+  }
+  @keyframes pwaPulse{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)} }
+  #pwa-ios-tip{
+    position:fixed; left:12px; right:12px; bottom:12px; z-index:99999;
+    padding:12px 14px; border:2px solid #f0c040; border-radius:12px;
+    background:linear-gradient(180deg,#3a265c,#0a0814); color:#e8dfc0;
+    font-family:'VT323',monospace; font-size:16px; line-height:1.35;
+    box-shadow:0 6px 18px rgba(0,0,0,.55); display:none;
+    padding-bottom:calc(12px + env(safe-area-inset-bottom));
+  }
+  #pwa-ios-tip b{ color:#f0c040; }
+  #pwa-ios-tip .x{ float:right; color:#8a7a5a; cursor:pointer; font-size:18px; margin-left:8px; }
+</style>
+<button id="pwa-install-btn">📲 Instalar App</button>
+<div id="pwa-ios-tip">
+  <span class="x" onclick="this.parentNode.style.display='none'">✕</span>
+  <b>Instalar no iPhone:</b> toque em <b>Compartilhar</b> (□↑) na barra do Safari e escolha
+  <b>"Adicionar à Tela de Início"</b>. Depois abra pelo ícone — o jogo abre em tela cheia.
+</div>
+<script>
+  (function(){
+    var btn = document.getElementById('pwa-install-btn');
+    var iosTip = document.getElementById('pwa-ios-tip');
+    // já instalado / rodando como app? não mostra nada.
+    var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    if (standalone) return;
+
+    // Android/Chrome: captura o evento e mostra botão de 1 toque.
+    var deferred = null;
+    window.addEventListener('beforeinstallprompt', function(e){
+      e.preventDefault();
+      deferred = e;
+      btn.style.display = 'inline-flex';
+    });
+    btn.addEventListener('click', function(){
+      if (!deferred) return;
+      deferred.prompt();
+      deferred.userChoice.finally(function(){ deferred = null; btn.style.display='none'; });
+    });
+    window.addEventListener('appinstalled', function(){ btn.style.display='none'; });
+
+    // iOS Safari: não tem beforeinstallprompt → mostra a dica 1x.
+    var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    var isSafari = /^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent);
+    if (isIOS && isSafari && !localStorage.getItem('pwa_ios_tip_seen')){
+      setTimeout(function(){ iosTip.style.display='block'; localStorage.setItem('pwa_ios_tip_seen','1'); }, 2500);
+    }
+  })();
+</script>
 </body>
 </html>
