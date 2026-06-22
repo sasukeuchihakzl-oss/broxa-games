@@ -1575,10 +1575,7 @@
             <input type="number" id="mission-xp" min="0" placeholder="XP (opcional)" title="XP manual — deixe vazio p/ usar a dificuldade" style="flex:1">
             <input type="number" id="mission-lc" min="0" placeholder="LulaCoins (opcional)" title="LulaCoins manual — deixe vazio p/ usar a dificuldade" style="flex:1">
           </div>
-          <div class="form-row">
-            <button class="pixel-btn btn-purple" style="flex:1" onclick="copyAiPrompt()">🤖 PERGUNTAR A UMA IA (copia prompt)</button>
-          </div>
-          <div class="config-hint" style="margin-top:4px">Deixe XP/LC vazios pra usar a dificuldade. Ou clique acima, cole numa IA, e digite os valores que ela retornar.</div>
+          <div class="config-hint" style="margin-top:4px">Deixe XP/LC vazios pra usar a dificuldade automática.</div>
         </div>
         <div class="section-title" style="cursor:pointer" onclick="document.getElementById('preset-list').classList.toggle('collapsed')">📋 MISSÕES PRONTAS <span style="font-size:11px;color:var(--muted)">(clique p/ abrir)</span></div>
         <div id="preset-list" class="preset-list collapsed"></div>
@@ -3057,22 +3054,6 @@ function deleteCustomTemplate(i){
   save(); renderPresets();
 }
 
-// monta um prompt pronto pra colar numa IA (ChatGPT/Claude) que devolve XP e LulaCoins
-function copyAiPrompt(){
-  const name = (document.getElementById('mission-input').value||'').trim() || '[descreva sua tarefa aqui]';
-  const prompt = `Você avalia tarefas de um jogo de produtividade. Avalie a dificuldade/esforço da tarefa abaixo e responda APENAS com dois números no formato "XP: <n> | LulaCoins: <n>".\n`+
-    `Referência: tarefa fácil ~18 XP / 18 LC, média ~48/55, difícil ~105/120, épica ~280/320. Ajuste pelo tempo e esforço.\n`+
-    `Tarefa: "${name}"`;
-  if(navigator.clipboard && navigator.clipboard.writeText){
-    navigator.clipboard.writeText(prompt).then(()=>{
-      showToast('📋 Prompt copiado! Cole numa IA e digite o XP/LC que ela retornar.','info');
-    }).catch(()=>showToast('Copie manualmente: '+prompt,'info'));
-  } else {
-    showToast('Copie: '+prompt,'info');
-  }
-  try{ window.open('https://chatgpt.com/','_blank'); }catch(e){}
-}
-
 // ===== MISSÕES PRÉ-PRONTAS =====
 function renderPresets(){
   const el = document.getElementById('preset-list'); if(!el) return;
@@ -3711,6 +3692,13 @@ const CHAR_PRESETS = {
 let db = null;
 let onlineData = {};
 let fbListener = null;
+// Config embutido — conecta online automaticamente p/ todos (sem precisar configurar nada).
+// Realtime DB em modo teste (.read/.write=true) não exige apiKey real.
+const DEFAULT_FB_CONFIG = {
+  apiKey: 'no-auth',
+  databaseURL: 'https://broxa-games-default-rtdb.firebaseio.com',
+  projectId: 'broxa-games'
+};
 
 function setFbStatus(connected, msg) {
   const dot = document.getElementById('fb-dot');
@@ -5637,10 +5625,10 @@ function finishInit() {
   setInterval(checkMissionReminders, 60000);
   try {
     const savedCfg = localStorage.getItem('broxa_fb_config');
-    if(savedCfg) {
-      const cfg = JSON.parse(savedCfg);
-      if(cfg.apiKey && cfg.databaseURL) initFirebase(cfg);
-    }
+    let cfg = null;
+    if(savedCfg) { try{ cfg = JSON.parse(savedCfg); }catch(e){} }
+    if(!cfg || !cfg.databaseURL) cfg = DEFAULT_FB_CONFIG;  // embutido: conecta sozinho
+    if(cfg.databaseURL) initFirebase(cfg);
   } catch(e) {}
   setInterval(syncOnline, 120000);
   showToast("⚔ Bem-vindo de volta, " + (G.profile?.name||'') + "!");
