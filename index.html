@@ -1104,6 +1104,17 @@
   .tm-nudge{ margin-top:6px; width:100%; padding:7px; border:1px solid var(--gold); border-radius:7px; background:rgba(240,192,64,.12); color:var(--gold); font-family:var(--pixel); font-size:8px; cursor:pointer; }
   .tm-nudge.urgent{ border-color:var(--danger); background:rgba(255,51,68,.15); color:var(--danger); animation:glow-pulse .8s ease infinite alternate; }
   .tm-nudge:active{ transform:translateY(1px); }
+  /* ===== AVISO GLOBAL DE ATRASO (topo, qualquer aba) ===== */
+  #late-banner{
+    display:none; position:fixed; top:0; left:0; right:0; z-index:9998;
+    align-items:center; gap:8px; justify-content:center;
+    padding:8px 12px; padding-top:calc(8px + env(safe-area-inset-top));
+    background:linear-gradient(180deg,#7a1020,#3a0810); border-bottom:2px solid var(--danger);
+    box-shadow:0 4px 14px rgba(0,0,0,.5); animation:glow-pulse 1s ease infinite alternate;
+  }
+  #late-banner .lb-txt{ color:#ffd7d7; font-family:var(--vt); font-size:15px; line-height:1.25; }
+  #late-banner .lb-btn{ flex:0 0 auto; padding:6px 12px; border:1px solid var(--danger); border-radius:7px;
+    background:rgba(255,51,68,.2); color:#fff; font-family:var(--pixel); font-size:8px; cursor:pointer; }
   .hl-card{ display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:11px; border:1px solid var(--border); background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(0,0,0,.22)); }
   .hl-card.me{ border-color:#ffd24a88; background:linear-gradient(180deg,rgba(255,210,74,.12),rgba(0,0,0,.25)); box-shadow:0 0 14px #ffd24a33; }
   .hl-ico{ font-size:24px; filter:drop-shadow(0 2px 3px rgba(0,0,0,.6)); }
@@ -3807,6 +3818,7 @@ function listenRivals() {
     setFbStatus(true, `Online · ${others} rival(is) conectado(s)`);
     renderHighlights();
     renderTeamMissions();
+    renderLateBanner();
     checkRivalOverdue();
     renderRanking();
     renderRaid();
@@ -3981,6 +3993,21 @@ function checkRivalOverdue(){
       gameNotify('⚠️ '+n+' atrasou uma missão!', `${m.c||''} ${m.n} (era ${m.t}) — cobra ele! Se não cumprir, todos perdem. 😱`, {tag:'late-'+n, renotify:true});
     });
   });
+}
+// aviso fixo no topo (aparece em QUALQUER aba quando um mano está atrasado)
+function renderLateBanner(){
+  const el=document.getElementById('late-banner'); if(!el) return;
+  const myName=G.profile?.name||''; const today=todayStr();
+  const lates=[];
+  ONLINE_PLAYERS.filter(n=>n!==myName).forEach(n=>{
+    const d=onlineData[n]; if(!d || d.dayDate!==today) return;
+    (d.todayMissions||[]).forEach(m=>{ if(rivalMissionLate(m)) lates.push(n); });
+  });
+  if(!lates.length){ el.style.display='none'; return; }
+  const names=[...new Set(lates)];
+  el.style.display='flex';
+  el.innerHTML = `<span class="lb-txt">⚠️ <b>${names.join(', ')}</b> está atrasado (${lates.length} missão${lates.length>1?'s':''}) — cobra! Se não cumprir, <b>todos perdem</b>.</span>`+
+    `<button class="lb-btn" onclick="switchTab('ranking', document.querySelector('.tab-btn[onclick*=ranking]'))">VER</button>`;
 }
 
 // ===== RAID CO-OP SEMANAL (os 3 juntos) =====
@@ -5806,6 +5833,8 @@ function finishInit() {
   // lembrete recorrente da próxima missão: verifica a cada 10 min (a função se auto-limita a 1/40min)
   setInterval(checkNextMissionReminder, 600000);
   setTimeout(checkNextMissionReminder, 90000);   // primeiro lembrete ~1,5 min após abrir
+  // reavalia atraso dos manos (depende da hora) a cada 2 min, mesmo sem mudança no Firebase
+  setInterval(function(){ try{ renderLateBanner(); checkRivalOverdue(); renderTeamMissions(); }catch(e){} }, 120000);
   try {
     const savedCfg = localStorage.getItem('broxa_fb_config');
     let cfg = null;
@@ -5936,6 +5965,7 @@ init();
   #pwa-ios-tip b{ color:#f0c040; }
   #pwa-ios-tip .x{ float:right; color:#8a7a5a; cursor:pointer; font-size:18px; margin-left:8px; }
 </style>
+<div id="late-banner"></div>
 <button id="pwa-install-btn">📲 Instalar App</button>
 <div id="pwa-ios-tip">
   <span class="x" onclick="this.parentNode.style.display='none'">✕</span>
@@ -5944,7 +5974,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v14';
+  window.APP_VERSION = '2026.06.22 • v15';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
