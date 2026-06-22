@@ -1096,6 +1096,9 @@
   .tm-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; }
   .tm-name{ font-family:var(--pixel); font-size:9px; }
   .tm-count{ font-size:12px; color:var(--muted); }
+  .tm-seen-row{ margin:2px 0 5px; }
+  .tm-seen{ font-size:11px; color:var(--green); }
+  .tm-seen.stale{ color:var(--danger); }
   .tm-empty{ font-size:13px; color:var(--muted); padding:2px; }
   .tm-miss{ display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:14px; color:var(--text); padding:3px 4px; border-bottom:1px solid rgba(255,255,255,.04); }
   .tm-miss .tm-time{ font-size:12px; color:var(--cyan); white-space:nowrap; }
@@ -3959,10 +3962,17 @@ function renderTeamMissions(){
     const pend = tm.filter(m=>!m.d);
     const done = tm.filter(m=>m.d).length;
     const col = (d&&d.profileColor)||'#888';
+    // última sincronização (dados velhos = não dá pra confiar)
+    const mins = (d&&d.updatedAt) ? Math.round((Date.now()-d.updatedAt)/60000) : null;
+    const stale = (mins===null) || (mins>40);
+    const seenTxt = mins===null ? 'nunca sincronizou'
+      : (mins<1 ? 'visto agora' : 'visto há '+(mins<60 ? mins+'min' : Math.round(mins/60)+'h'));
+    const seenBadge = `<span class="tm-seen${stale?' stale':''}">${stale?'⚠️ ':'🟢 '}${seenTxt}</span>`;
     html += `<div class="tm-player" style="border-color:${col}55">
       <div class="tm-head"><span class="tm-name" style="color:${col}">${n}</span>
-        <span class="tm-count">${done}/${tm.length} feitas hoje</span></div>`;
-    if(!fresh){ html += `<div class="tm-empty">sem dados de hoje ainda</div>`; }
+        <span class="tm-count">${done}/${tm.length} feitas hoje</span></div>
+      <div class="tm-seen-row">${seenBadge}</div>`;
+    if(!fresh){ html += `<div class="tm-empty">${stale?'dados desatualizados — pediu pra ele abrir o app?':'sem dados de hoje ainda'}</div>`; }
     else if(!pend.length){ html += `<div class="tm-empty" style="color:var(--green)">✅ fez tudo hoje!</div>`; }
     else {
       html += pend.map(m=>{
@@ -5974,7 +5984,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v15';
+  window.APP_VERSION = '2026.06.22 • v16';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
