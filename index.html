@@ -3212,7 +3212,7 @@ function completeMission(i) {
   G.totalMissions++;
   G.streak++;
   G.didToday = true;
-  pushHistory('done', m);
+  pushHistory('done', m, {coins, xp});
   // contadores do dia (desafios + dashboard)
   ensureToday();
   G.todayCounters.missions++;
@@ -3877,7 +3877,7 @@ function syncOnline() {
       const done = (G.history||[])
         .filter(h=>h.type==='done' && todayStr(new Date(h.t))===t)
         .filter(h=>{ if(seen[h.name]) return false; seen[h.name]=1; return true; })
-        .map(h=>({n:h.name, c:h.cat, d:true, t:''}));
+        .map(h=>({n:h.name, c:h.cat, d:true, t:'', lc:h.lc||0, xp:h.xp||0}));
       return done.concat(pend);
     })(),
     dayDate: todayStr(),
@@ -3947,7 +3947,10 @@ function openSpy(name) {
     } else {
       const done = tm.filter(m=>m.d).length;
       sm.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:3px">${done}/${tm.length} concluídas hoje</div>` +
-        tm.map(m=>`<div class="spy-miss-row"><span class="mk ${m.d?'spy-miss-done':'spy-miss-todo'}">${m.d?'✅':'⬜'}</span><span class="${m.d?'spy-miss-done':'spy-miss-todo'}">${m.c||''} ${m.n}</span></div>`).join('');
+        tm.map(m=>{
+          const gain = (m.d && (m.lc||m.xp)) ? `<span style="margin-left:auto;font-size:12px;color:var(--gold)">+${m.lc||0} LC · +${m.xp||0} XP</span>` : '';
+          return `<div class="spy-miss-row"><span class="mk ${m.d?'spy-miss-done':'spy-miss-todo'}">${m.d?'✅':'⬜'}</span><span class="${m.d?'spy-miss-done':'spy-miss-todo'}">${m.c||''} ${m.n}</span>${gain}</div>`;
+        }).join('');
     }
   }
   // compras
@@ -4004,7 +4007,7 @@ function renderTeamMissions(){
     else {
       // mostra TODAS de hoje: ✅ feitas + ⬜ pendentes (⚠️ atrasadas)
       html += tm.map(m=>{
-        if(m.d) return `<div class="tm-miss done"><span>✅ ${m.c||''} ${m.n}</span><span class="tm-time">feita</span></div>`;
+        if(m.d) return `<div class="tm-miss done"><span>✅ ${m.c||''} ${m.n}</span><span class="tm-time">${(m.lc||m.xp)?`+${m.lc||0} LC · +${m.xp||0} XP`:'feita'}</span></div>`;
         const late=rivalMissionLate(m);
         return `<div class="tm-miss${late?' late':''}">
           <span>${late?'⚠️':'⬜'} ${m.c||''} ${m.n}</span>
@@ -5096,8 +5099,10 @@ function updateClock(){
 }
 
 // ===== HISTÓRICO / LEDGER =====
-function pushHistory(type, m){
-  G.history.unshift({t:Date.now(), type, name:m.name, cat:m.cat, diff:m.diff});
+function pushHistory(type, m, extra){
+  const e = {t:Date.now(), type, name:m.name, cat:m.cat, diff:m.diff};
+  if(extra){ if(extra.coins!=null) e.lc=extra.coins; if(extra.xp!=null) e.xp=extra.xp; }
+  G.history.unshift(e);
   if(G.history.length>300) G.history.pop();
 }
 function addLedger(type, amount, reason){
@@ -6030,7 +6035,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v25';
+  window.APP_VERSION = '2026.06.22 • v26';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
