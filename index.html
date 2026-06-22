@@ -2848,6 +2848,7 @@ function renderMissions() {
         </div>
         <button class="pixel-btn btn-cyan btn-sm" title="Editar" onclick="editMission(${i})">✎</button>
         ${!m.done ? `<button class="pixel-btn btn-green btn-sm" title="Concluir" onclick="completeMission(${i})">✓</button>` : '<span style="color:var(--green);font-size:14px">✓</span>'}
+        <button class="pixel-btn btn-red btn-sm" title="Excluir" onclick="deleteMission(${i})">✕</button>
       </div>
     </div>`;
   }).join('');
@@ -3267,8 +3268,11 @@ function completeMission(i) {
 }
 
 function deleteMission(i) {
-  // anti-trapaça: excluir missão foi desativado (ninguém apaga p/ fugir da punição)
-  return;
+  const m = G.missions[i]; if(!m) return;
+  if(!confirm(`Excluir a missão "${m.name}"?`)) return;
+  G.missions.splice(i,1);
+  renderMissions(); save();
+  showToast('🗑 Missão excluída','info');
 }
 
 function gainXP(amount) {
@@ -5986,7 +5990,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v18';
+  window.APP_VERSION = '2026.06.22 • v19';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
