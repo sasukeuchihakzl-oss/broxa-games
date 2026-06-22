@@ -1104,6 +1104,8 @@
   .tm-miss .tm-time{ font-size:12px; color:var(--cyan); white-space:nowrap; }
   .tm-miss.late{ color:var(--danger); }
   .tm-miss.late .tm-time{ color:var(--danger); font-weight:bold; }
+  .tm-miss.done span:first-child{ color:var(--green); }
+  .tm-miss.done .tm-time{ color:var(--green); font-size:11px; }
   .tm-nudge{ margin-top:6px; width:100%; padding:7px; border:1px solid var(--gold); border-radius:7px; background:rgba(240,192,64,.12); color:var(--gold); font-family:var(--pixel); font-size:8px; cursor:pointer; }
   .tm-nudge.urgent{ border-color:var(--danger); background:rgba(255,51,68,.15); color:var(--danger); animation:glow-pulse .8s ease infinite alternate; }
   .tm-nudge:active{ transform:translateY(1px); }
@@ -3194,6 +3196,7 @@ function completeMission(i) {
   const m = G.missions[i];
   if(!m || m.done) return;
   m.done = true;
+  m.doneAt = Date.now();   // p/ os amigos verem o que você concluiu hoje
   m.stats = m.stats || {done:0,failed:0};
   m.stats.done++;
   const d = DIFFS[m.diff];
@@ -3859,11 +3862,23 @@ function syncOnline() {
     evo: evoOf(G.level).name,
     xpEarned: G.xpEarned || 0,
     // missões de hoje (feitas/não feitas + horário) p/ os amigos acompanharem e cobrarem
-    todayMissions: G.missions.filter(m=>{
-      if(m.date && todayStr() < m.date) return false;                                   // agendada p/ data futura
-      if(missionRecur(m)) return missionDueOn(Object.assign({}, m, {done:false}), new Date()); // recorrente devida hoje
-      return !m.done;                                                                   // única: enquanto pendente
-    }).map(m=>({n:m.name, c:m.cat, d:!!m.done, t:m.time||''})),
+    todayMissions: (function(){
+      const t = todayStr();
+      // PENDENTES (da lista atual, ainda não feitas e devidas hoje)
+      const pend = G.missions.filter(m=>{
+        if(m.done) return false;
+        if(m.date && t < m.date) return false;
+        if(missionRecur(m)) return missionDueOn(Object.assign({}, m, {done:false}), new Date());
+        return true;
+      }).map(m=>({n:m.name, c:m.cat, d:false, t:m.time||''}));
+      // CONCLUÍDAS HOJE (do histórico — confiável mesmo se a missão sumiu/resetou)
+      const seen = {};
+      const done = (G.history||[])
+        .filter(h=>h.type==='done' && todayStr(new Date(h.t))===t)
+        .filter(h=>{ if(seen[h.name]) return false; seen[h.name]=1; return true; })
+        .map(h=>({n:h.name, c:h.cat, d:true, t:''}));
+      return done.concat(pend);
+    })(),
     dayDate: todayStr(),
     // destaque por período (v4.1) — com carimbo p/ ignorar contador de período passado
     todayCount: (G.todayCounters&&G.todayCounters.missions)||0, todayMark: todayStr(),
@@ -3874,10 +3889,12 @@ function syncOnline() {
     lastPunishments: (G.lastPunishments || []).slice(0, 15),
     updatedAt: Date.now()
   };
-  db.ref('forge_players/' + myName).set(payload).catch(e => {
-    setFbStatus(false, 'Falha ao sincronizar');
-  });
-  syncSeason();
+  try {
+    db.ref('forge_players/' + myName).set(payload).catch(e => {
+      setFbStatus(false, 'Falha ao sincronizar');
+    });
+    syncSeason();
+  } catch(e) { /* db indisponível no momento — ignora, tenta no próximo autosave */ }
 }
 
 function saveAndInitFirebase() {
@@ -3979,9 +3996,11 @@ function renderTeamMissions(){
         <span class="tm-count">${done}/${tm.length} feitas hoje</span></div>
       <div class="tm-seen-row">${seenBadge}</div>`;
     if(!fresh){ html += `<div class="tm-empty">${stale?'dados desatualizados — pediu pra ele abrir o app?':'sem dados de hoje ainda'}</div>`; }
-    else if(!pend.length){ html += `<div class="tm-empty" style="color:var(--green)">✅ fez tudo hoje!</div>`; }
+    else if(!tm.length){ html += `<div class="tm-empty">nenhuma missão hoje ainda</div>`; }
     else {
-      html += pend.map(m=>{
+      // mostra TODAS de hoje: ✅ feitas + ⬜ pendentes (⚠️ atrasadas)
+      html += tm.map(m=>{
+        if(m.d) return `<div class="tm-miss done"><span>✅ ${m.c||''} ${m.n}</span><span class="tm-time">feita</span></div>`;
         const late=rivalMissionLate(m);
         return `<div class="tm-miss${late?' late':''}">
           <span>${late?'⚠️':'⬜'} ${m.c||''} ${m.n}</span>
@@ -3989,7 +4008,11 @@ function renderTeamMissions(){
         </div>`;
       }).join('');
       const lateCount = pend.filter(rivalMissionLate).length;
-      html += `<button class="tm-nudge${lateCount?' urgent':''}" onclick="sendNudge('${n}')">👊 Cobrar ${n}${lateCount?' ('+lateCount+' atrasada'+(lateCount>1?'s':'')+')':''}</button>`;
+      if(pend.length){
+        html += `<button class="tm-nudge${lateCount?' urgent':''}" onclick="sendNudge('${n}')">👊 Cobrar ${n}${lateCount?' ('+lateCount+' atrasada'+(lateCount>1?'s':'')+')':''}</button>`;
+      } else {
+        html += `<div class="tm-empty" style="color:var(--green)">✅ fez tudo hoje!</div>`;
+      }
     }
     html += `</div>`;
   });
@@ -5846,7 +5869,7 @@ function finishInit() {
   updateClock();
   setInterval(updateClock, 1000);
   setInterval(checkDailyReset, 60000);
-  setInterval(save, 15000);
+  setInterval(save, 8000);   // autosave + sync online mais frequente (atualiza os manos mais rápido)
   window.addEventListener('online', updateUI);
   window.addEventListener('offline', updateUI);
   window.addEventListener('beforeunload', save);
@@ -5998,7 +6021,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v20';
+  window.APP_VERSION = '2026.06.22 • v21';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
