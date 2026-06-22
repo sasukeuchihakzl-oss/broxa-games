@@ -1,0 +1,33 @@
+{
+  "name": "Forge of Life — BROXA GAMES",
+  "short_name": "Forge of Life",
+  "description": "RPG de produtividade: missões reais viram quests com XP, LulaCoins, dungeons e ranking entre os manos.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0814",
+  "theme_color": "#0a0814",
+  "lang": "pt-BR",
+  "categories": ["games", "productivity", "lifestyle"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

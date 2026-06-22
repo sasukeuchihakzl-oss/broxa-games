@@ -2,6 +2,17 @@
 <html>
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5">
+<!-- PWA (app instalável no celular) -->
+<title>Forge of Life — BROXA GAMES</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a0814">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Forge of Life">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" href="icon-192.png">
 <!-- Firebase SDK (Realtime Database) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
@@ -809,6 +820,40 @@
   @media (max-width:680px){
     .main-layout{ grid-template-columns:1fr; }
     .char-canvas{ width:120px; height:120px; }
+  }
+
+  /* ============================================================
+     ✦ PWA / MOBILE — app de celular (instalável)
+     ============================================================ */
+  html,body{ overscroll-behavior-y:contain; }
+  body{
+    /* respeita o notch/barra do celular */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  /* quando rodando instalado (standalone), some a barra do navegador:
+     dá mais espaço e cara de app */
+  @media (max-width:760px){
+    #game-root{ max-width:100%; padding-left:8px; padding-right:8px; }
+    .game-title{ font-size:8px; }
+    /* alvos de toque maiores */
+    button, .tab-btn, .habit-btn, .form-row select, .form-row input{
+      min-height:40px;
+    }
+    /* abas: barra rolável horizontal em vez de quebrar em várias linhas */
+    .tab-bar{
+      flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;
+      scrollbar-width:none;
+    }
+    .tab-bar::-webkit-scrollbar{ display:none; }
+    .tab-btn{ flex:0 0 auto; min-width:72px; font-size:8px; padding:8px 10px; }
+    /* grids de 2 colunas continuam, mas modais ocupam a tela toda */
+    .modal-box, .modal > div{ max-width:96vw !important; }
+  }
+  @media (max-width:430px){
+    .habits-list, .shop-grid, .zone-grid{ grid-template-columns:1fr; }
+    .inv-grid{ grid-template-columns:repeat(4,1fr); }
+    .header-stats{ gap:8px; flex-wrap:wrap; }
   }
 
   /* ============================================================
@@ -5707,6 +5752,16 @@ function init() {
 }
 
 init();
+</script>
+<!-- PWA: registra o service worker (offline + instalável) -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('sw.js').catch(function(err){
+        console.warn('SW não registrado:', err);
+      });
+    });
+  }
 </script>
 </body>
 </html>
