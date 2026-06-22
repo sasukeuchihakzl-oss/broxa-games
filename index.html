@@ -5652,12 +5652,8 @@ function selectCharacterConfirmed(name) {
   // penalidades só começam a valer amanhã (hoje é dia de montar as missões, sem punição)
   const _tomorrow = new Date(); _tomorrow.setDate(_tomorrow.getDate()+1);
   G.graceDate = todayStr(_tomorrow);
-  G.missions = [
-    {name:"Fazer exercícios hoje", cat:"💪", diff:"medium", time:"", recurring:true, done:false, id:1, stats:{done:0,failed:0}, createdAt:Date.now()},
-    {name:"Estudar 30 minutos", cat:"📚", diff:"easy", time:"", recurring:true, done:false, id:2, stats:{done:0,failed:0}, createdAt:Date.now()},
-    {name:"Beber 2L de água", cat:"🥗", diff:"easy", time:"", recurring:true, done:false, id:3, stats:{done:0,failed:0}, createdAt:Date.now()},
-    {name:"Dormir antes das 23h", cat:"🔄", diff:"medium", time:"23:00", recurring:true, done:false, id:4, stats:{done:0,failed:0}, createdAt:Date.now()}
-  ];
+  // começa sem missões automáticas — cada jogador monta as suas
+  G.missions = [];
   G.inventory = [
     {name:"Espada de Ferro",emoji:"⚔️",art:"sword",type:"weapon",atk:8,rarity:"uncommon",count:1},
     {name:"Poção Menor",emoji:"🧪",art:"potion",type:"consumable",hp:25,rarity:"common",count:2}
@@ -5825,7 +5821,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.21 • v5';
+  window.APP_VERSION = '2026.06.22 • v6';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
