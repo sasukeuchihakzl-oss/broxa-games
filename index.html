@@ -3162,18 +3162,10 @@ function renderPresets(){
       </div>`;
     }).join('');
   }
-  // sugestões fixas do jogo
-  html += `<div class="preset-subtitle">💡 SUGESTÕES</div>`;
-  html += MISSION_TEMPLATES.map((t,i)=>{
-    const d = DIFFS[t.diff]; const col = catColor(t.cat);
-    return `<button class="preset-item" onclick="addPreset(${i})" style="border-color:${col}55">
-      <span class="preset-cat">${t.cat}</span>
-      <span class="preset-name">${t.name}</span>
-      <span class="preset-tag diff-${t.diff}">${d.label}</span>
-      <span class="preset-rec">${recurLabel(t.recur)||'única'}</span>
-      <span class="preset-add">+</span>
-    </button>`;
-  }).join('');
+  // (sugestões fixas removidas — as missões agora são calculadas por IA)
+  if(!customs.length){
+    html += `<div class="preset-hint" style="color:var(--muted);font-size:13px;padding:8px 4px">Você ainda não salvou nenhuma missão pronta. Monte uma no formulário acima e toque em <b>⭐ Salvar como pronta</b> para reutilizar depois.</div>`;
+  }
   el.innerHTML = html;
 }
 function addPreset(i){
@@ -5836,7 +5828,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v8';
+  window.APP_VERSION = '2026.06.22 • v9';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
