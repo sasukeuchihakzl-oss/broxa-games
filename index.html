@@ -881,6 +881,26 @@
   #mission-time{ color-scheme:dark; }
   .time-badge{ font-size:11px; color:var(--cyan); margin-left:6px; }
   .time-badge.overdue{ color:var(--danger); font-weight:bold; }
+  .time-badge.soon{ color:var(--gold); font-weight:bold; }
+  /* Urgência na missão */
+  .mission-item.urgent-overdue{ box-shadow:inset 0 0 0 1px rgba(255,77,77,.5); background:rgba(255,77,77,.06); }
+  .mission-item.urgent-soon{ box-shadow:inset 0 0 0 1px rgba(255,200,60,.45); background:rgba(255,200,60,.05); }
+  .mission-item.urgent-overdue .mission-name::before{ content:'🔴 '; }
+  .mission-item.urgent-soon .mission-name::before{ content:'🟡 '; }
+  /* ===== RESUMO DO DIA (barra + próxima missão) ===== */
+  .day-summary{ background:linear-gradient(135deg,rgba(170,68,255,.10),rgba(0,0,0,.25)); border:1px solid var(--border); border-radius:12px; padding:10px 12px; margin-bottom:10px; }
+  .ds-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .ds-title{ font-family:var(--pixel); font-size:9px; color:var(--gold); letter-spacing:.5px; }
+  .ds-count{ font-size:14px; font-weight:bold; color:var(--text); }
+  .ds-bar{ height:10px; background:rgba(0,0,0,.4); border-radius:6px; overflow:hidden; border:1px solid var(--border); }
+  .ds-fill{ height:100%; border-radius:6px; transition:width .5s ease; box-shadow:0 0 8px rgba(255,255,255,.2); }
+  .ds-next{ display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-top:9px; padding-top:8px; border-top:1px dashed var(--border); }
+  .ds-next.none,.ds-next.done{ justify-content:center; color:var(--muted); font-size:13px; }
+  .ds-next.done{ color:var(--green); font-weight:bold; }
+  .ds-next-label{ font-family:var(--pixel); font-size:7px; color:var(--cyan); background:rgba(34,221,255,.12); padding:3px 5px; border-radius:5px; }
+  .ds-next-cat{ font-size:18px; }
+  .ds-next-name{ font-size:14px; font-weight:bold; color:var(--text); flex:1; min-width:80px; }
+  .ds-next-go{ margin-left:auto; }
   .rec-badge{ font-size:11px; color:var(--purple); margin-left:6px; }
 
   /* hábitos negativos */
@@ -1632,13 +1652,13 @@
         <button class="tab-btn" onclick="switchTab('rewards',this)">🎁 PRÊMIOS</button>
         <button class="tab-btn" onclick="switchTab('ranking',this)">🏆 RANK</button>
         <button class="tab-btn" onclick="switchTab('history',this)">📜 LOG</button>
-        <button class="tab-btn" onclick="switchTab('skills',this)">🌳 SKILLS</button>
         <button class="tab-btn" onclick="switchTab('stats',this)">📊 STATS</button>
       </div>
 
       <!-- MISSIONS TAB -->
       <div class="tab-content active" id="tab-missions">
         <div id="wake-box"></div>
+        <div id="day-summary"></div>
         <div class="add-mission-form">
           <div class="section-title">+ NOVA MISSÃO</div>
           <div class="form-row">
@@ -1791,12 +1811,6 @@
         <div id="achievements-list" style="font-size:14px;line-height:1.8;"></div>
       </div>
 
-      <!-- SKILLS TAB -->
-      <div class="tab-content" id="tab-skills" style="display:none">
-        <div class="section-title">🌳 ÁRVORE DE HABILIDADES</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Desbloqueie com gemas. <span style="color:var(--purple)">Passivas</span> aplicam sempre; <span style="color:var(--cyan)">Ativas</span> mudam o botão HABILIDADE no combate.</div>
-        <div class="skill-tree-grid" id="skill-tree-grid"></div>
-      </div>
 
       <!-- STATS / DASHBOARD TAB -->
       <div class="tab-content" id="tab-stats" style="display:none">
@@ -2821,28 +2835,80 @@ function moveMission(i, dir){
   renderMissions(); save();
 }
 
+// Uma missão "conta" pra hoje se: recorrente devida hoje, única pendente devida hoje, ou única concluída hoje
+function isTodayMission(m){
+  const r = missionRecur(m);
+  if(r) return dueToday(m);
+  if(dueToday(m)) return true;
+  if(m.done && m.doneAt && todayStr(new Date(m.doneAt))===todayStr()) return true;
+  return false;
+}
+function renderDaySummary(hm, mins){
+  const el = document.getElementById('day-summary'); if(!el) return;
+  const today = G.missions.filter(isTodayMission);
+  const total = today.length;
+  const done = today.filter(m=>m.done).length;
+  const pct = total ? Math.round(done/total*100) : 0;
+  const barCol = pct>=100 ? 'var(--green)' : (pct>=50 ? 'var(--gold)' : 'var(--cyan)');
+  // próxima missão pendente do dia (por horário; sem horário vão por último)
+  const pending = today.filter(m=>!m.done).sort((a,b)=>mins(a)-mins(b));
+  const next = pending[0];
+  let nextHtml = '';
+  if(total===0){
+    nextHtml = `<div class="ds-next none">Nenhuma missão pra hoje. Crie uma abaixo! 👇</div>`;
+  } else if(!next){
+    nextHtml = `<div class="ds-next done">🎉 Tudo concluído hoje! Mandou bem, guerreiro!</div>`;
+  } else {
+    const i = G.missions.indexOf(next);
+    let tb = '';
+    if(next.time){
+      const [hh,mm]=next.time.split(':').map(Number); const tmin=hh*60+mm;
+      const over = hm>tmin; const soon = !over && (tmin-hm)<=30;
+      tb = `<span class="time-badge ${over?'overdue':''} ${soon?'soon':''}">⏰ ${next.time}${over?' atrasada':(soon?` em ${tmin-hm}min`:'')}</span>`;
+    }
+    nextHtml = `<div class="ds-next">
+      <span class="ds-next-label">PRÓXIMA</span>
+      <span class="ds-next-cat">${next.cat}</span>
+      <span class="ds-next-name">${next.name}</span>
+      ${tb}
+      <button class="pixel-btn btn-green btn-sm ds-next-go" onclick="completeMission(${i})">✓ Concluir</button>
+    </div>`;
+  }
+  el.innerHTML = `<div class="day-summary">
+    <div class="ds-head">
+      <span class="ds-title">📅 HOJE</span>
+      <span class="ds-count">${done}/${total} <span style="color:var(--muted)">(${pct}%)</span></span>
+    </div>
+    <div class="ds-bar"><div class="ds-fill" style="width:${pct}%;background:${barCol}"></div></div>
+    ${nextHtml}
+  </div>`;
+}
 function renderMissions() {
   const list = document.getElementById('mission-list');
   renderWakeButton();
   renderDailyChallenges();
+  const now = new Date(); const hm = now.getHours()*60 + now.getMinutes();
+  const mins = m => { if(!m.time) return 99999; const [h,mm]=m.time.split(':').map(Number); return h*60+mm; };
+  renderDaySummary(hm, mins);
   if(G.missions.length===0){
     list.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:10px 0;text-align:center;">Nenhuma missão criada.<br>Adicione suas tarefas reais acima!</div>';
     return;
   }
-  const now = new Date(); const hm = now.getHours()*60 + now.getMinutes();
   // Ordenação padrão: pendentes primeiro, por horário (mais cedo → mais tarde; sem horário no fim); concluídas embaixo
-  const mins = m => { if(!m.time) return 99999; const [h,mm]=m.time.split(':').map(Number); return h*60+mm; };
   const ordered = G.missions.map((m,i)=>({m,i}))
     .sort((a,b)=> ( (a.m.done?1:0) - (b.m.done?1:0) ) || ( mins(a.m) - mins(b.m) ) );
   list.innerHTML = ordered.map(({m,i})=>{
     const d = DIFFS[m.diff];
     const col = catColor(m.cat);
     const st = m.stats || {done:0,failed:0};
-    let timeBadge = '';
+    let timeBadge = ''; let urgency = '';
     if(m.time){
-      const [hh,mm] = m.time.split(':').map(Number);
-      const overdue = !m.done && dueToday(m) && hm > (hh*60+mm);  // só atrasa se for missão DE HOJE
-      timeBadge = `<span class="time-badge ${overdue?'overdue':''}">⏰ ${m.time}${overdue?' atrasada':''}</span>`;
+      const [hh,mm] = m.time.split(':').map(Number); const tmin = hh*60+mm;
+      const overdue = !m.done && dueToday(m) && hm > tmin;        // só atrasa se for missão DE HOJE
+      const soon = !m.done && !overdue && dueToday(m) && (tmin - hm) <= 30 && (tmin - hm) >= 0;
+      urgency = overdue ? 'urgent-overdue' : (soon ? 'urgent-soon' : '');
+      const lbl = overdue ? ' atrasada' : (soon ? ` em ${tmin-hm}min` : '');
+      timeBadge = `<span class="time-badge ${overdue?'overdue':''} ${soon?'soon':''}">⏰ ${m.time}${lbl}</span>`;
     }
     const r = missionRecur(m);
     const recBonus = recurBonusLabel(m);
@@ -2855,7 +2921,7 @@ function renderMissions() {
       const [yy,mo,dd] = m.date.split('-');
       dateBadge = `<span class="date-badge ${future?'future':''}">📅 ${dd}/${mo}${future?' (agendada)':''}</span>`;
     }
-    return `<div class="mission-item ${m.done?'mission-done':''} ${folga?'mission-rest':''}" style="border-left:3px solid ${col}">
+    return `<div class="mission-item ${m.done?'mission-done':''} ${folga?'mission-rest':''} ${urgency}" style="border-left:3px solid ${col}">
       <span class="mission-cat-icon">${m.cat}</span>
       <div class="mission-info">
         <div class="mission-name">${m.name} ${recBadge}${dateBadge}${folgaBadge}${timeBadge}</div>
@@ -4829,7 +4895,7 @@ function checkNextMissionReminder(){
 function switchTab(name, btn) {
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  const tabs = ['missions','dungeons','world','shop','rewards','ranking','history','inventory','skills','stats'];
+  const tabs = ['missions','dungeons','world','shop','rewards','ranking','history','inventory','stats'];
   tabs.forEach(t=>{
     const el = document.getElementById('tab-'+t);
     if(el){
@@ -4846,7 +4912,6 @@ function switchTab(name, btn) {
   else if(name==='history') renderHistory();
   else if(name==='inventory') renderInventory();
   else if(name==='missions'){ renderMissions(); renderPresets(); }
-  else if(name==='skills') renderSkillTree();
   else if(name==='stats') renderDashboard();
 }
 
@@ -6251,7 +6316,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.23 • v37';
+  window.APP_VERSION = '2026.06.23 • v38';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
