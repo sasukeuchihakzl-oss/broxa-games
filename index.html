@@ -3288,6 +3288,18 @@ function deleteMission(i) {
 
 // XP necessário p/ subir do nível atual ao próximo (curva mais íngreme: sobe devagar)
 function xpForNext(level){ return Math.floor(300 * Math.pow(1.5, (level||1)-1)); }
+// recalcula nível/xp a partir de um XP total, usando a curva NOVA
+function levelFromTotalXp(total){
+  let level=1, rem=Math.max(0, Math.floor(total||0));
+  while(level<99 && rem >= xpForNext(level)){ rem -= xpForNext(level); level++; }
+  return {level, xp:rem, xpNext:xpForNext(level)};
+}
+// XP total acumulado na curva ANTIGA (base 100, ×1.35) — p/ migrar 1x
+function oldXpTotal(level, xp){
+  let t=Math.max(0, xp||0), n=100;
+  for(let L=1; L<(level||1); L++){ t += n; n = Math.floor(n*1.35); }
+  return t;
+}
 function gainXP(amount) {
   amount = Math.round(amount * prestigeXpMult());   // bônus permanente de prestígio (v4 #10)
   G.xp += amount;
@@ -4915,7 +4927,8 @@ function save(){
       graceDate:G.graceDate, customTemplates:G.customTemplates,
       manoBank:G.manoBank, debts:G.debts,
       migratedDefaults:G.migratedDefaults, nextReminderLast:G.nextReminderLast,
-      wokeUpDate:G.wokeUpDate, wakeNerfDate:G.wakeNerfDate, wakeRemindDate:G.wakeRemindDate, wakeStartDate:G.wakeStartDate
+      wokeUpDate:G.wokeUpDate, wakeNerfDate:G.wakeNerfDate, wakeRemindDate:G.wakeRemindDate, wakeStartDate:G.wakeStartDate,
+      xpCurveV2:G.xpCurveV2
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     G._lastSaveTs = Date.now();
@@ -4936,6 +4949,13 @@ function load(){
       const legacyDefaults = ["Fazer exercícios hoje","Estudar 30 minutos","Beber 2L de água","Dormir antes das 23h"];
       G.missions = G.missions.filter(m=> !legacyDefaults.includes(m.name));
       G.migratedDefaults = true;
+    }
+    // migração única: recalcula o NÍVEL na curva nova (mais difícil) a partir do XP já acumulado
+    if(!G.xpCurveV2){
+      const total = oldXpTotal(G.level||1, G.xp||0);
+      const nl = levelFromTotalXp(total);
+      G.level = nl.level; G.xp = nl.xp; G.xpNext = nl.xpNext;
+      G.xpCurveV2 = true;
     }
     G.profile = G.profile || defaultProfile();
     G.history = G.history || []; G.ledger = G.ledger || []; G.rewardsLog = G.rewardsLog || [];
@@ -6199,7 +6219,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.23 • v33';
+  window.APP_VERSION = '2026.06.23 • v34';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
