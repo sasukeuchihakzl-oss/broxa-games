@@ -1099,6 +1099,16 @@
   .tm-seen-row{ margin:2px 0 5px; }
   .tm-seen{ font-size:11px; color:var(--green); }
   .tm-seen.stale{ color:var(--danger); }
+  /* ===== BOTÃO ACORDEI ===== */
+  #wake-box{ margin-bottom:8px; }
+  .wake-btn{ width:100%; padding:13px; border-radius:12px; border:2px solid #ffcc44; cursor:pointer;
+    background:linear-gradient(180deg,#5a4410,#2a1f08); color:#ffe08a; font-family:var(--pixel); font-size:11px;
+    display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 12px rgba(0,0,0,.4);
+    animation:glow-pulse 1.4s ease infinite alternate; }
+  .wake-btn:active{ transform:translateY(1px); }
+  .wake-done{ width:100%; padding:11px; border-radius:12px; border:1px solid var(--green);
+    background:rgba(34,204,102,.10); color:var(--green); font-family:var(--vt); font-size:15px; text-align:center; }
+  .wake-late{ border-color:var(--danger); background:linear-gradient(180deg,#5a1414,#2a0808); color:#ffb0b0; }
   .tm-empty{ font-size:13px; color:var(--muted); padding:2px; }
   .tm-miss{ display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:14px; color:var(--text); padding:3px 4px; border-bottom:1px solid rgba(255,255,255,.04); }
   .tm-miss .tm-time{ font-size:12px; color:var(--cyan); white-space:nowrap; }
@@ -1628,6 +1638,7 @@
 
       <!-- MISSIONS TAB -->
       <div class="tab-content active" id="tab-missions">
+        <div id="wake-box"></div>
         <div class="add-mission-form">
           <div class="section-title">+ NOVA MISSÃO</div>
           <div class="form-row">
@@ -2811,6 +2822,7 @@ function moveMission(i, dir){
 
 function renderMissions() {
   const list = document.getElementById('mission-list');
+  renderWakeButton();
   renderDailyChallenges();
   if(G.missions.length===0){
     list.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:10px 0;text-align:center;">Nenhuma missão criada.<br>Adicione suas tarefas reais acima!</div>';
@@ -4895,7 +4907,8 @@ function save(){
       xpEarned:G.xpEarned, dayFailSeen:G.dayFailSeen,
       graceDate:G.graceDate, customTemplates:G.customTemplates,
       manoBank:G.manoBank, debts:G.debts,
-      migratedDefaults:G.migratedDefaults, nextReminderLast:G.nextReminderLast
+      migratedDefaults:G.migratedDefaults, nextReminderLast:G.nextReminderLast,
+      wokeUpDate:G.wokeUpDate, wakeNerfDate:G.wakeNerfDate
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     G._lastSaveTs = Date.now();
@@ -5346,6 +5359,42 @@ function doHabit(id){
   showToast(`${h.emoji} ${h.name}: -${h.hp} HP`,'dmg');
   if(G.hp<=0) triggerDeath(); else updateUI();
   save();
+}
+
+// ===== BOTÃO "ACORDEI" (nerf -100 XP se não apertar até 9h) =====
+const WAKE_DEADLINE_H = 9;   // até as 9h da manhã
+function renderWakeButton(){
+  const el = document.getElementById('wake-box'); if(!el) return;
+  const today = todayStr();
+  if(G.wokeUpDate === today){
+    el.innerHTML = `<div class="wake-done">☀️ Bom dia! Você já acordou hoje ✅</div>`;
+    return;
+  }
+  const now = new Date();
+  const late = now.getHours() >= WAKE_DEADLINE_H;   // passou das 9h
+  el.innerHTML = `<button class="wake-btn ${late?'wake-late':''}" onclick="wakeUp()">☀️ ACORDEI ${late?'(atrasado! ⚠️)':'· até 9h'}</button>`;
+}
+function wakeUp(){
+  const today = todayStr();
+  if(G.wokeUpDate === today){ showToast('Você já marcou que acordou hoje 🙂','info'); return; }
+  G.wokeUpDate = today;
+  const h = new Date().getHours();
+  if(h < WAKE_DEADLINE_H){ showToast('☀️ Bom dia! Acordou no horário 💪','heal'); }
+  else { showToast('☀️ Bom dia! (mas passou das 9h hoje)','info'); }
+  renderWakeButton(); updateUI(); save();
+}
+// verifica se passou das 9h sem acordar → -100 XP (1x por dia)
+function checkWakeNerf(){
+  const today = todayStr();
+  const now = new Date();
+  if(now.getHours() < WAKE_DEADLINE_H) return;     // ainda não deu 9h
+  if(G.wokeUpDate === today) return;               // acordou, tudo certo
+  if(G.wakeNerfDate === today) return;             // já levou o nerf hoje
+  if(G.graceDate && today < G.graceDate){ renderWakeButton(); return; }  // dia de preparação, sem punição
+  G.wakeNerfDate = today;
+  loseXP(100);
+  showToast('😴 Não apertou "Acordei" até as 9h! -100 XP','dmg');
+  renderWakeButton(); updateUI(); save();
 }
 
 // ===== HISTÓRICO (tela) =====
@@ -5930,6 +5979,9 @@ function finishInit() {
   setTimeout(checkNextMissionReminder, 90000);   // primeiro lembrete ~1,5 min após abrir
   // reavalia atraso dos manos (depende da hora) a cada 2 min, mesmo sem mudança no Firebase
   setInterval(function(){ try{ renderLateBanner(); checkRivalOverdue(); renderTeamMissions(); }catch(e){} }, 120000);
+  // botão "Acordei": verifica o nerf das 9h ao abrir e a cada minuto
+  setTimeout(function(){ try{ checkWakeNerf(); }catch(e){} }, 4000);
+  setInterval(function(){ try{ checkWakeNerf(); }catch(e){} }, 60000);
   // carrega o cache dos manos (últimos dados conhecidos) p/ mostrar mesmo sem internet
   try{ const oc = localStorage.getItem('broxa_online_cache'); if(oc){ const d=JSON.parse(oc); if(d && Object.keys(d).length) onlineData = d; } }catch(e){}
   try {
@@ -6071,7 +6123,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v27';
+  window.APP_VERSION = '2026.06.22 • v28';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
