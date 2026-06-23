@@ -2092,6 +2092,7 @@ const G = {
   seasonMissions: 0,
   duelSeen: 0,
   nudgeSeen: 0,
+  giftSeen: 0,
   // v4.1: destaque semanal
   weekMissions: 0,
   weekMark: ''
@@ -3870,6 +3871,7 @@ function listenRivals() {
   listenSeason();
   listenDuels();
   listenNudges();
+  listenGift();
   listenDayFails();
 }
 
@@ -4581,6 +4583,35 @@ function applyNudge(v){
 }
 const NUDGE_MSGS = ['Bora fazer missão, preguiçoso! 💪','Tá perdendo no ranking, corre! 🏃','Cadê a disciplina hoje? 👀','Não amarela não, mano! 🔥','Tô na sua cola no ranking 😏','Mexe esse corpo, guerreiro! ⚔'];
 
+// ===== PRESENTE / PERDÃO DE XP (admin) =====
+let giftListener = null;
+function listenGift(){
+  if(!db) return; const myName=G.profile?.name||''; if(!ONLINE_PLAYERS.includes(myName)) return;
+  if(giftListener) giftListener.off();
+  giftListener = db.ref('forge_gift/'+myName);
+  giftListener.on('value', snap=>{ const v=snap.val(); if(v) applyGift(v); });
+}
+function applyGift(v){
+  if(!v || !v.at) return;
+  if((G.giftSeen||0) >= v.at) return;
+  G.giftSeen = v.at;
+  const xp = Math.round(v.xp||0);
+  if(xp > 0){ gainXP(xp); }
+  else if(xp < 0){ loseXP(-xp); }
+  const reason = v.reason || (v.from?('de '+v.from):'');
+  showToast(`🎁 +${xp} XP ${reason}`, xp>=0?'heal':'dmg');
+  gameNotify('🎁 Você recebeu XP!', `${xp>=0?'+':''}${xp} XP ${reason}`, {tag:'gift', renotify:true});
+  if(db) db.ref('forge_gift/'+(G.profile?.name||'')).remove().catch(()=>{});
+  updateUI(); save();
+}
+function sendGift(name, xp, reason){
+  if(!db){ showToast('Conecte o Firebase para enviar XP!','dmg'); return; }
+  const myName=G.profile?.name||'';
+  db.ref('forge_gift/'+name).set({ from:myName, xp:Math.round(xp), reason:reason||'', at:Date.now() })
+    .then(()=>showToast(`🎁 ${xp>=0?'+':''}${xp} XP enviado pro ${name}!`,'heal'))
+    .catch(()=>showToast('Falha ao enviar XP','dmg'));
+}
+
 // ===== NERF COLETIVO: amigo furou o dia → todos sofrem (v6 #11) =====
 let dayFailListener = null;
 function listenDayFails(){
@@ -4921,7 +4952,7 @@ function save(){
       theme:G.theme, themesUnlocked:G.themesUnlocked,
       bestStreak:G.bestStreak, prestige:G.prestige, prestigePoints:G.prestigePoints,
       seasonId:G.seasonId, seasonTitles:G.seasonTitles, seasonMissions:G.seasonMissions,
-      duelSeen:G.duelSeen, nudgeSeen:G.nudgeSeen,
+      duelSeen:G.duelSeen, nudgeSeen:G.nudgeSeen, giftSeen:G.giftSeen,
       weekMissions:G.weekMissions, weekMark:G.weekMark,
       xpEarned:G.xpEarned, dayFailSeen:G.dayFailSeen,
       graceDate:G.graceDate, customTemplates:G.customTemplates,
@@ -4985,6 +5016,7 @@ function load(){
     G.seasonMissions = G.seasonMissions || 0;
     G.duelSeen = G.duelSeen || 0;
     G.nudgeSeen = G.nudgeSeen || 0;
+    G.giftSeen = G.giftSeen || 0;
     G.weekMissions = G.weekMissions || 0;
     G.weekMark = G.weekMark || '';
     G.xpEarned = G.xpEarned || 0;
@@ -6219,7 +6251,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.23 • v35';
+  window.APP_VERSION = '2026.06.23 • v36';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
