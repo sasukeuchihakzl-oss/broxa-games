@@ -5185,10 +5185,25 @@ function checkDailyReset(){
     try{ db.ref('forge_dayfail/'+G.lastResetDate+'/'+G.profile.name).set({missed, ts:Date.now()}); }catch(e){}
   }
   } // fim do else (fora da carência)
+  cleanupDoneUnique();   // remove missões únicas já concluídas em dias passados
   G.lastResetDate = today;
   G.day = computeDay();
   save();
   if(G.hp<=0) triggerDeath();
+}
+// remove missões ÚNICAS (sem recorrência) já concluídas em dias ANTERIORES.
+// NÃO mexe no histórico de coins/XP nem nos gastos (só na lista de missões).
+function cleanupDoneUnique(){
+  if(!Array.isArray(G.missions)) return false;
+  const t = todayStr();
+  const before = G.missions.length;
+  G.missions = G.missions.filter(m=>{
+    if(missionRecur(m)) return true;                                  // recorrente: mantém (reaparece na data certa)
+    if(!m.done) return true;                                          // pendente: mantém
+    if(m.doneAt && todayStr(new Date(m.doneAt))===t) return true;     // concluída HOJE: mantém visível hoje
+    return false;                                                     // única concluída em dia passado → some
+  });
+  return G.missions.length !== before;
 }
 
 // ===== COMPETIÇÃO (apenas jogadores reais via Firebase) =====
@@ -5993,14 +6008,16 @@ function selectCharacterConfirmed(name) {
 // ===== INIT =====
 function finishInit() {
   if(!G.startTs) G.startTs = Date.now();
-  // "Acordei" só começa a valer a partir do dia SEGUINTE ao primeiro contato
-  if(!G.wakeStartDate){
-    const _tm=new Date(); _tm.setDate(_tm.getDate()+1);
-    G.wakeStartDate = todayStr(_tm);
-    if(G.wakeNerfDate){ G.xp = (G.xp||0) + 100; }   // devolve nerf indevido aplicado hoje
-    G.wakeNerfDate=''; G.wakeRemindDate='';
+  // "Acordei" vale a partir de HOJE (pra sempre). No dia que liga, se já passou
+  // das 9h, NÃO pune (pra não punir injustamente) — de amanhã em diante vale normal.
+  const _today = todayStr();
+  if(!G.wakeStartDate || G.wakeStartDate > _today){
+    G.wakeStartDate = _today;
+    if(new Date().getHours() >= WAKE_DEADLINE_H && G.wokeUpDate !== _today){ G.wakeNerfDate = _today; }
+    G.wakeRemindDate = '';
     save();
   }
+  if(cleanupDoneUnique()) save();   // limpa missões únicas concluídas em dias passados
   applyTheme(G.theme || 'classic');
   pregenIcons();
   buildCatSelect();
@@ -6180,7 +6197,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v31';
+  window.APP_VERSION = '2026.06.23 • v32';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
