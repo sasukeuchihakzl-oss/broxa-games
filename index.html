@@ -2830,7 +2830,11 @@ function renderMissions() {
     return;
   }
   const now = new Date(); const hm = now.getHours()*60 + now.getMinutes();
-  list.innerHTML = G.missions.map((m,i)=>{
+  // Ordenação padrão: pendentes primeiro, por horário (mais cedo → mais tarde; sem horário no fim); concluídas embaixo
+  const mins = m => { if(!m.time) return 99999; const [h,mm]=m.time.split(':').map(Number); return h*60+mm; };
+  const ordered = G.missions.map((m,i)=>({m,i}))
+    .sort((a,b)=> ( (a.m.done?1:0) - (b.m.done?1:0) ) || ( mins(a.m) - mins(b.m) ) );
+  list.innerHTML = ordered.map(({m,i})=>{
     const d = DIFFS[m.diff];
     const col = catColor(m.cat);
     const st = m.stats || {done:0,failed:0};
@@ -2859,10 +2863,6 @@ function renderMissions() {
       </div>
       <span class="diff-badge ${d.class}">${d.label}</span>
       <div class="mission-actions">
-        <div class="mission-reorder">
-          <button class="m-move" title="Subir" onclick="moveMission(${i},-1)">▲</button>
-          <button class="m-move" title="Descer" onclick="moveMission(${i},1)">▼</button>
-        </div>
         ${!m.done ? `<button class="pixel-btn btn-green btn-sm" title="Concluir" onclick="completeMission(${i})">✓</button>` : '<span style="color:var(--green);font-size:14px">✓</span>'}
       </div>
     </div>`;
@@ -6251,7 +6251,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.23 • v36';
+  window.APP_VERSION = '2026.06.23 • v37';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
