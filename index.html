@@ -1916,7 +1916,7 @@
             <input type="number" id="screen-min" placeholder="min" min="0" max="1440" style="width:70px">
             <button class="pixel-btn btn-gold" onclick="addScreenEntry()">OK</button>
           </div>
-          <div class="config-hint">Abra o "Bem-estar Digital" do celular e digite os minutos de cada app. Quando o app companheiro estiver instalado, isso vem sozinho. 🤖</div>
+          <div class="config-hint">Abra o "Bem-estar Digital" do celular e digite os minutos de cada app.</div>
         </div>
         <div id="screen-today"></div>
         <div class="sep"></div>
@@ -4980,7 +4980,7 @@ function sendGift(name, xp, reason){
     .catch(()=>showToast('Falha ao enviar XP','dmg'));
 }
 
-// ===== 📱 TEMPO DE TELA (isolado — companheiro Android grava em forge_screentime/<nome>) =====
+// ===== 📱 TEMPO DE TELA (isolado — lê forge_screentime/<nome>) =====
 let screenListener = null;
 function listenScreenTime(){
   if(!db) return; const myName=G.profile?.name||''; if(!ONLINE_PLAYERS.includes(myName)) return;
@@ -5058,8 +5058,8 @@ function renderScreenTime(){
   if(st){
     const auto = G.screenTime && G.screenTime.src==='auto';
     st.innerHTML = auto
-      ? `🤖 Recebendo automático do app companheiro (atualizado ${G.screenTime.at?fmtShort(G.screenTime.at):'hoje'}).`
-      : `✍️ Registro manual. Instale o app companheiro p/ vir sozinho.`;
+      ? `🤖 Sincronizado automaticamente (atualizado ${G.screenTime.at?fmtShort(G.screenTime.at):'hoje'}).`
+      : `✍️ Registro manual.`;
   }
   // hoje
   const apps = (G.screenTime&&G.screenTime.apps)||{};
@@ -6900,7 +6900,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.23 • v44';
+  window.APP_VERSION = '2026.06.23 • v45';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
