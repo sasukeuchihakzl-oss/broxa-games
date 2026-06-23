@@ -4913,7 +4913,7 @@ function save(){
       graceDate:G.graceDate, customTemplates:G.customTemplates,
       manoBank:G.manoBank, debts:G.debts,
       migratedDefaults:G.migratedDefaults, nextReminderLast:G.nextReminderLast,
-      wokeUpDate:G.wokeUpDate, wakeNerfDate:G.wakeNerfDate, wakeRemindDate:G.wakeRemindDate
+      wokeUpDate:G.wokeUpDate, wakeNerfDate:G.wakeNerfDate, wakeRemindDate:G.wakeRemindDate, wakeStartDate:G.wakeStartDate
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     G._lastSaveTs = Date.now();
@@ -5402,6 +5402,11 @@ const WAKE_DEADLINE_H = 9;   // até as 9h da manhã
 function renderWakeButton(){
   const el = document.getElementById('wake-box'); if(!el) return;
   const today = todayStr();
+  if(G.wakeStartDate && today < G.wakeStartDate){
+    const dm = G.wakeStartDate.split('-');
+    el.innerHTML = `<div class="wake-done" style="border-color:#ffcc44;color:#ffe08a;background:rgba(255,204,68,.08)">☀️ "Acordei" começa a valer ${dm[2]}/${dm[1]} — aperte antes das ${WAKE_DEADLINE_H}h a partir de lá</div>`;
+    return;
+  }
   if(G.wokeUpDate === today){
     el.innerHTML = `<div class="wake-done">☀️ Bom dia! Você já acordou hoje ✅</div>`;
     return;
@@ -5422,6 +5427,7 @@ function wakeUp(){
 // verifica o "Acordei": lembra antes das 9h e aplica -100 XP se passar sem acordar (1x/dia)
 function checkWakeNerf(){
   const today = todayStr();
+  if(G.wakeStartDate && today < G.wakeStartDate){ renderWakeButton(); return; }  // ainda não começou a valer
   const h = new Date().getHours();
   if(G.wokeUpDate === today) return;               // já acordou hoje → nada a fazer
   // lembrete (notificação) a partir das 7h, antes das 9h, 1x por dia
@@ -5987,6 +5993,14 @@ function selectCharacterConfirmed(name) {
 // ===== INIT =====
 function finishInit() {
   if(!G.startTs) G.startTs = Date.now();
+  // "Acordei" só começa a valer a partir do dia SEGUINTE ao primeiro contato
+  if(!G.wakeStartDate){
+    const _tm=new Date(); _tm.setDate(_tm.getDate()+1);
+    G.wakeStartDate = todayStr(_tm);
+    if(G.wakeNerfDate){ G.xp = (G.xp||0) + 100; }   // devolve nerf indevido aplicado hoje
+    G.wakeNerfDate=''; G.wakeRemindDate='';
+    save();
+  }
   applyTheme(G.theme || 'classic');
   pregenIcons();
   buildCatSelect();
@@ -6166,7 +6180,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v29';
+  window.APP_VERSION = '2026.06.22 • v30';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
