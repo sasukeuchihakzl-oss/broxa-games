@@ -4526,7 +4526,12 @@ function challengeDuel(name){
   if(!ONLINE_PLAYERS.includes(myName)) return;
   const oppPow = rivalPower(name);
   if(oppPow==null){ showToast(name+' precisa sincronizar (abrir o jogo) primeiro.','dmg'); return; }
-  const betRaw = prompt(`⚔ Duelar com ${name}\n\nApostar quantas LulaCoins? (você tem ${G.coins})`,'100');
+  gameAsk({ title:`⚔ Duelar com ${name}`, label:`Apostar quantas LulaCoins? (você tem ${G.coins})`,
+    type:'number', value:'100', okText:'APOSTAR', onOk:(betRaw)=>resolveDuel(name, betRaw) });
+}
+function resolveDuel(name, betRaw){
+  const myName=G.profile?.name||'';
+  const oppPow = rivalPower(name); if(oppPow==null) return;
   const bet = Math.floor(parseFloat(betRaw));
   if(isNaN(bet)||bet<=0) return;
   if(bet>G.coins){ showToast('Você não tem LulaCoins suficientes!','dmg'); return; }
@@ -4908,7 +4913,7 @@ function save(){
       graceDate:G.graceDate, customTemplates:G.customTemplates,
       manoBank:G.manoBank, debts:G.debts,
       migratedDefaults:G.migratedDefaults, nextReminderLast:G.nextReminderLast,
-      wokeUpDate:G.wokeUpDate, wakeNerfDate:G.wakeNerfDate
+      wokeUpDate:G.wokeUpDate, wakeNerfDate:G.wakeNerfDate, wakeRemindDate:G.wakeRemindDate
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     G._lastSaveTs = Date.now();
@@ -5078,21 +5083,22 @@ function copySaveCode(){
     const code = btoa(unescape(encodeURIComponent(raw)));
     navigator.clipboard.writeText(code)
       .then(()=>showToast('📋 Código do save copiado!','info'))
-      .catch(()=>{ prompt('Copie seu código de save:', code); });
+      .catch(()=>{ gameAsk({ title:'📋 Código do save', label:'Copie e guarde este código:', type:'textarea', value:code, readonly:true }); });
   }catch(e){ showToast('Falha ao gerar código','dmg'); }
 }
 function pasteSaveCode(){
-  const code = prompt('Cole aqui o código do save:');
-  if(!code) return;
-  try{
-    const raw = decodeURIComponent(escape(atob(code.trim())));
-    const data = JSON.parse(raw);
-    if(!data || typeof data!=='object' || !data.profile) throw new Error('inválido');
-    if(!confirm('Carregar este save vai SUBSTITUIR seu progresso atual. Continuar?')) return;
-    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
-    showToast('📝 Save carregado! Recarregando…','heal');
-    setTimeout(()=>location.reload(), 900);
-  }catch(e){ showToast('Código de save inválido!','dmg'); }
+  gameAsk({ title:'📝 Colar código do save', label:'Cole aqui o código:', type:'textarea', value:'', okText:'CARREGAR', onOk:(code)=>{
+    if(!code) return;
+    try{
+      const raw = decodeURIComponent(escape(atob(code.trim())));
+      const data = JSON.parse(raw);
+      if(!data || typeof data!=='object' || !data.profile) throw new Error('inválido');
+      if(!confirm('Carregar este save vai SUBSTITUIR seu progresso atual. Continuar?')) return;
+      localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+      showToast('📝 Save carregado! Recarregando…','heal');
+      setTimeout(()=>location.reload(), 900);
+    }catch(e){ showToast('Código de save inválido!','dmg'); }
+  }});
 }
 
 // ===== DATA / HORA REAL =====
@@ -5328,6 +5334,32 @@ function openRewardInput(r, fields, compute){
   };
 }
 function closeRewardInput(){ const m=document.getElementById('reward-input-modal'); if(m) m.classList.remove('show'); }
+// modal genérico de entrada (substitui prompt(), que NÃO funciona em PWA no celular)
+// opts: {title, label, type:'number'|'text'|'textarea', value, readonly, okText, cancelText, onOk(value)}
+function gameAsk(opts){
+  let modal=document.getElementById('ask-modal');
+  if(!modal){ modal=document.createElement('div'); modal.id='ask-modal'; modal.className='modal'; document.body.appendChild(modal); }
+  const st='width:100%;padding:11px;border-radius:6px;border:1px solid var(--border);background:#1a1426;color:var(--text);font-size:16px';
+  const isTA=opts.type==='textarea';
+  const ro=opts.readonly?'readonly':'';
+  const safe=(opts.value!=null?String(opts.value):'');
+  const field=isTA
+    ? `<textarea id="ask-input" rows="4" ${ro} style="${st};resize:vertical">${safe.replace(/</g,'&lt;')}</textarea>`
+    : `<input id="ask-input" type="${opts.type==='number'?'number':'text'}" ${opts.type==='number'?'inputmode="decimal" min="0"':''} ${ro} value="${safe.replace(/"/g,'&quot;')}" style="${st}">`;
+  modal.innerHTML=`<div class="modal-box">
+    <div class="modal-title">${opts.title||''}</div>
+    ${opts.label?`<div style="font-size:13px;color:var(--text);margin:6px 0 6px;white-space:pre-line">${opts.label}</div>`:''}
+    ${field}
+    <div class="modal-actions" style="display:flex;gap:8px;margin-top:12px">
+      <button class="pixel-btn btn-red btn-sm" style="flex:1" onclick="closeAsk()">${opts.cancelText||'FECHAR'}</button>
+      ${opts.onOk?`<button class="pixel-btn btn-green btn-sm" style="flex:1" id="ask-ok">${opts.okText||'OK'}</button>`:''}
+    </div></div>`;
+  modal.classList.add('show');
+  const inp=document.getElementById('ask-input');
+  if(opts.readonly && inp){ setTimeout(()=>{ inp.focus(); inp.select(); }, 50); }
+  if(opts.onOk){ document.getElementById('ask-ok').onclick=()=>{ const v=inp.value; closeAsk(); opts.onOk(v); }; }
+}
+function closeAsk(){ const m=document.getElementById('ask-modal'); if(m) m.classList.remove('show'); }
 function finalizeReward(r, cost, label){
   if(G.coins < cost){ showToast('Faltam '+(cost-G.coins)+' LulaCoins!','dmg'); return; }
   G.coins -= cost; addLedger('out', cost, 'Recompensa: '+label);
@@ -5343,7 +5375,10 @@ function finalizeReward(r, cost, label){
 // ===== HÁBITOS NEGATIVOS (punições) =====
 function renderHabits(){
   const el = document.getElementById('habits-list'); if(!el) return;
-  el.innerHTML = HABITS.map(h=>`<button class="habit-btn" onclick="doHabit('${h.id}')">${h.emoji} ${h.name} <span class="habit-cost">-${h.hp}HP · -${h.coins}LC</span></button>`).join('');
+  el.innerHTML = HABITS.map(h=>{
+    const c=[]; if(h.hp)c.push('-'+h.hp+'HP'); if(h.coins)c.push('-'+h.coins+'LC'); if(h.xp)c.push('-'+h.xp+'XP');
+    return `<button class="habit-btn" onclick="doHabit('${h.id}')">${h.emoji} ${h.name} <span class="habit-cost">${c.join(' · ')}</span></button>`;
+  }).join('');
 }
 function doHabit(id){
   const h = HABITS.find(x=>x.id===id); if(!h) return;
@@ -5356,7 +5391,8 @@ function doHabit(id){
   G.lastPunishments = G.lastPunishments || [];
   G.lastPunishments.unshift({t:Date.now(), emoji:h.emoji, name:h.name, hp:h.hp||0, coins:h.coins||0});
   if(G.lastPunishments.length > 20) G.lastPunishments.pop();
-  showToast(`${h.emoji} ${h.name}: -${h.hp} HP`,'dmg');
+  const parts=[]; if(h.hp)parts.push('-'+h.hp+' HP'); if(h.coins)parts.push('-'+h.coins+' LC'); if(h.xp)parts.push('-'+h.xp+' XP');
+  showToast(`${h.emoji} ${h.name}: ${parts.join(' · ')||'aplicado'}`,'dmg');
   if(G.hp<=0) triggerDeath(); else updateUI();
   save();
 }
@@ -5383,17 +5419,24 @@ function wakeUp(){
   else { showToast('☀️ Bom dia! (mas passou das 9h hoje)','info'); }
   renderWakeButton(); updateUI(); save();
 }
-// verifica se passou das 9h sem acordar → -100 XP (1x por dia)
+// verifica o "Acordei": lembra antes das 9h e aplica -100 XP se passar sem acordar (1x/dia)
 function checkWakeNerf(){
   const today = todayStr();
-  const now = new Date();
-  if(now.getHours() < WAKE_DEADLINE_H) return;     // ainda não deu 9h
-  if(G.wokeUpDate === today) return;               // acordou, tudo certo
+  const h = new Date().getHours();
+  if(G.wokeUpDate === today) return;               // já acordou hoje → nada a fazer
+  // lembrete (notificação) a partir das 7h, antes das 9h, 1x por dia
+  if(h>=7 && h<WAKE_DEADLINE_H && G.wakeRemindDate!==today){
+    G.wakeRemindDate = today;
+    gameNotify('☀️ Bom dia! Aperta o "Acordei"', `Antes das ${WAKE_DEADLINE_H}h, senão perde 100 XP!`, {tag:'wake', renotify:true});
+    save();
+  }
+  if(h < WAKE_DEADLINE_H) return;                  // ainda não deu 9h → só lembra
   if(G.wakeNerfDate === today) return;             // já levou o nerf hoje
   if(G.graceDate && today < G.graceDate){ renderWakeButton(); return; }  // dia de preparação, sem punição
   G.wakeNerfDate = today;
   loseXP(100);
   showToast('😴 Não apertou "Acordei" até as 9h! -100 XP','dmg');
+  gameNotify('😴 -100 XP de penalidade', 'Você não apertou "Acordei" até as 9h hoje.', {tag:'wake', renotify:true});
   renderWakeButton(); updateUI(); save();
 }
 
@@ -6123,7 +6166,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v28';
+  window.APP_VERSION = '2026.06.22 • v29';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
