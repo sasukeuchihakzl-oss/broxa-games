@@ -2025,7 +2025,7 @@ const G = {
   hp: 100,
   maxHp: 100,
   xp: 0,
-  xpNext: 300,
+  xpNext: 2460,
   coins: 150,
   gems: 5,
   streak: 0,
@@ -2492,7 +2492,7 @@ function doPrestige(){
   if(!confirm('⭐ RENASCER?\n\nVocê volta ao Nível 1, mas mantém moedas, gemas, itens, missões e conquistas.\n\nGanha PARA SEMPRE: +10% de XP e +5% de dano (acumula a cada prestígio).')) return;
   G.prestige = (G.prestige||0) + 1;
   G.prestigePoints = (G.prestigePoints||0) + 1;
-  G.level = 1; G.xp = 0; G.xpNext = 300;
+  G.level = 1; G.xp = 0; G.xpNext = 2460;
   G.maxHp = 100 + (G.prestige*20); // +20 HP base permanente por prestígio
   G.hp = G.maxHp;
   G.attrPoints = (G.attrPoints||0) + 3;
@@ -3287,7 +3287,7 @@ function deleteMission(i) {
 }
 
 // XP necessário p/ subir do nível atual ao próximo (curva mais íngreme: sobe devagar)
-function xpForNext(level){ return Math.floor(300 * Math.pow(1.5, (level||1)-1)); }
+function xpForNext(level){ return Math.floor(2460 * Math.pow(1.5, (level||1)-1)); }
 // recalcula nível/xp a partir de um XP total, usando a curva NOVA
 function levelFromTotalXp(total){
   let level=1, rem=Math.max(0, Math.floor(total||0));
@@ -4928,7 +4928,7 @@ function save(){
       manoBank:G.manoBank, debts:G.debts,
       migratedDefaults:G.migratedDefaults, nextReminderLast:G.nextReminderLast,
       wokeUpDate:G.wokeUpDate, wakeNerfDate:G.wakeNerfDate, wakeRemindDate:G.wakeRemindDate, wakeStartDate:G.wakeStartDate,
-      xpCurveV2:G.xpCurveV2
+      xpCurveV2:G.xpCurveV2, xpCurveV3:G.xpCurveV3
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     G._lastSaveTs = Date.now();
@@ -4950,12 +4950,12 @@ function load(){
       G.missions = G.missions.filter(m=> !legacyDefaults.includes(m.name));
       G.migratedDefaults = true;
     }
-    // migração única: recalcula o NÍVEL na curva nova (mais difícil) a partir do XP já acumulado
-    if(!G.xpCurveV2){
-      const total = oldXpTotal(G.level||1, G.xp||0);
+    // migração: recalcula o NÍVEL na curva nova (~20k p/ Veterano) pelo XP TOTAL já ganho
+    if(!G.xpCurveV3){
+      const total = (G.xpEarned!=null && G.xpEarned>0) ? G.xpEarned : oldXpTotal(G.level||1, G.xp||0);
       const nl = levelFromTotalXp(total);
       G.level = nl.level; G.xp = nl.xp; G.xpNext = nl.xpNext;
-      G.xpCurveV2 = true;
+      G.xpCurveV2 = true; G.xpCurveV3 = true;
     }
     G.profile = G.profile || defaultProfile();
     G.history = G.history || []; G.ledger = G.ledger || []; G.rewardsLog = G.rewardsLog || [];
@@ -6141,7 +6141,7 @@ function init() {
   if(!loaded || !ONLINE_PLAYERS.includes(name)) {
     // Limpa qualquer save inválido e mostra seleção de personagem
     Object.assign(G, {
-      profile:null, level:1, hp:100, maxHp:100, xp:0, xpNext:300,
+      profile:null, level:1, hp:100, maxHp:100, xp:0, xpNext:2460,
       coins:150, gems:5, streak:0, day:1, totalMissions:0, attrs:defaultAttrs(),
       attrPoints:0, missions:[], inventory:[], equipped:{weapon:null,armor:null,accessory:null},
       dungeonProgress:[0,0,0,0,0,0], dungeonsCleared:0, raidApplied:'',
@@ -6219,7 +6219,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.23 • v34';
+  window.APP_VERSION = '2026.06.23 • v35';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
