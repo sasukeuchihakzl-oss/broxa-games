@@ -1160,6 +1160,19 @@
   .feed-react{ background:rgba(255,255,255,.06); border:1px solid var(--border); border-radius:7px; font-size:13px; cursor:pointer; padding:2px 5px; transition:transform .1s, background .2s; }
   .feed-react:hover{ background:rgba(255,210,74,.18); transform:scale(1.15); }
   .feed-react:active{ transform:scale(.9); }
+  /* ===== TEMPO DE TELA ===== */
+  .st-total{ font-size:14px; color:var(--text); margin-bottom:8px; }
+  .st-row{ display:flex; align-items:center; gap:8px; padding:5px 0; font-size:13px; }
+  .st-row.over{ color:var(--danger); }
+  .st-name{ min-width:78px; color:var(--text); }
+  .st-bar{ flex:1; height:9px; background:rgba(0,0,0,.35); border-radius:5px; overflow:hidden; border:1px solid var(--border); }
+  .st-fill{ display:block; height:100%; background:var(--cyan); border-radius:5px; }
+  .st-row.over .st-fill{ background:var(--danger); }
+  .st-val{ font-size:12px; white-space:nowrap; }
+  .st-goal{ color:var(--muted); font-size:10px; }
+  .st-x{ background:transparent; border:none; color:var(--muted); cursor:pointer; font-size:12px; }
+  .st-goalbtn{ background:rgba(34,221,255,.12); border:1px solid var(--border); border-radius:6px; color:var(--cyan); font-size:10px; cursor:pointer; padding:2px 6px; }
+  .st-tip{ font-size:12px; color:var(--text); background:linear-gradient(135deg,rgba(255,210,74,.08),rgba(0,0,0,.18)); border:1px solid var(--border); border-radius:8px; padding:7px 9px; margin-bottom:5px; line-height:1.4; }
   .tm-player{ border:1px solid var(--border); border-radius:11px; padding:8px 10px; background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(0,0,0,.22)); }
   .tm-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; }
   .tm-name{ font-family:var(--pixel); font-size:9px; }
@@ -1708,6 +1721,7 @@
         <button class="tab-btn" onclick="switchTab('ranking',this)">🏆 RANK</button>
         <button class="tab-btn" onclick="switchTab('history',this)">📜 LOG</button>
         <button class="tab-btn" onclick="switchTab('stats',this)">📊 STATS</button>
+        <button class="tab-btn" onclick="switchTab('screen',this)">📱 TELA</button>
       </div>
 
       <!-- MISSIONS TAB -->
@@ -1889,6 +1903,31 @@
         <div id="dash-cats"></div>
         <div class="sep"></div>
         <button class="pixel-btn btn-gold btn-sm" style="width:100%" onclick="shareWeeklyRecap()">📤 GERAR RECAP DA SEMANA</button>
+      </div>
+
+      <!-- SCREEN TIME TAB (📱 Tempo de Tela) -->
+      <div class="tab-content" id="tab-screen" style="display:none">
+        <div class="section-title">📱 TEMPO DE TELA — HOJE</div>
+        <div id="screen-status" class="config-hint" style="margin-bottom:8px"></div>
+        <div class="add-mission-form">
+          <div class="section-title" style="font-size:9px">+ REGISTRAR APP</div>
+          <div class="form-row">
+            <input type="text" id="screen-app" placeholder="App (ex: Instagram)" maxlength="20" style="flex:1">
+            <input type="number" id="screen-min" placeholder="min" min="0" max="1440" style="width:70px">
+            <button class="pixel-btn btn-gold" onclick="addScreenEntry()">OK</button>
+          </div>
+          <div class="config-hint">Abra o "Bem-estar Digital" do celular e digite os minutos de cada app. Quando o app companheiro estiver instalado, isso vem sozinho. 🤖</div>
+        </div>
+        <div id="screen-today"></div>
+        <div class="sep"></div>
+        <div class="section-title">📊 MÉDIA DIÁRIA (7 dias)</div>
+        <div id="screen-avg"></div>
+        <div class="sep"></div>
+        <div class="section-title">🎯 METAS POR APP</div>
+        <div id="screen-goals"></div>
+        <div class="sep"></div>
+        <div class="section-title">💡 COMO MELHORAR</div>
+        <div id="screen-tips"></div>
       </div>
 
     </div>
@@ -2156,6 +2195,10 @@ const G = {
   customTemplates: [],    // v6.1: missões prontas criadas pelo usuário
   allDoneToday: false,
   perfectDayDate: '',     // dia em que o alarde de "100% concluído" já tocou
+  // 📱 tempo de tela (isolado — não interfere no jogo)
+  screenTime: null,       // {date, apps:{nome:min}, src}
+  screenLog: [],          // histórico [{date, apps:{}}]
+  screenGoals: {},        // {nome:minMeta}
   skillsUnlocked: [],
   skillCooldowns: {},
   furyTurns: 0,
@@ -4194,6 +4237,7 @@ function listenRivals() {
   listenGift();
   listenReact();
   listenCatalog();
+  listenScreenTime();
   listenDayFails();
 }
 
@@ -4936,6 +4980,143 @@ function sendGift(name, xp, reason){
     .catch(()=>showToast('Falha ao enviar XP','dmg'));
 }
 
+// ===== 📱 TEMPO DE TELA (isolado — companheiro Android grava em forge_screentime/<nome>) =====
+let screenListener = null;
+function listenScreenTime(){
+  if(!db) return; const myName=G.profile?.name||''; if(!ONLINE_PLAYERS.includes(myName)) return;
+  if(screenListener) screenListener.off();
+  screenListener = db.ref('forge_screentime/'+myName);
+  screenListener.on('value', snap=>{
+    const v = snap.val(); if(!v || !v.apps) return;
+    const today = todayStr();
+    if(v.date && v.date !== today) return;     // só usa dados de hoje
+    ensureScreenToday();
+    // o app automático tem prioridade sobre o manual
+    G.screenTime = { date:today, apps:Object.assign({}, v.apps), src:'auto', at:v.at||Date.now() };
+    save();
+    const tab = document.getElementById('tab-screen');
+    if(tab && tab.style.display!=='none') renderScreenTime();
+  });
+}
+// garante o registro de hoje e arquiva o de ontem no histórico
+function ensureScreenToday(){
+  const today = todayStr();
+  if(G.screenTime && G.screenTime.date && G.screenTime.date !== today){
+    G.screenLog = Array.isArray(G.screenLog)?G.screenLog:[];
+    if(Object.keys(G.screenTime.apps||{}).length){
+      G.screenLog.unshift({date:G.screenTime.date, apps:G.screenTime.apps});
+      if(G.screenLog.length>60) G.screenLog.pop();
+    }
+    G.screenTime = null;
+  }
+  if(!G.screenTime) G.screenTime = {date:today, apps:{}, src:'manual'};
+}
+function screenTotal(apps){ return Object.values(apps||{}).reduce((s,n)=>s+(+n||0),0); }
+function fmtMin(m){ m=Math.round(+m||0); if(m<60) return m+'min'; const h=Math.floor(m/60), r=m%60; return h+'h'+(r?(' '+r+'min'):''); }
+function addScreenEntry(){
+  ensureScreenToday();
+  const an = (document.getElementById('screen-app').value||'').trim();
+  const mn = parseInt((document.getElementById('screen-min').value||'').trim());
+  if(!an){ showToast('Digite o nome do app!','dmg'); return; }
+  if(isNaN(mn)||mn<0){ showToast('Digite os minutos!','dmg'); return; }
+  G.screenTime.apps[an] = mn;            // sobrescreve (valor do dia)
+  G.screenTime.src = 'manual';
+  document.getElementById('screen-app').value='';
+  document.getElementById('screen-min').value='';
+  save(); renderScreenTime();
+  showToast('📱 '+an+': '+fmtMin(mn)+' registrado','info');
+}
+function removeScreenApp(name){
+  if(!G.screenTime||!G.screenTime.apps) return;
+  delete G.screenTime.apps[name];
+  save(); renderScreenTime();
+}
+function setScreenGoal(name){
+  const cur = G.screenGoals[name]||'';
+  gameAsk({ title:'🎯 Meta de '+name, label:'Limite diário em minutos (vazio = sem meta):', type:'text', value:String(cur), okText:'SALVAR', onOk:(val)=>{
+    const m = parseInt((val||'').trim());
+    if(isNaN(m)||m<=0){ delete G.screenGoals[name]; } else { G.screenGoals[name]=m; }
+    save(); renderScreenTime();
+  }});
+}
+// média diária por app nos últimos 7 dias (inclui hoje)
+function screenAvg(){
+  const days = [];
+  if(G.screenTime && Object.keys(G.screenTime.apps||{}).length) days.push(G.screenTime.apps);
+  (G.screenLog||[]).slice(0,6).forEach(e=>days.push(e.apps||{}));
+  if(!days.length) return {perApp:{}, total:0, n:0};
+  const sum={}; days.forEach(a=>Object.entries(a).forEach(([k,v])=>{ sum[k]=(sum[k]||0)+(+v||0); }));
+  const perApp={}; Object.entries(sum).forEach(([k,v])=>perApp[k]=Math.round(v/days.length));
+  const total = Math.round(Object.values(perApp).reduce((s,n)=>s+n,0));
+  return {perApp, total, n:days.length};
+}
+function renderScreenTime(){
+  ensureScreenToday();
+  const myName=G.profile?.name||'';
+  // status
+  const st = document.getElementById('screen-status');
+  if(st){
+    const auto = G.screenTime && G.screenTime.src==='auto';
+    st.innerHTML = auto
+      ? `🤖 Recebendo automático do app companheiro (atualizado ${G.screenTime.at?fmtShort(G.screenTime.at):'hoje'}).`
+      : `✍️ Registro manual. Instale o app companheiro p/ vir sozinho.`;
+  }
+  // hoje
+  const apps = (G.screenTime&&G.screenTime.apps)||{};
+  const today = document.getElementById('screen-today');
+  if(today){
+    const ents = Object.entries(apps).sort((a,b)=>b[1]-a[1]);
+    if(!ents.length){ today.innerHTML = `<div class="raid-note">Nada registrado hoje ainda.</div>`; }
+    else {
+      const tot = screenTotal(apps);
+      today.innerHTML = `<div class="st-total">⏱️ Total hoje: <b>${fmtMin(tot)}</b></div>` + ents.map(([k,v])=>{
+        const goal = G.screenGoals[k];
+        const over = goal && v>goal;
+        return `<div class="st-row${over?' over':''}">
+          <span class="st-name">${k}</span>
+          <span class="st-bar"><span class="st-fill" style="width:${Math.min(100,Math.round(v/Math.max(tot,1)*100))}%"></span></span>
+          <span class="st-val">${fmtMin(v)}${goal?` <span class="st-goal">/${fmtMin(goal)}</span>`:''}</span>
+          <button class="st-x" title="Remover" onclick="removeScreenApp('${k.replace(/'/g,"")}')">✕</button>
+        </div>`;
+      }).join('');
+    }
+  }
+  // média 7 dias
+  const av = screenAvg();
+  const avEl = document.getElementById('screen-avg');
+  if(avEl){
+    const ents = Object.entries(av.perApp).sort((a,b)=>b[1]-a[1]);
+    avEl.innerHTML = ents.length
+      ? `<div class="st-total">Média total: <b>${fmtMin(av.total)}/dia</b> <span style="color:var(--muted);font-size:10px">(${av.n} dia${av.n>1?'s':''})</span></div>` +
+        ents.map(([k,v])=>`<div class="st-row"><span class="st-name">${k}</span><span class="st-val">${fmtMin(v)}/dia</span><button class="st-goalbtn" onclick="setScreenGoal('${k.replace(/'/g,"")}')">🎯 meta</button></div>`).join('')
+      : `<div class="raid-note">Registre alguns dias pra ver sua média.</div>`;
+  }
+  // metas
+  const goalsEl = document.getElementById('screen-goals');
+  if(goalsEl){
+    const gents = Object.entries(G.screenGoals||{});
+    goalsEl.innerHTML = gents.length
+      ? gents.map(([k,v])=>{ const cur=apps[k]||0; const over=cur>v; return `<div class="st-row${over?' over':''}"><span class="st-name">${k}</span><span class="st-val">hoje ${fmtMin(cur)} / meta ${fmtMin(v)} ${over?'⚠️':'✅'}</span><button class="st-x" onclick="(function(){delete G.screenGoals['${k.replace(/'/g,"")}'];save();renderScreenTime();})()">✕</button></div>`; }).join('')
+      : `<div class="raid-note">Sem metas. Toque em "🎯 meta" num app acima pra definir um limite.</div>`;
+  }
+  // dicas
+  const tipsEl = document.getElementById('screen-tips');
+  if(tipsEl){ tipsEl.innerHTML = screenTips(av, apps).map(t=>`<div class="st-tip">💡 ${t}</div>`).join('') || `<div class="raid-note">Registre seu tempo pra receber dicas.</div>`; }
+}
+function screenTips(av, apps){
+  const tips=[];
+  const ents = Object.entries(av.perApp).sort((a,b)=>b[1]-a[1]);
+  if(!ents.length) return tips;
+  const [topApp, topMin] = ents[0];
+  if(topMin>=120) tips.push(`<b>${topApp}</b> é seu maior gasto: <b>${fmtMin(topMin)}/dia</b>. Tente cortar 20% essa semana (~${fmtMin(Math.round(topMin*0.2))} a menos).`);
+  if(av.total>=240) tips.push(`Média de <b>${fmtMin(av.total)}/dia</b> de tela. Defina metas nos 2 maiores apps e acompanhe a queda aqui.`);
+  // apps que estouraram a meta hoje
+  Object.entries(G.screenGoals||{}).forEach(([k,g])=>{ const c=apps[k]||0; if(c>g) tips.push(`Você passou da meta de <b>${k}</b> hoje (${fmtMin(c)} > ${fmtMin(g)}). Deixa o celular longe nos próximos blocos.`); });
+  if(topApp && /insta|tiktok|youtube|reels/i.test(topApp)) tips.push(`Troca 15min de <b>${topApp}</b> por uma missão do jogo — vira XP em vez de scroll. 😉`);
+  if(!tips.length) tips.push('Mandou bem! Seu tempo de tela está controlado. Continue registrando pra manter o hábito.');
+  return tips.slice(0,4);
+}
+
 // ===== FEED DO GRUPO (#9) =====
 function renderFeed(){
   const el = document.getElementById('group-feed'); if(!el) return;
@@ -5238,7 +5419,7 @@ function checkNextMissionReminder(){
 function switchTab(name, btn) {
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  const tabs = ['missions','dungeons','world','shop','rewards','ranking','history','inventory','stats'];
+  const tabs = ['missions','dungeons','world','shop','rewards','ranking','history','inventory','stats','screen'];
   tabs.forEach(t=>{
     const el = document.getElementById('tab-'+t);
     if(el){
@@ -5256,6 +5437,7 @@ function switchTab(name, btn) {
   else if(name==='inventory') renderInventory();
   else if(name==='missions'){ renderMissions(); renderPresets(); }
   else if(name==='stats') renderDashboard();
+  else if(name==='screen') renderScreenTime();
 }
 
 // ===== DASHBOARD / ESTATÍSTICAS (v4 #8) =====
@@ -5392,6 +5574,7 @@ function save(){
       startTs:G.startTs, lastResetDate:G.lastResetDate, didToday:G.didToday,
       discordWebhook:G.discordWebhook, currentZone:G.currentZone,
       perfectStreak:G.perfectStreak, allDoneToday:G.allDoneToday, perfectDayDate:G.perfectDayDate,
+      screenTime:G.screenTime, screenLog:G.screenLog, screenGoals:G.screenGoals,
       skillsUnlocked:G.skillsUnlocked, skillCooldowns:G.skillCooldowns,
       furyTurns:G.furyTurns, notifLastSent:G.notifLastSent,
       lastPurchases:G.lastPurchases, lastPunishments:G.lastPunishments,
@@ -5443,6 +5626,9 @@ function load(){
     G.perfectStreak = G.perfectStreak || 0;
     G.allDoneToday = G.allDoneToday || false;
     G.perfectDayDate = G.perfectDayDate || '';
+    G.screenTime = G.screenTime || null;
+    G.screenLog = Array.isArray(G.screenLog) ? G.screenLog : [];
+    G.screenGoals = G.screenGoals || {};
     G.skillsUnlocked = G.skillsUnlocked || [];
     G.skillCooldowns = G.skillCooldowns || {};
     G.furyTurns = G.furyTurns || 0;
@@ -6714,7 +6900,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.23 • v43';
+  window.APP_VERSION = '2026.06.23 • v44';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
