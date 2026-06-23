@@ -2025,7 +2025,7 @@ const G = {
   hp: 100,
   maxHp: 100,
   xp: 0,
-  xpNext: 100,
+  xpNext: 300,
   coins: 150,
   gems: 5,
   streak: 0,
@@ -2492,7 +2492,7 @@ function doPrestige(){
   if(!confirm('⭐ RENASCER?\n\nVocê volta ao Nível 1, mas mantém moedas, gemas, itens, missões e conquistas.\n\nGanha PARA SEMPRE: +10% de XP e +5% de dano (acumula a cada prestígio).')) return;
   G.prestige = (G.prestige||0) + 1;
   G.prestigePoints = (G.prestigePoints||0) + 1;
-  G.level = 1; G.xp = 0; G.xpNext = 100;
+  G.level = 1; G.xp = 0; G.xpNext = 300;
   G.maxHp = 100 + (G.prestige*20); // +20 HP base permanente por prestígio
   G.hp = G.maxHp;
   G.attrPoints = (G.attrPoints||0) + 3;
@@ -3286,6 +3286,8 @@ function deleteMission(i) {
   return;   // excluir missão desativado (evita perda de progresso / trapaça)
 }
 
+// XP necessário p/ subir do nível atual ao próximo (curva mais íngreme: sobe devagar)
+function xpForNext(level){ return Math.floor(300 * Math.pow(1.5, (level||1)-1)); }
 function gainXP(amount) {
   amount = Math.round(amount * prestigeXpMult());   // bônus permanente de prestígio (v4 #10)
   G.xp += amount;
@@ -3295,7 +3297,7 @@ function gainXP(amount) {
     const prevTitle = titleFor(G.level);
     const prevEvo = evoTierIdx(G.level);
     G.level++;
-    G.xpNext = Math.floor(G.xpNext * 1.35);
+    G.xpNext = xpForNext(G.level);
     // HP máx cresce mais a cada nível (progressão mais sentida)
     const hpGain = 12 + Math.floor(G.level/5)*2;
     G.maxHp += hpGain;
@@ -6119,7 +6121,7 @@ function init() {
   if(!loaded || !ONLINE_PLAYERS.includes(name)) {
     // Limpa qualquer save inválido e mostra seleção de personagem
     Object.assign(G, {
-      profile:null, level:1, hp:100, maxHp:100, xp:0, xpNext:100,
+      profile:null, level:1, hp:100, maxHp:100, xp:0, xpNext:300,
       coins:150, gems:5, streak:0, day:1, totalMissions:0, attrs:defaultAttrs(),
       attrPoints:0, missions:[], inventory:[], equipped:{weapon:null,armor:null,accessory:null},
       dungeonProgress:[0,0,0,0,0,0], dungeonsCleared:0, raidApplied:'',
@@ -6197,7 +6199,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.23 • v32';
+  window.APP_VERSION = '2026.06.23 • v33';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
