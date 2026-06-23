@@ -901,6 +901,27 @@
   .ds-next-cat{ font-size:18px; }
   .ds-next-name{ font-size:14px; font-weight:bold; color:var(--text); flex:1; min-width:80px; }
   .ds-next-go{ margin-left:auto; }
+  /* ===== BANNER DIA PERFEITO (#11) ===== */
+  #perfect-day-banner{ position:fixed; inset:0; z-index:99998; display:flex; align-items:center; justify-content:center; pointer-events:none; background:radial-gradient(circle at center, rgba(255,210,74,.12), transparent 60%); animation:pdbIn .4s ease; }
+  #perfect-day-banner.out{ opacity:0; transition:opacity .6s ease; }
+  .pdb-inner{ text-align:center; background:linear-gradient(160deg,rgba(40,30,10,.95),rgba(10,8,20,.95)); border:2px solid var(--gold); border-radius:18px; padding:22px 34px; box-shadow:0 0 40px rgba(255,210,74,.5); animation:pdbPop .5s cubic-bezier(.2,1.4,.4,1); }
+  .pdb-emoji{ font-size:48px; animation:pdbBounce .8s ease infinite alternate; }
+  .pdb-title{ font-family:var(--pixel); font-size:18px; color:var(--gold); text-shadow:0 0 14px var(--gold); margin:6px 0; }
+  .pdb-sub{ font-size:14px; color:var(--text); }
+  .pdb-rewards{ font-size:15px; color:var(--green); font-weight:bold; margin-top:8px; }
+  .pdb-confetti{ position:absolute; top:-12px; width:9px; height:14px; border-radius:2px; animation:pdbFall linear forwards; }
+  @keyframes pdbIn{ from{opacity:0} to{opacity:1} }
+  @keyframes pdbPop{ from{transform:scale(.6);opacity:0} to{transform:scale(1);opacity:1} }
+  @keyframes pdbBounce{ from{transform:translateY(0)} to{transform:translateY(-10px)} }
+  @keyframes pdbFall{ from{transform:translateY(-12px) rotate(0)} to{transform:translateY(105vh) rotate(720deg)} }
+  /* ===== MISSÕES ESQUECIDAS (#13) ===== */
+  .forgotten-box{ background:linear-gradient(135deg,rgba(34,221,255,.08),rgba(0,0,0,.2)); border:1px solid var(--border); border-radius:11px; padding:9px 11px; margin-bottom:10px; }
+  .forgotten-box .fb-title{ font-family:var(--pixel); font-size:9px; color:var(--cyan); margin-bottom:6px; }
+  .fb-item{ display:flex; align-items:center; gap:7px; padding:5px 0; font-size:13px; }
+  .fb-item .fb-cat{ font-size:16px; }
+  .fb-item .fb-name{ flex:1; color:var(--text); }
+  .fb-item .fb-freq{ font-size:10px; color:var(--muted); }
+  .fb-add{ background:var(--cyan); color:#000; border:none; border-radius:6px; font-family:var(--pixel); font-size:8px; padding:5px 8px; cursor:pointer; }
   .rec-badge{ font-size:11px; color:var(--purple); margin-left:6px; }
 
   /* hábitos negativos */
@@ -1733,6 +1754,7 @@
           </div>
           <div class="config-hint" style="margin-top:4px">Deixe XP/LC vazios pra usar a dificuldade automática. ⚠ XP perdido = punição por falhar (vazio = metade do XP).</div>
         </div>
+        <div id="forgotten-box" class="forgotten-box" style="display:none"></div>
         <div class="section-title" style="cursor:pointer" onclick="document.getElementById('preset-list').classList.toggle('collapsed')">📋 MISSÕES PRONTAS <span style="font-size:11px;color:var(--muted)">(clique p/ abrir)</span></div>
         <div id="preset-list" class="preset-list collapsed"></div>
         <div class="sep"></div>
@@ -2121,6 +2143,7 @@ const G = {
   graceDate: '',          // v6.1: penalidades só valem a partir desta data (amanhã)
   customTemplates: [],    // v6.1: missões prontas criadas pelo usuário
   allDoneToday: false,
+  perfectDayDate: '',     // dia em que o alarde de "100% concluído" já tocou
   skillsUnlocked: [],
   skillCooldowns: {},
   furyTurns: 0,
@@ -2929,6 +2952,7 @@ function renderMissions() {
   const now = new Date(); const hm = now.getHours()*60 + now.getMinutes();
   const mins = m => { if(!m.time) return 99999; const [h,mm]=m.time.split(':').map(Number); return h*60+mm; };
   renderDaySummary(hm, mins);
+  renderForgotten();
   if(G.missions.length===0){
     list.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:10px 0;text-align:center;">Nenhuma missão criada.<br>Adicione suas tarefas reais acima!</div>';
     return;
@@ -3301,6 +3325,43 @@ function renderPresets(){
   }
   el.innerHTML = html;
 }
+// #13: sugere missões que você costumava fazer mas não estão na lista atual
+function renderForgotten(){
+  const el = document.getElementById('forgotten-box'); if(!el) return;
+  const now = Date.now(); const CUTOFF = 14*864e5;   // últimos 14 dias
+  const counts = {};   // name -> {n, cat, diff, last}
+  (G.history||[]).forEach(h=>{
+    if(h.type!=='done') return;
+    if(now - (h.t||0) > CUTOFF) return;
+    const k = h.name;
+    if(!counts[k]) counts[k] = {n:0, cat:h.cat, diff:h.diff||'medium', last:h.t};
+    counts[k].n++;
+    if(h.t > counts[k].last){ counts[k].last=h.t; counts[k].cat=h.cat; counts[k].diff=h.diff||'medium'; }
+  });
+  // candidatas: feitas ≥3x em 14 dias E que NÃO estão na lista atual
+  const cands = Object.entries(counts)
+    .filter(([name,c])=> c.n>=3 && !G.missions.some(m=>m.name===name))
+    .sort((a,b)=>b[1].n-a[1].n)
+    .slice(0,4);
+  if(!cands.length){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display='block';
+  el.innerHTML = `<div class="fb-title">💡 VOCÊ COSTUMAVA FAZER (não está na lista hoje)</div>` +
+    cands.map(([name,c])=>`<div class="fb-item">
+      <span class="fb-cat">${c.cat||'✅'}</span>
+      <span class="fb-name">${name} <span class="fb-freq">· ${c.n}x em 14 dias</span></span>
+      <button class="fb-add" onclick="addForgotten(${JSON.stringify(name).replace(/"/g,'&quot;')})">+ ADICIONAR</button>
+    </div>`).join('');
+}
+function addForgotten(name){
+  if(G.missions.some(m=>m.name===name)){ showToast('Já está na lista!','dmg'); return; }
+  // pega cat/diff do registro mais recente no histórico
+  let cat='✅', diff='medium';
+  const h = (G.history||[]).find(x=>x.type==='done' && x.name===name);
+  if(h){ cat=h.cat||cat; diff=h.diff||diff; }
+  G.missions.unshift({name, cat, diff, time:'', recur:'', recurring:false, done:false, id:Date.now(), stats:{done:0,failed:0}, createdAt:Date.now(), aiValue:null, aiXp:null});
+  renderMissions(); renderForgotten(); save();
+  showToast('✅ '+name+' adicionada de volta!','heal');
+}
 function addPreset(i){
   const t = MISSION_TEMPLATES[i]; if(!t) return;
   // evita duplicar missão com mesmo nome
@@ -3380,12 +3441,53 @@ function completeMission(i) {
 
   repayMyDebts();
   checkDailyChallenges();
+  celebratePerfectDay();
   renderMissions();
   renderDungeons();
   renderWorld();
   updateUI();
   checkAchievements();
   save();
+}
+
+// #11: alarde + recompensa especial quando TODAS as missões do dia estão concluídas
+function celebratePerfectDay(){
+  const today = G.missions.filter(isTodayMission);
+  if(today.length < 1) return;
+  if(!today.every(m=>m.done)) return;
+  if(G.perfectDayDate === todayStr()) return;   // já comemorou hoje
+  G.perfectDayDate = todayStr();
+  // recompensa: +1 gema + bônus proporcional ao nº de missões
+  const bonusXp = 40 + today.length*10;
+  const bonusLc = 30 + today.length*8;
+  G.gems += 1;
+  G.coins += bonusLc; addLedger('in', bonusLc, 'Dia 100% concluído');
+  gainXP(bonusXp);
+  showPerfectDayBanner(today.length, bonusLc, bonusXp);
+  gameNotify('🎉 DIA PERFEITO!', `Você concluiu todas as ${today.length} missões de hoje! +1💎 +${bonusLc} LC +${bonusXp} XP`, {tag:'perfect', renotify:true});
+  try{ spawnPanelSparks(); }catch(e){}
+}
+function showPerfectDayBanner(n, lc, xp){
+  const old = document.getElementById('perfect-day-banner'); if(old) old.remove();
+  const b = document.createElement('div');
+  b.id = 'perfect-day-banner';
+  b.innerHTML = `<div class="pdb-inner">
+    <div class="pdb-emoji">🎉</div>
+    <div class="pdb-title">DIA PERFEITO!</div>
+    <div class="pdb-sub">Todas as ${n} missões concluídas</div>
+    <div class="pdb-rewards">+1 💎 · +${lc} LC · +${xp} XP</div>
+  </div>`;
+  document.body.appendChild(b);
+  // confetes
+  for(let i=0;i<60;i++){
+    const c=document.createElement('div'); c.className='pdb-confetti';
+    c.style.left=Math.random()*100+'vw';
+    c.style.background=['#ffd24a','#22ddff','#ff5a6a','#5fe08a','#aa44ff'][i%5];
+    c.style.animationDelay=(Math.random()*0.6)+'s';
+    c.style.animationDuration=(2+Math.random()*1.5)+'s';
+    b.appendChild(c);
+  }
+  setTimeout(()=>{ b.classList.add('out'); setTimeout(()=>b.remove(), 600); }, 3200);
 }
 
 function deleteMission(i) {
@@ -5176,7 +5278,7 @@ function save(){
       history:G.history, ledger:G.ledger, rewardsLog:G.rewardsLog,
       startTs:G.startTs, lastResetDate:G.lastResetDate, didToday:G.didToday,
       discordWebhook:G.discordWebhook, currentZone:G.currentZone,
-      perfectStreak:G.perfectStreak, allDoneToday:G.allDoneToday,
+      perfectStreak:G.perfectStreak, allDoneToday:G.allDoneToday, perfectDayDate:G.perfectDayDate,
       skillsUnlocked:G.skillsUnlocked, skillCooldowns:G.skillCooldowns,
       furyTurns:G.furyTurns, notifLastSent:G.notifLastSent,
       lastPurchases:G.lastPurchases, lastPunishments:G.lastPunishments,
@@ -5227,6 +5329,7 @@ function load(){
     G.inCombat = false;
     G.perfectStreak = G.perfectStreak || 0;
     G.allDoneToday = G.allDoneToday || false;
+    G.perfectDayDate = G.perfectDayDate || '';
     G.skillsUnlocked = G.skillsUnlocked || [];
     G.skillCooldowns = G.skillCooldowns || {};
     G.furyTurns = G.furyTurns || 0;
@@ -6496,7 +6599,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.23 • v40';
+  window.APP_VERSION = '2026.06.23 • v41';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
