@@ -3256,10 +3256,31 @@ function addMission() {
   const xpRaw = parseInt((document.getElementById('mission-xp')||{}).value);
   const lcRaw = parseInt((document.getElementById('mission-lc')||{}).value);
   const penRaw = parseInt((document.getElementById('mission-pen')||{}).value);
-  const aiXp = (!isNaN(xpRaw) && xpRaw>0) ? xpRaw : null;
-  const aiValue = (!isNaN(lcRaw) && lcRaw>0) ? lcRaw : null;
+  let aiXp = (!isNaN(xpRaw) && xpRaw>0) ? xpRaw : null;
+  let aiValue = (!isNaN(lcRaw) && lcRaw>0) ? lcRaw : null;
   const penXp = (!isNaN(penRaw) && penRaw>0) ? penRaw : null;
+
+  // 🔎 AVISO DE DUPLICADA/PARECIDA: confere o catálogo do grupo p/ manter XP/LC consistentes
+  const match = findCatalogMatch(name);
+  const mine = effVals(diff, aiXp, aiValue);
+  if(match && (match.entry.xp !== mine.xp || match.entry.lc !== mine.lc)){
+    const e = match.entry;
+    const igual = match.r >= 0.999;
+    const titulo = igual ? `"${e.name}" já existe no grupo` : `Parecida com "${e.name}" (do grupo)`;
+    const ok = confirm(
+      `⚠️ ${titulo}\n\n`+
+      `${e.by||'Alguém'} definiu: ${e.xp} XP · ${e.lc} LC\n`+
+      `Você colocou: ${mine.xp} XP · ${mine.lc} LC\n\n`+
+      `Pra manter justo entre os manos, IGUALAR ao valor do grupo?\n\n`+
+      `OK = igualar (${e.xp} XP / ${e.lc} LC)   ·   Cancelar = manter o meu`
+    );
+    if(ok){ aiXp = e.xp; aiValue = e.lc; }
+  }
+
   G.missions.unshift({name, cat, diff, time, date, recur, recurring:!!recur, done:false, id:Date.now(), stats:{done:0,failed:0}, createdAt:Date.now(), aiValue, aiXp, penXp});
+  // registra no catálogo do grupo (primeiro a criar fixa o valor canônico)
+  const finalVals = effVals(diff, aiXp, aiValue);
+  registerCatalog(name, finalVals.xp, finalVals.lc);
   input.value = '';
   ['mission-time','mission-date','mission-rec','mission-xp','mission-lc','mission-pen'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   renderMissions(); save();
@@ -3457,17 +3478,12 @@ function celebratePerfectDay(){
   if(!today.every(m=>m.done)) return;
   if(G.perfectDayDate === todayStr()) return;   // já comemorou hoje
   G.perfectDayDate = todayStr();
-  // recompensa: +1 gema + bônus proporcional ao nº de missões
-  const bonusXp = 40 + today.length*10;
-  const bonusLc = 30 + today.length*8;
-  G.gems += 1;
-  G.coins += bonusLc; addLedger('in', bonusLc, 'Dia 100% concluído');
-  gainXP(bonusXp);
-  showPerfectDayBanner(today.length, bonusLc, bonusXp);
-  gameNotify('🎉 DIA PERFEITO!', `Você concluiu todas as ${today.length} missões de hoje! +1💎 +${bonusLc} LC +${bonusXp} XP`, {tag:'perfect', renotify:true});
+  // SEM recompensa especial — só o alarde visual (a pedido)
+  showPerfectDayBanner(today.length);
+  gameNotify('🎉 DIA PERFEITO!', `Você concluiu todas as ${today.length} missões de hoje! Mandou bem! 💪`, {tag:'perfect', renotify:true});
   try{ spawnPanelSparks(); }catch(e){}
 }
-function showPerfectDayBanner(n, lc, xp){
+function showPerfectDayBanner(n){
   const old = document.getElementById('perfect-day-banner'); if(old) old.remove();
   const b = document.createElement('div');
   b.id = 'perfect-day-banner';
@@ -3475,7 +3491,7 @@ function showPerfectDayBanner(n, lc, xp){
     <div class="pdb-emoji">🎉</div>
     <div class="pdb-title">DIA PERFEITO!</div>
     <div class="pdb-sub">Todas as ${n} missões concluídas</div>
-    <div class="pdb-rewards">+1 💎 · +${lc} LC · +${xp} XP</div>
+    <div class="pdb-rewards">Mandou bem, guerreiro! 💪</div>
   </div>`;
   document.body.appendChild(b);
   // confetes
@@ -4019,6 +4035,61 @@ const CHAR_PRESETS = {
 let db = null;
 let onlineData = {};
 let fbListener = null;
+// ===== CATÁLOGO COMPARTILHADO DE MISSÕES (consistência de XP/LC entre os manos) =====
+let catalogData = {};
+let catalogListener = null;
+function listenCatalog(){
+  if(!db) return;
+  if(catalogListener) catalogListener.off();
+  catalogListener = db.ref('forge_catalog');
+  catalogListener.on('value', snap=>{
+    catalogData = snap.val() || {};
+    try{ localStorage.setItem('broxa_catalog_cache', JSON.stringify(catalogData)); }catch(e){}
+  });
+}
+// normaliza nome: minúsculo, sem acento, só letras/números/espaço
+function normName(s){
+  return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
+}
+// palavras vazias (pt) que não ajudam a comparar missões
+const _STOP = new Set(['de','da','do','das','dos','a','o','as','os','e','em','na','no','nas','nos','um','uma','pra','para','por','com','meu','minha','hoje','agora','ja','la','ao','aos']);
+function _tokens(s){ return normName(s).split(' ').filter(w=>w && w.length>1 && !_STOP.has(w) && !/^\d+$/.test(w)); }
+// dois tokens "casam" se iguais ou compartilham os 5 primeiros caracteres (abdomen ~ abdominal)
+function _tokMatch(x,y){ if(x===y) return true; const n=Math.min(x.length,y.length,5); return n>=4 && x.slice(0,n)===y.slice(0,n); }
+// semelhança 0..1 por sobreposição de palavras-chave (relativa ao menor conjunto)
+function simRatio(a,b){
+  const A=_tokens(a), B=_tokens(b);
+  if(!A.length||!B.length) return 0;
+  let inter=0; A.forEach(x=>{ if(B.some(y=>_tokMatch(x,y))) inter++; });
+  return inter/Math.min(A.length,B.length);
+}
+// procura no catálogo a missão igual (mesmo nome normalizado) ou mais parecida (≥0.6)
+function findCatalogMatch(name){
+  const key = normName(name);
+  let best=null;
+  Object.entries(catalogData||{}).forEach(([k,e])=>{
+    if(!e || !e.name) return;
+    const r = (k===key) ? 1 : simRatio(name, e.name);
+    if(r>=0.6 && (!best || r>best.r)) best={key:k, entry:e, r};
+  });
+  return best;
+}
+function registerCatalog(name, xp, lc){
+  if(!db) return;
+  const key = normName(name); if(!key) return;
+  // primeiro a criar "fixa" o valor (não sobrescreve se já existe)
+  if(catalogData[key]) return;
+  const myName = G.profile?.name||'';
+  db.ref('forge_catalog/'+key).set({ name, xp, lc, by:myName, at:Date.now() }).catch(()=>{});
+}
+// valores efetivos de uma missão (manual tem prioridade; senão usa a dificuldade)
+function effVals(diff, aiXp, aiValue){
+  const d = DIFFS[diff]||DIFFS.medium;
+  const xp = (aiXp!=null) ? aiXp : d.xp;
+  const lc = (aiValue!=null) ? aiValue : Math.round((d.coins[0]+d.coins[1])/2);
+  return {xp, lc};
+}
 // Config embutido — conecta online automaticamente p/ todos (sem precisar configurar nada).
 // Realtime DB em modo teste (.read/.write=true) não exige apiKey real.
 const DEFAULT_FB_CONFIG = {
@@ -4081,6 +4152,7 @@ function listenRivals() {
   listenNudges();
   listenGift();
   listenReact();
+  listenCatalog();
   listenDayFails();
 }
 
@@ -6460,6 +6532,7 @@ function finishInit() {
   setInterval(function(){ try{ checkWakeNerf(); }catch(e){} }, 60000);
   // carrega o cache dos manos (últimos dados conhecidos) p/ mostrar mesmo sem internet
   try{ const oc = localStorage.getItem('broxa_online_cache'); if(oc){ const d=JSON.parse(oc); if(d && Object.keys(d).length) onlineData = d; } }catch(e){}
+  try{ const cc = localStorage.getItem('broxa_catalog_cache'); if(cc){ const d=JSON.parse(cc); if(d && Object.keys(d).length) catalogData = d; } }catch(e){}
   try {
     const savedCfg = localStorage.getItem('broxa_fb_config');
     let cfg = null;
@@ -6599,7 +6672,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.23 • v41';
+  window.APP_VERSION = '2026.06.23 • v42';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
