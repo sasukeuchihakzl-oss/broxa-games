@@ -5270,16 +5270,52 @@ function renderRewards(){
 }
 function redeemReward(id){
   const r = REAL_REWARDS.find(x=>x.id===id); if(!r) return;
-  let cost = r.cost||0, label = r.name;
   if(r.variable==='price'){
-    const p = parseFloat(prompt('Quanto vai custar (R$)?','20'));
-    if(isNaN(p)||p<0) return;
-    cost = Math.max(10, Math.ceil(p*6)); label = r.name+' (R$'+p+')';
+    openRewardInput(r, [{key:'preco', label:'Quanto vai custar? (R$)', val:'20'}], vals=>{
+      const p = parseFloat(vals.preco); if(isNaN(p)||p<0) return null;
+      return { cost: Math.max(10, Math.ceil(p*6)), label: r.name+' (R$'+p+')' };
+    });
   } else if(r.variable==='outing'){
-    const hrs = parseFloat(prompt('Quantas horas de rolê?','3')); if(isNaN(hrs)||hrs<0) return;
-    const sp = parseFloat(prompt('Quanto pretende gastar (R$)?','50')); if(isNaN(sp)||sp<0) return;
-    cost = Math.max(20, Math.ceil(hrs*40 + sp*5)); label = r.name+' ('+hrs+'h · R$'+sp+')';
+    openRewardInput(r, [
+      {key:'horas', label:'Quantas horas de rolê?', val:'3'},
+      {key:'gasto', label:'Quanto pretende gastar? (R$)', val:'50'}
+    ], vals=>{
+      const hrs=parseFloat(vals.horas), sp=parseFloat(vals.gasto);
+      if(isNaN(hrs)||hrs<0||isNaN(sp)||sp<0) return null;
+      return { cost: Math.max(20, Math.ceil(hrs*40 + sp*5)), label: r.name+' ('+hrs+'h · R$'+sp+')' };
+    });
+  } else {
+    finalizeReward(r, r.cost||0, r.name);
   }
+}
+// janelinha própria p/ digitar valor (substitui o prompt(), que não funciona em PWA no celular)
+function openRewardInput(r, fields, compute){
+  let modal = document.getElementById('reward-input-modal');
+  if(!modal){ modal = document.createElement('div'); modal.id='reward-input-modal'; modal.className='modal'; document.body.appendChild(modal); }
+  modal.innerHTML = `<div class="modal-box">
+    <div class="modal-title">${r.emoji} ${r.name}</div>
+    ${fields.map(f=>`<label style="display:block;font-size:13px;color:var(--text);margin:10px 0 3px">${f.label}</label>
+      <input type="number" inputmode="decimal" id="ri-${f.key}" value="${f.val}" min="0" step="0.01" style="width:100%;padding:11px;border-radius:6px;border:1px solid var(--border);background:#1a1426;color:var(--text);font-size:16px">`).join('')}
+    <div id="ri-cost" style="text-align:center;color:var(--gold);margin-top:12px;font-size:15px"></div>
+    <div class="modal-actions" style="display:flex;gap:8px;margin-top:12px">
+      <button class="pixel-btn btn-red btn-sm" style="flex:1" onclick="closeRewardInput()">CANCELAR</button>
+      <button class="pixel-btn btn-green btn-sm" style="flex:1" id="ri-confirm">RESGATAR</button>
+    </div></div>`;
+  modal.classList.add('show');
+  const getVals = ()=>{ const v={}; fields.forEach(f=>v[f.key]=document.getElementById('ri-'+f.key).value); return v; };
+  const upd = ()=>{ const res=compute(getVals()); const el=document.getElementById('ri-cost');
+    el.textContent = res ? ('Custo: '+res.cost+' LC'+(G.coins<res.cost?' (faltam '+(res.cost-G.coins)+')':'')) : 'valor inválido'; };
+  fields.forEach(f=>document.getElementById('ri-'+f.key).addEventListener('input', upd));
+  upd();
+  document.getElementById('ri-confirm').onclick = ()=>{
+    const res=compute(getVals());
+    if(!res){ showToast('Digite um valor válido','dmg'); return; }
+    closeRewardInput();
+    finalizeReward(r, res.cost, res.label);
+  };
+}
+function closeRewardInput(){ const m=document.getElementById('reward-input-modal'); if(m) m.classList.remove('show'); }
+function finalizeReward(r, cost, label){
   if(G.coins < cost){ showToast('Faltam '+(cost-G.coins)+' LulaCoins!','dmg'); return; }
   G.coins -= cost; addLedger('out', cost, 'Recompensa: '+label);
   G.rewardsLog.unshift({t:Date.now(), name:label, emoji:r.emoji, cost});
@@ -6035,7 +6071,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v26';
+  window.APP_VERSION = '2026.06.22 • v27';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
