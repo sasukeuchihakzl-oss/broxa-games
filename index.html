@@ -2836,7 +2836,7 @@ function renderMissions() {
     let timeBadge = '';
     if(m.time){
       const [hh,mm] = m.time.split(':').map(Number);
-      const overdue = !m.done && hm > (hh*60+mm);
+      const overdue = !m.done && dueToday(m) && hm > (hh*60+mm);  // só atrasa se for missão DE HOJE
       timeBadge = `<span class="time-badge ${overdue?'overdue':''}">⏰ ${m.time}${overdue?' atrasada':''}</span>`;
     }
     const r = missionRecur(m);
@@ -6180,7 +6180,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.22 • v30';
+  window.APP_VERSION = '2026.06.22 • v31';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
