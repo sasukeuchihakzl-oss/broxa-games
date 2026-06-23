@@ -1721,7 +1721,9 @@
         <button class="tab-btn" onclick="switchTab('ranking',this)">🏆 RANK</button>
         <button class="tab-btn" onclick="switchTab('history',this)">📜 LOG</button>
         <button class="tab-btn" onclick="switchTab('stats',this)">📊 STATS</button>
+        <!-- TEMPO DE TELA desativado (pronto p/ reativar): descomentar a linha abaixo + SCREEN_TIME_ENABLED=true
         <button class="tab-btn" onclick="switchTab('screen',this)">📱 TELA</button>
+        -->
       </div>
 
       <!-- MISSIONS TAB -->
@@ -4980,9 +4982,12 @@ function sendGift(name, xp, reason){
     .catch(()=>showToast('Falha ao enviar XP','dmg'));
 }
 
-// ===== 📱 TEMPO DE TELA (isolado — lê forge_screentime/<nome>) =====
+// ===== 📱 TEMPO DE TELA (DESATIVADO por enquanto — pronto p/ reativar) =====
+// Pra reativar: SCREEN_TIME_ENABLED=true E descomentar o botão "📱 TELA" no HTML.
+const SCREEN_TIME_ENABLED = false;
 let screenListener = null;
 function listenScreenTime(){
+  if(!SCREEN_TIME_ENABLED) return;   // desativado por enquanto
   if(!db) return; const myName=G.profile?.name||''; if(!ONLINE_PLAYERS.includes(myName)) return;
   if(screenListener) screenListener.off();
   screenListener = db.ref('forge_screentime/'+myName);
@@ -6900,7 +6905,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.23 • v45';
+  window.APP_VERSION = '2026.06.23 • v46';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
