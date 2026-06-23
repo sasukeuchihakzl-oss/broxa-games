@@ -1077,6 +1077,23 @@
   .dash-cat-track{ flex:1; height:14px; background:rgba(0,0,0,.35); border-radius:7px; overflow:hidden; border:1px solid var(--border); }
   .dash-cat-fill{ height:100%; border-radius:7px; transition:width .5s ease; box-shadow:0 0 8px rgba(255,255,255,.2) inset; }
   .dash-cat-n{ font-size:11px; color:var(--text); width:26px; text-align:right; }
+  /* ===== HEATMAP (mapa de constância) ===== */
+  .hm-wrap{ display:flex; gap:4px; align-items:flex-start; }
+  .hm-days{ display:flex; flex-direction:column; gap:3px; padding-top:0; }
+  .hm-daylbl{ font-size:8px; color:var(--muted); height:14px; line-height:14px; text-align:right; width:12px; }
+  .hm-grid{ display:flex; gap:3px; flex:1; overflow-x:auto; }
+  .hm-col{ display:flex; flex-direction:column; gap:3px; }
+  .hm-cell{ width:14px; height:14px; border-radius:3px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.04); }
+  .hm-cell.empty{ background:transparent; border-color:transparent; }
+  .hm-cell.lvl0{ background:rgba(255,255,255,.06); }
+  .hm-cell.lvl1{ background:rgba(34,221,255,.30); }
+  .hm-cell.lvl2{ background:rgba(34,221,255,.55); }
+  .hm-cell.lvl3{ background:rgba(46,213,115,.70); }
+  .hm-cell.lvl4{ background:var(--green); box-shadow:0 0 6px rgba(46,213,115,.6); }
+  .hm-cell.today{ outline:2px solid var(--gold); outline-offset:1px; }
+  .hm-legend{ display:flex; align-items:center; gap:4px; justify-content:flex-end; margin-top:8px; }
+  .hm-legend span{ font-size:9px; color:var(--muted); }
+  .hm-legend .hm-cell{ width:12px; height:12px; }
 
   /* ===== PRESTÍGIO (v4 #10) ===== */
   .prestige-badge{ display:inline-block; margin-left:5px; padding:1px 6px; border-radius:8px; font-size:10px; color:#1a1330; background:linear-gradient(180deg,#ffe98a,#ffba2a); box-shadow:0 0 8px #ffd24a88; font-weight:bold; }
@@ -1817,6 +1834,9 @@
         <div class="section-title">📊 PROGRESSO DA SEMANA</div>
         <div id="dash-weekchart" class="dash-chart"></div>
         <div class="dash-kpis" id="dash-kpis"></div>
+        <div class="sep"></div>
+        <div class="section-title">🗓️ MAPA DE CONSTÂNCIA</div>
+        <div id="dash-heatmap"></div>
         <div class="sep"></div>
         <div class="section-title">🏷️ CATEGORIA MAIS FORTE</div>
         <div id="dash-cats"></div>
@@ -4929,7 +4949,46 @@ function dashWeekData(){
   }
   return days;
 }
+// Missões concluídas num dia (hoje vem dos contadores ao vivo; passado do dayLog)
+function missionsOnDay(ds){
+  if(ds===todayStr(new Date())) return (G.todayCounters&&G.todayCounters.missions)||0;
+  const e=(G.dayLog||[]).find(x=>x.date===ds); return e?(e.missions||0):0;
+}
+function renderHeatmap(){
+  const el = document.getElementById('dash-heatmap'); if(!el) return;
+  const WEEKS = 6;                          // últimas 6 semanas
+  const now = new Date();
+  // começa no domingo da semana de WEEKS-1 atrás
+  const start = new Date(now); start.setDate(now.getDate() - (WEEKS*7-1));
+  start.setDate(start.getDate() - start.getDay());   // recua até domingo
+  const dayLbls=['D','S','T','Q','Q','S','S'];
+  const monthNm=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  let cols=''; let cur=new Date(start); const totalCols=Math.ceil((now-start)/(7*864e5))+1;
+  for(let c=0;c<totalCols;c++){
+    let cells='';
+    for(let r=0;r<7;r++){
+      const d=new Date(cur); d.setDate(cur.getDate()+r);
+      if(d>now){ cells+=`<div class="hm-cell empty"></div>`; continue; }
+      const ds=todayStr(d); const n=missionsOnDay(ds);
+      const lvl = n===0?0 : n<=1?1 : n<=2?2 : n<=4?3 : 4;
+      const isToday = ds===todayStr(now);
+      cells+=`<div class="hm-cell lvl${lvl}${isToday?' today':''}" title="${d.getDate()}/${d.getMonth()+1}: ${n} missão(ões)"></div>`;
+    }
+    cols+=`<div class="hm-col">${cells}</div>`;
+    cur.setDate(cur.getDate()+7);
+  }
+  el.innerHTML = `
+    <div class="hm-wrap">
+      <div class="hm-days">${dayLbls.map(l=>`<div class="hm-daylbl">${l}</div>`).join('')}</div>
+      <div class="hm-grid">${cols}</div>
+    </div>
+    <div class="hm-legend"><span>menos</span>
+      ${[0,1,2,3,4].map(l=>`<div class="hm-cell lvl${l}"></div>`).join('')}
+      <span>mais</span>
+    </div>`;
+}
 function renderDashboard(){
+  renderHeatmap();
   const week = dashWeekData();
   const max = Math.max(1, ...week.map(d=>d.missions));
   // gráfico de barras
@@ -6316,7 +6375,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.23 • v38';
+  window.APP_VERSION = '2026.06.23 • v39';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
