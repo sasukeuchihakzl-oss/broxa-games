@@ -4227,7 +4227,7 @@ let pricesListener = null;
 function listenPrices(){
   if(!db) return; const myName=G.profile?.name||''; if(!ONLINE_PLAYERS.includes(myName)) return;
   if(pricesListener) pricesListener.off();
-  pricesListener = db.ref('forge_prices');
+  pricesListener = db.ref('forge_prices/'+myName);   // preços POR JOGADOR
   pricesListener.on('value', snap=>{
     pricesData = snap.val() || {};
     try{ localStorage.setItem('broxa_prices_cache', JSON.stringify(pricesData)); }catch(e){}
@@ -7001,7 +7001,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.24 • v49';
+  window.APP_VERSION = '2026.06.24 • v50';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
