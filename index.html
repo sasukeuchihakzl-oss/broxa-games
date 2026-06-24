@@ -2780,9 +2780,8 @@ function updateUI() {
   const perfMEl = document.getElementById('perfect-mult');
   if(perfEl && perfMEl) {
     if(pS >= 1) {
-      const m = Math.round((1 + pS * 0.1) * 10) / 10;
-      perfMEl.textContent = pS+'d x'+m.toFixed(1);
-      perfEl.title = pS+' dia(s) perfeito(s) seguidos — bônus de x'+m.toFixed(1)+' em XP e LulaCoins!';
+      perfMEl.textContent = pS+'d ⭐';
+      perfEl.title = pS+' dia(s) perfeito(s) seguidos!';
       perfEl.classList.add('active');
     } else {
       perfEl.classList.remove('active');
@@ -3488,7 +3487,7 @@ function completeMission(i) {
   const d = DIFFS[m.diff];
   // multiplicador do streak perfeito (a partir do dia 2: +10% por dia)
   const pStreak = G.perfectStreak || 0;
-  const perfMult = pStreak >= 1 ? Math.round((1 + pStreak * 0.1) * 10) / 10 : 1.0;
+  const perfMult = 1.0;   // bônus de XP/LC por streak perfeito REMOVIDO (a pedido)
   const recMult = recurMult(m);   // bônus de rotina (constância)
   const baseCoins = (m.aiValue!=null) ? m.aiValue : (d.coins[0] + Math.floor(Math.random()*(d.coins[1]-d.coins[0])));
   const baseXp = (m.aiXp!=null) ? m.aiXp : d.xp;
@@ -5837,14 +5836,25 @@ function checkDailyReset(){
   if(!G.lastResetDate){ G.lastResetDate = today; G.day = computeDay(); return; }
   let failures = 0, dueCount = 0, doneCount = 0, xpLoss = 0;
   const closedDay = new Date(G.lastResetDate + 'T12:00:00'); // o dia que acabou de terminar
+  const penOf = (m)=> (m.penXp!=null ? m.penXp : Math.round((m.aiXp!=null?m.aiXp:DIFFS[m.diff].xp) * 0.5));
   G.missions.forEach(m=>{
     if(missionRecur(m)){
       if(missionDueOn(m, closedDay)){
         dueCount++;
         if(m.done){ doneCount++; }
-        else { m.stats=m.stats||{done:0,failed:0}; m.stats.failed++; failures++; pushHistory('failed', m); xpLoss += (m.penXp!=null ? m.penXp : Math.round((m.aiXp!=null?m.aiXp:DIFFS[m.diff].xp) * 0.5)); }
+        else { m.stats=m.stats||{done:0,failed:0}; m.stats.failed++; failures++; pushHistory('failed', m); xpLoss += penOf(m); }
       }
       m.done = false;
+    } else {
+      // ÚNICA com prazo: venceu no dia que fechou e não foi feita → conta como falha (1x só)
+      const createdDs = m.createdAt ? todayStr(new Date(m.createdAt)) : '';
+      const createdOk = !createdDs || createdDs <= G.lastResetDate;          // já existia no dia fechado
+      const hadDeadline = m.date ? (m.date <= G.lastResetDate) : !!m.time;   // data vencida OU tinha horário
+      if(!m.done && !m._failed && createdOk && hadDeadline){
+        dueCount++;
+        m.stats=m.stats||{done:0,failed:0}; m.stats.failed++; failures++; pushHistory('failed', m); xpLoss += penOf(m);
+        m._failed = true;   // não pune de novo nos próximos dias
+      }
     }
   });
   ensureToday(); // arquiva o dia anterior no dayLog e gera desafios novos
@@ -6905,7 +6915,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.23 • v46';
+  window.APP_VERSION = '2026.06.24 • v47';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
