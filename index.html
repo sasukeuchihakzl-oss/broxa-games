@@ -3343,6 +3343,20 @@ function addMission() {
   let aiValue = (!isNaN(lcRaw) && lcRaw>0) ? lcRaw : null;
   const penXp = (!isNaN(penRaw) && penRaw>0) ? penRaw : null;
 
+  // ⚖️ TABELA JUSTA: avisa se o XP estiver muito acima do valor de referência da tarefa
+  const fair = fairXpFor(name);
+  const myXpNow = (aiXp!=null) ? aiXp : (DIFFS[diff]||DIFFS.medium).xp;
+  if(fair && myXpNow > Math.round(fair*1.4)){
+    const ok = confirm(
+      `⚖️ XP acima do justo\n\n`+
+      `"${name}" costuma valer ~${fair} XP (tabela do grupo, por esforço + benefício).\n`+
+      `Você colocou ${myXpNow} XP.\n\n`+
+      `Usar o valor justo (${fair} XP / ${Math.round(fair*0.8)} LC)?\n\n`+
+      `OK = usar o justo   ·   Cancelar = manter o meu`
+    );
+    if(ok){ aiXp = fair; aiValue = Math.round(fair*0.8); }
+  }
+
   // 🔎 AVISO DE DUPLICADA/PARECIDA: confere o catálogo do grupo p/ manter XP/LC consistentes
   const match = findCatalogMatch(name);
   const mine = effVals(diff, aiXp, aiValue);
@@ -4174,6 +4188,36 @@ function effVals(diff, aiXp, aiValue){
   const xp = (aiXp!=null) ? aiXp : d.xp;
   const lc = (aiValue!=null) ? aiValue : Math.round((d.coins[0]+d.coins[1])/2);
   return {xp, lc};
+}
+// ===== TABELA JUSTA DE XP (esforço + benefício próprio) =====
+// chave = palavras que identificam a tarefa; xp = valor justo de referência.
+const FAIR_XP = [
+  {keys:['agua','litros','beber'], xp:18},
+  {keys:['planejar','rotina'], xp:20},
+  {keys:['passear','cachorro','cao'], xp:20},
+  {keys:['banho','gelado','frio'], xp:20},
+  {keys:['meditar','meditacao','meditacao'], xp:25},
+  {keys:['caminhada','caminhar','andar'], xp:28},
+  {keys:['organizar','arrumar','louca','vasilha','limpar','faxina'], xp:28},
+  {keys:['abdomen','abdominal','localizado'], xp:30},
+  {keys:['compra','mercado','feira'], xp:32},
+  {keys:['cardio','correr','corrida','pedalar','bike','esteira'], xp:35},
+  {keys:['ler','leitura','livro'], xp:40},
+  {keys:['curriculo','vaga','emprego'], xp:42},
+  {keys:['academia','treino','musculacao','malhar'], xp:52},
+  {keys:['dieta'], xp:60},
+  {keys:['estudar','estudo','programar','programacao','concurso'], xp:60},
+  {keys:['faculdade','aula','curso'], xp:70}
+];
+// retorna o XP justo de referência pra um nome de missão (ou null se não reconhecer)
+function fairXpFor(name){
+  const toks = _tokens(name); if(!toks.length) return null;
+  for(const f of FAIR_XP){
+    for(const k of f.keys){
+      if(toks.some(t=>_tokMatch(t,k))) return f.xp;
+    }
+  }
+  return null;
 }
 // Config embutido — conecta online automaticamente p/ todos (sem precisar configurar nada).
 // Realtime DB em modo teste (.read/.write=true) não exige apiKey real.
@@ -6915,7 +6959,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.24 • v47';
+  window.APP_VERSION = '2026.06.24 • v48';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
