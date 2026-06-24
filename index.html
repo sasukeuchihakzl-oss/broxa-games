@@ -5317,14 +5317,11 @@ function listenDayFails(){
   });
 }
 function applyDayFailNerf(name, missed){
-  const hpLoss = 25, xpLoss = 30, lcLoss = 25;
-  G.hp = Math.max(0, G.hp - hpLoss);
-  loseXP(xpLoss);
-  G.coins = Math.max(0, G.coins - lcLoss);
-  addLedger('out', lcLoss, 'Nerf coletivo ('+name+' furou o dia)');
-  showToast(`😞 ${name} furou o dia (${missed} missão(ões))! Todos levam nerf: -${hpLoss}HP -${xpLoss}XP -${lcLoss}LC`,'dmg');
-  gameNotify('😞 Nerf coletivo!', name+' não cumpriu as missões. Todos perderam HP/XP/LC.', {tag:'nerf'});
-  if(G.hp<=0) triggerDeath(); else updateUI();
+  // grupo NÃO perde HP nem LC — só -100 XP (HP é só de quem falhou)
+  loseXP(100);
+  showToast(`😞 ${name} furou o dia (${missed} missão(ões))! Todos perdem -100 XP`,'dmg');
+  gameNotify('😞 Nerf coletivo!', name+' não cumpriu as missões. Todos perderam 100 XP.', {tag:'nerf'});
+  updateUI();
 }
 function sendNudge(name){
   if(!db){ showToast('Conecte o Firebase para cutucar!','dmg'); return; }
@@ -5959,24 +5956,23 @@ function checkDailyReset(){
   if(inGrace){
     if(failures>0) showToast(`🕊️ Dia de preparação — sem punição hoje. As cobranças começam a valer amanhã!`, 'info');
   } else {
-  if(failures>0){
-    const pen = Math.min(45, failures*8);
-    G.hp = Math.max(0, G.hp - pen);
+  // Não cumpriu TODAS as missões devidas do dia?
+  const missed = dueCount - doneCount;
+  if(dueCount > 0 && missed > 0){
+    // 1) QUEM FALHOU: punição normal das missões (XP) que não fez
     if(xpLoss>0) loseXP(xpLoss);
-    addLedger('out', 0, `Penalidade diária (${failures} falha(s))`);
-    showToast(`⚠ ${failures} missão(ões) não feita(s)! -${pen} HP · -${xpLoss} XP`, 'dmg');
-  }
-  if(dueCount > 0 && (doneCount/dueCount) < 0.6){
-    loseXP(40);
-    groupCover(40, 'Menos de 60% das missões do dia');
-    showToast(`📉 Menos de 60% das missões! -40 XP e -40 LC`, 'dmg');
-  }
-  // avisa o grupo se NÃO cumpri todas as missões do dia → nerf coletivo (v6 #11)
-  if(db && ONLINE_PLAYERS.includes(G.profile?.name) && dueCount>0 && doneCount<dueCount){
-    const missed = dueCount - doneCount;
-    G.dayFailSeen = G.dayFailSeen || {};
-    G.dayFailSeen[G.lastResetDate+':'+G.profile.name] = true; // não me nerfo pela minha própria falha
-    try{ db.ref('forge_dayfail/'+G.lastResetDate+'/'+G.profile.name).set({missed, ts:Date.now()}); }catch(e){}
+    // 2) QUEM FALHOU: HP — 10 por missão não feita, máximo 90 (grupo NÃO perde HP)
+    const hpLoss = Math.min(90, missed*10);
+    G.hp = Math.max(0, G.hp - hpLoss);
+    // 3) QUEM FALHOU também entra no nerf coletivo de XP (-100)
+    loseXP(100);
+    showToast(`⚠ ${missed} missão(ões) não feita(s)! -${hpLoss} HP · -${xpLoss+100} XP`, 'dmg');
+    // 4) GRUPO: todos perdem -100 XP (sem HP, sem LC)
+    if(db && ONLINE_PLAYERS.includes(G.profile?.name)){
+      G.dayFailSeen = G.dayFailSeen || {};
+      G.dayFailSeen[G.lastResetDate+':'+G.profile.name] = true; // não levo o nerf coletivo 2x (já apliquei acima)
+      try{ db.ref('forge_dayfail/'+G.lastResetDate+'/'+G.profile.name).set({missed, ts:Date.now()}); }catch(e){}
+    }
   }
   } // fim do else (fora da carência)
   cleanupDoneUnique();   // remove missões únicas já concluídas em dias passados
@@ -7001,7 +6997,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.24 • v50';
+  window.APP_VERSION = '2026.06.24 • v51';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
