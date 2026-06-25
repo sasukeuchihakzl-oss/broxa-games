@@ -238,6 +238,17 @@
   .tab-btn:last-child { border-right: none; }
   .tab-btn.active { background: rgba(240,192,64,0.12); color: var(--gold); }
   .tab-btn:hover:not(.active) { color: var(--text); background: rgba(255,255,255,0.04); }
+  /* 🔮 aba misteriosa */
+  .tab-mystery { color:#c79bff; text-shadow:0 0 6px rgba(160,90,255,.55); animation: mysteryGlow 2.4s ease-in-out infinite; }
+  .tab-mystery.active { background: rgba(160,90,255,0.16); color:#e0c8ff; }
+  @keyframes mysteryGlow { 0%,100%{ filter:brightness(1) } 50%{ filter:brightness(1.45) } }
+  .mystery-head { background: radial-gradient(120% 100% at 50% 0%, rgba(120,60,200,.30), rgba(20,10,35,.55)); border:1px solid rgba(160,90,255,.45); border-radius:12px; padding:14px; margin-bottom:12px; box-shadow:0 0 18px rgba(120,60,220,.25) inset; }
+  .mystery-title { font-family:'Press Start 2P',monospace; font-size:13px; color:#e0c8ff; text-shadow:0 0 8px rgba(160,90,255,.7); margin-bottom:8px; letter-spacing:1px; }
+  .mystery-sub { font-size:12.5px; color:#c9bce0; line-height:1.6; }
+  .mission-item.sealed { opacity:.92; border-left-color:#a05aff !important; background:linear-gradient(90deg, rgba(120,60,200,.16), rgba(255,255,255,.02)); }
+  .seal-badge { display:inline-block; background:rgba(160,90,255,.22); color:#d9c2ff; border:1px solid rgba(160,90,255,.5); border-radius:8px; padding:1px 7px; font-size:11px; margin-left:4px; }
+  .seal-badge.ready { background:rgba(80,200,120,.22); color:#bdf3cf; border-color:rgba(80,200,120,.6); animation: mysteryGlow 1.6s ease-in-out infinite; }
+  .ds-doublexp { margin-top:8px; text-align:center; font-size:12px; color:var(--gold); background:rgba(240,192,64,.12); border:1px solid rgba(240,192,64,.4); border-radius:8px; padding:5px 8px; font-weight:bold; }
 
   .tab-content { padding: 8px; flex: 1; overflow-y: auto; max-height: 440px; }
 
@@ -1717,10 +1728,13 @@
         <button class="tab-btn active" onclick="switchTab('missions',this)">📋 MISSÕES</button>
         <button class="tab-btn" onclick="switchTab('dungeons',this)">⚔ DUNGEON</button>
         <button class="tab-btn" onclick="switchTab('world',this)">🗺 MUNDO</button>
+        <button class="tab-btn" onclick="switchTab('shop',this)">🛒 LOJA</button>
         <button class="tab-btn" onclick="switchTab('rewards',this)">🎁 PRÊMIOS</button>
         <button class="tab-btn" onclick="switchTab('ranking',this)">🏆 RANK</button>
         <button class="tab-btn" onclick="switchTab('history',this)">📜 LOG</button>
         <button class="tab-btn" onclick="switchTab('stats',this)">📊 STATS</button>
+        <button class="tab-btn" onclick="switchTab('time',this)">⏱ TEMPO</button>
+        <button class="tab-btn tab-mystery" onclick="switchTab('future',this)">🔮 BROXISSE</button>
         <!-- TEMPO DE TELA desativado (pronto p/ reativar): descomentar a linha abaixo + SCREEN_TIME_ENABLED=true
         <button class="tab-btn" onclick="switchTab('screen',this)">📱 TELA</button>
         -->
@@ -1767,6 +1781,10 @@
               <option value="weekends">🌅 Fins de semana</option>
               <option value="3x">3️⃣ 3x/semana (seg/qua/sex)</option>
             </select>
+            <select id="mission-when" title="Onde a missão entra" style="flex:1">
+              <option value="active">⚡ Ativar agora</option>
+              <option value="future">🔮 Guardar como Futura</option>
+            </select>
           </div>
           <div class="form-row">
             <input type="number" id="mission-xp" min="0" placeholder="XP (opcional)" title="XP manual — deixe vazio p/ usar a dificuldade" style="flex:1">
@@ -1774,6 +1792,7 @@
           </div>
           <div class="form-row">
             <input type="number" id="mission-pen" min="0" placeholder="⚠ XP perdido se falhar (opcional)" title="Punição: XP que você perde se NÃO completar essa missão. Vazio = metade do XP da missão." style="flex:1">
+            <input type="number" id="mission-dur" min="0" placeholder="⏱ minutos (opcional)" title="Quanto tempo essa missão leva, em minutos. Usado no gráfico da aba ⏱ TEMPO. Vazio = estimado pela dificuldade." style="flex:1">
           </div>
           <div class="config-hint" style="margin-top:4px">Deixe XP/LC vazios pra usar a dificuldade automática. ⚠ XP perdido = punição por falhar (vazio = metade do XP).</div>
           <div class="icon-picker-head">🎨 Ícone da missão <span style="color:var(--muted);font-size:10px">(opcional — sem escolher usa o da categoria)</span> <span id="icon-sel-preview" class="icon-sel-preview"></span></div>
@@ -1791,6 +1810,21 @@
         <div class="sep"></div>
         <div class="section-title">⚠️ HÁBITOS NEGATIVOS (punições)</div>
         <div class="habits-list" id="habits-list"></div>
+      </div>
+
+      <!-- TIME (TEMPO DE ATIVIDADES) TAB -->
+      <div class="tab-content" id="tab-time" style="display:none">
+        <div class="section-title">⏱ TEMPO DE ATIVIDADES</div>
+        <div id="time-content"></div>
+      </div>
+
+      <!-- FUTURE (MYSTERY) TAB -->
+      <div class="tab-content" id="tab-future" style="display:none">
+        <div class="mystery-head">
+          <div class="mystery-title">🔮 MISSÕES DA BROXISSE</div>
+          <div class="mystery-sub">Missões guardadas aqui ficam <b>seladas por 7 dias</b>. Quando o selo abrir, você pode ativá-la — e ao concluí-la ganha <b style="color:var(--gold)">+50% de XP</b>. Só missões <b>únicas</b> entram aqui.</div>
+        </div>
+        <div class="mission-list" id="future-list"></div>
       </div>
 
       <!-- DUNGEONS TAB -->
@@ -2197,6 +2231,12 @@ const G = {
   customTemplates: [],    // v6.1: missões prontas criadas pelo usuário
   allDoneToday: false,
   perfectDayDate: '',     // dia em que o alarde de "100% concluído" já tocou
+  // v52: Double XP (item 1) + recorde de XP diário (item 3) + tempo de atividades (item 4)
+  doubleXpUntil: 0,       // timestamp (ms) do fim do Double XP de 24h
+  xpDay: null,            // {date, xp, recordHit} — XP ganho hoje
+  xpRecord: 0,            // recorde de XP num único dia (a barra a bater)
+  timeLog: {},            // {data:{catEmoji:minutos}} — tempo gasto por categoria/dia
+  sleepGoalH: 8,          // horas de sono p/ o gráfico da aba TEMPO
   // 📱 tempo de tela (isolado — não interfere no jogo)
   screenTime: null,       // {date, apps:{nome:min}, src}
   screenLog: [],          // histórico [{date, apps:{}}]
@@ -2510,6 +2550,7 @@ const SHOP_ITEMS = [
   {id:"elixir", cat:"Consumível", name:"Elixir da Vitalidade", emoji:"🍶", art:"flask", desc:"Restaura HP por completo", price:180, effect:"HP cheio", rarity:"rare", fn:()=>{G.hp=G.maxHp;showToast("🍶 HP totalmente restaurado!","heal");updateUI();}},
   {id:"xp_scroll", cat:"Consumível", name:"Pergaminho de XP", emoji:"📜", art:"scroll", desc:"Ganha 60 XP instantâneo", price:90, effect:"+60 XP", rarity:"uncommon", fn:()=>gainXP(60)},
   {id:"coin_bag", cat:"Consumível", name:"Bolsa de LulaCoins", emoji:"💰", art:"coinbag", desc:"Troca 10 por 45 (juros do esforço)", price:10, effect:"+45 LC", rarity:"common", fn:()=>{G.coins+=45;showToast("+45 LulaCoins!");}},
+  {id:"double_xp", cat:"Acessório", name:"Amuleto do XP Dobrado", emoji:"🧿", art:"amulet", desc:"Use na bolsa pra DOBRAR todo o XP por 1 dia inteiro", price:2000, effect:"2× XP · 1 dia", rarity:"legendary", grant:{name:"Amuleto do XP Dobrado", emoji:"🧿", art:"amulet", type:"consumable", doublexp:true, rarity:"legendary"}},
   // --- ARMAS (equipáveis) ---
   {id:"sword_will", cat:"Arma", name:"Espada da Vontade", emoji:"🗡️", art:"sword", desc:"Forjada na determinação", price:130, effect:"⚔ +12 ATK", rarity:"uncommon", grant:{name:"Espada da Vontade",emoji:"🗡️",art:"sword",type:"weapon",atk:12,rarity:"uncommon"}},
   {id:"axe_effort", cat:"Arma", name:"Machado do Esforço", emoji:"🪓", art:"axe", desc:"Cada golpe é uma conquista", price:320, effect:"⚔ +20 · 💪 +3", rarity:"rare", grant:{name:"Machado do Esforço",emoji:"🪓",art:"axe",type:"weapon",atk:20,str:3,rarity:"rare"}},
@@ -2841,6 +2882,7 @@ function missionRecur(m){ return m.recur || (m.recurring ? 'daily' : ''); }
 function recurMult(m){ return ({daily:1.30, weekdays:1.25, '3x':1.15, weekends:1.10})[missionRecur(m)] || 1.0; }
 function recurBonusLabel(m){ const mu=recurMult(m); return mu>1 ? `+${Math.round((mu-1)*100)}% rotina` : ''; }
 function missionDueOn(m, date){
+  if(m.future) return false;   // missão guardada como Futura: não conta (sem penalidade/lembrete) até ativar
   const r = missionRecur(m);
   const ds = todayStr(date);
   if(m.date && ds < m.date) return false;   // agendada p/ uma data futura → ainda não está ativa
@@ -2952,6 +2994,26 @@ function moveMission(i, dir){
   const tmp = G.missions[i]; G.missions[i]=G.missions[j]; G.missions[j]=tmp;
   renderMissions(); save();
 }
+// ⏱ Edição limitada: por enquanto SÓ permite ajustar o tempo (duração) da missão
+function editMissionDuration(i){
+  const m = G.missions[i]; if(!m) return;
+  gameAsk({
+    title:'⏱ Tempo da missão (minutos)',
+    label: m.name + '\nVazio = usar a estimativa pela dificuldade.',
+    type:'number',
+    value: (m.durMin!=null ? String(m.durMin) : ''),
+    okText:'SALVAR',
+    onOk:(v)=>{
+      const n = parseInt(v);
+      m.durMin = (!isNaN(n) && n>0) ? n : null;
+      try{ renderMissions(); }catch(e){}
+      try{ renderFutureMissions(); }catch(e){}
+      try{ renderTimeTab(); }catch(e){}
+      save();
+      showToast('⏱ Tempo: '+(m.durMin? fmtHM(m.durMin) : 'estimado ('+fmtHM(missionDurMin(m))+')'), 'info');
+    }
+  });
+}
 
 // Uma missão "conta" pra hoje se: recorrente devida hoje, única pendente devida hoje, ou única concluída hoje
 function isTodayMission(m){
@@ -2999,6 +3061,7 @@ function renderDaySummary(hm, mins){
     </div>
     <div class="ds-bar"><div class="ds-fill" style="width:${pct}%;background:${barCol}"></div></div>
     ${nextHtml}
+    ${doubleXpActive()?`<div class="ds-doublexp">⚡ XP DOBRADO ativo — ${fmtHM(doubleXpLeftMs()/60000)} restantes</div>`:''}
   </div>`;
 }
 function renderMissions() {
@@ -3009,12 +3072,14 @@ function renderMissions() {
   const mins = m => { if(!m.time) return 99999; const [h,mm]=m.time.split(':').map(Number); return h*60+mm; };
   renderDaySummary(hm, mins);
   renderForgotten();
-  if(G.missions.length===0){
-    list.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:10px 0;text-align:center;">Nenhuma missão criada.<br>Adicione suas tarefas reais acima!</div>';
+  renderFutureMissions();
+  const activeCount = G.missions.filter(m=>!m.future).length;
+  if(activeCount===0){
+    list.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:10px 0;text-align:center;">Nenhuma missão ativa.<br>Adicione tarefas acima' + (G.missions.some(m=>m.future)?' ou abra o portal 🔮 ??? pra ativar uma selada.':'!') + '</div>';
     return;
   }
   // Ordenação padrão: pendentes primeiro, por horário (mais cedo → mais tarde; sem horário no fim); concluídas embaixo
-  const ordered = G.missions.map((m,i)=>({m,i}))
+  const ordered = G.missions.map((m,i)=>({m,i})).filter(o=>!o.m.future)
     .sort((a,b)=> ( (a.m.done?1:0) - (b.m.done?1:0) ) || ( mins(a.m) - mins(b.m) ) );
   list.innerHTML = ordered.map(({m,i})=>{
     const d = DIFFS[m.diff];
@@ -3044,14 +3109,182 @@ function renderMissions() {
       <span class="mission-cat-icon">${m.icon||m.cat}</span>
       <div class="mission-info">
         <div class="mission-name">${m.name} ${recBadge}${dateBadge}${folgaBadge}${timeBadge}</div>
-        <div class="mission-meta">${icImg('lulacoin',11)} ${m.aiValue!=null?(m.aiValue+' LC · +'+m.aiXp+' XP'):(d.coins[0]+'-'+d.coins[1]+' LC · +'+d.xp+' XP')} · <span style="color:var(--green)">✅${st.done}</span> <span style="color:var(--danger)">❌${st.failed}</span>${m.penXp!=null?` · <span style="color:var(--danger)" title="XP perdido se falhar">⚠ -${m.penXp} XP</span>`:''}</div>
+        <div class="mission-meta">${icImg('lulacoin',11)} ${m.aiValue!=null?(m.aiValue+' LC · +'+m.aiXp+' XP'):(d.coins[0]+'-'+d.coins[1]+' LC · +'+d.xp+' XP')} · <span class="dur-badge" title="${m.durMin!=null?'tempo informado':'estimado pela dificuldade'}" style="color:#8fc7ff">⏱ ${fmtHM(missionDurMin(m))}${m.durMin==null?' ~':''}</span> · <span style="color:var(--green)">✅${st.done}</span> <span style="color:var(--danger)">❌${st.failed}</span>${m.penXp!=null?` · <span style="color:var(--danger)" title="XP perdido se falhar">⚠ -${m.penXp} XP</span>`:''}</div>
       </div>
       <span class="diff-badge ${d.class}">${d.label}</span>
       <div class="mission-actions">
+        <button class="pixel-btn btn-sm" title="Editar tempo da missão" onclick="editMissionDuration(${i})">⏱</button>
         ${!m.done ? `<button class="pixel-btn btn-green btn-sm" title="Concluir" onclick="completeMission(${i})">✓</button>` : '<span style="color:var(--green);font-size:14px">✓</span>'}
       </div>
     </div>`;
   }).join('');
+}
+
+// 🔮 PORTAL DO TEMPO — missões seladas por 7 dias. Ao abrir o selo, ativa e dá +50% XP ao concluir.
+const FUTURE_SEAL_MS = 7*24*60*60*1000;   // 7 dias
+function futureSealLeftMs(m){ const base = m.sealedAt || m.createdAt || Date.now(); return (base + FUTURE_SEAL_MS) - Date.now(); }
+function renderFutureMissions(){
+  const list = document.getElementById('future-list');
+  if(!list) return;
+  const fut = G.missions.map((m,i)=>({m,i})).filter(o=>o.m.future);
+  if(fut.length===0){
+    list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:14px 0;text-align:center;line-height:1.7;">Nenhuma missão da broxisse ainda.<br>Ao criar uma missão, escolha <b style="color:#c79bff">🔮 Guardar como Futura</b> pra selá-la aqui.</div>';
+    return;
+  }
+  // selo mais perto de abrir primeiro
+  fut.sort((a,b)=> futureSealLeftMs(a.m) - futureSealLeftMs(b.m));
+  list.innerHTML = fut.map(({m,i})=>{
+    const d = DIFFS[m.diff];
+    const col = catColor(m.cat);
+    const leftMs = futureSealLeftMs(m);
+    const ready = leftMs <= 0;
+    let sealBadge;
+    if(ready){ sealBadge = `<span class="seal-badge ready">✨ selo aberto</span>`; }
+    else {
+      const days = Math.floor(leftMs/86400000);
+      const hours = Math.floor((leftMs%86400000)/3600000);
+      const txt = days>0 ? `${days}d ${hours}h` : `${hours}h ${Math.floor((leftMs%3600000)/60000)}min`;
+      sealBadge = `<span class="seal-badge">🔒 abre em ${txt}</span>`;
+    }
+    return `<div class="mission-item sealed" ${ready?`style="cursor:pointer" onclick="activateMission(${i})" title="Tocar pra ativar"`:''}>
+      <span class="mission-cat-icon">${m.icon||m.cat}</span>
+      <div class="mission-info">
+        <div class="mission-name">${m.name} ${sealBadge}</div>
+        <div class="mission-meta">${icImg('lulacoin',11)} ${m.aiValue!=null?(m.aiValue+' LC · +'+m.aiXp+' XP'):(d.coins[0]+'-'+d.coins[1]+' LC · +'+d.xp+' XP')} · <span style="color:#8fc7ff">⏱ ${fmtHM(missionDurMin(m))}${m.durMin==null?' ~':''}</span> · <span style="color:var(--gold)">🔮 +50% XP</span></div>
+      </div>
+      <span class="diff-badge ${d.class}">${d.label}</span>
+      <div class="mission-actions">
+        <button class="pixel-btn btn-sm" title="Editar tempo da missão" onclick="event.stopPropagation();editMissionDuration(${i})">⏱</button>
+        ${ready
+          ? `<button class="pixel-btn btn-gold btn-sm" title="Ativar agora" onclick="event.stopPropagation();activateMission(${i})">▶ ATIVAR</button>`
+          : `<button class="pixel-btn btn-sm" disabled style="opacity:.45;cursor:not-allowed">🔒</button>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function activateMission(i){
+  const m = G.missions[i]; if(!m || !m.future) return;
+  if(futureSealLeftMs(m) > 0){
+    const days = Math.ceil(futureSealLeftMs(m)/86400000);
+    showToast(`🔒 Selo ainda fechado — faltam ~${days} dia(s).`, 'dmg');
+    return;
+  }
+  m.future = false;
+  m.fromFuture = true;   // marca p/ o bônus de +50% XP ao concluir
+  renderFutureMissions();
+  renderMissions();
+  save();
+  showToast('⚡ Missão da broxisse ativada! (+50% XP ao concluir)', 'info');
+}
+
+// ===== ⏱ ABA TEMPO DE ATIVIDADES (item 4) =====
+function fmtHM(min){
+  min = Math.max(0, Math.round(min));
+  const h = Math.floor(min/60), m = min%60;
+  if(h<=0) return m+'min';
+  if(m<=0) return h+'h';
+  return h+'h '+m+'min';
+}
+function timeTasksToday(){
+  const log = (G.timeLog||{})[todayStr()] || {};
+  return Object.values(log).reduce((s,v)=>s+v,0);
+}
+function timeAvg7(){
+  const now=new Date(); let sum=0, days=0;
+  for(let i=0;i<7;i++){
+    const d=new Date(now); d.setDate(now.getDate()-i);
+    const log=(G.timeLog||{})[todayStr(d)];
+    if(log){ sum += Object.values(log).reduce((s,v)=>s+v,0); days++; }
+  }
+  return days? Math.round(sum/days) : 0;
+}
+function setSleepGoal(){
+  gameAsk({title:'😴 Horas de sono por dia', type:'number', value:String(G.sleepGoalH||8), okText:'SALVAR', onOk:(v)=>{
+    const n=parseFloat(v); if(!isNaN(n)&&n>=0&&n<=24){ G.sleepGoalH=n; save(); renderTimeTab(); showToast('😴 Sono ajustado p/ '+n+'h','info'); }
+  }});
+}
+function renderTimeTab(){
+  const el = document.getElementById('time-content'); if(!el) return;
+  const catMins = (G.timeLog||{})[todayStr()] || {};
+  const tasksMin = timeTasksToday();
+  const sleepMin = Math.round((G.sleepGoalH||8)*60);
+  const freeMin = Math.max(0, 1440 - sleepMin - tasksMin);
+  const segs = [
+    {label:'😴 Sono',    min:sleepMin, color:'#5b76d6'},
+    {label:'✅ Tarefas', min:tasksMin, color:'#46c46a'},
+    {label:'🎮 Livre',   min:freeMin,  color:'#f0c040'}
+  ];
+  const pct = (m)=> (m/1440*100).toFixed(1);
+  // barra empilhada do dia (24h)
+  let dayBar = `<div style="display:flex;height:30px;border-radius:8px;overflow:hidden;border:1px solid var(--border)">`;
+  segs.forEach(s=>{ if(s.min>0) dayBar += `<div title="${s.label}: ${fmtHM(s.min)}" style="width:${pct(s.min)}%;background:${s.color}"></div>`; });
+  dayBar += `</div>`;
+  const legend = segs.map(s=>`<div style="display:flex;align-items:center;gap:6px;font-size:12.5px">
+      <span style="width:11px;height:11px;border-radius:3px;background:${s.color};display:inline-block"></span>
+      ${s.label}: <b>${fmtHM(s.min)}</b> <span style="color:var(--muted)">(${pct(s.min)}%)</span>
+    </div>`).join('');
+  // detalhamento por categoria de hoje
+  const cats = Object.entries(catMins).sort((a,b)=>b[1]-a[1]);
+  const maxCat = cats.length ? cats[0][1] : 1;
+  const catRows = cats.length ? cats.map(([c,mn])=>`
+    <div style="display:flex;align-items:center;gap:8px;margin:5px 0">
+      <span style="font-size:17px;width:22px;text-align:center">${c}</span>
+      <div style="flex:1;height:15px;background:rgba(255,255,255,.06);border-radius:7px;overflow:hidden">
+        <div style="height:100%;width:${(mn/maxCat*100)}%;background:${catColor(c)};border-radius:7px"></div>
+      </div>
+      <span style="font-size:12px;color:var(--text);min-width:66px;text-align:right">${fmtHM(mn)}</span>
+    </div>`).join('') : '<div style="color:var(--muted);font-size:13px;padding:8px 0">Conclua missões hoje pra ver o tempo por categoria. (defina ⏱ minutos ao criar, ou usa a estimativa da dificuldade)</div>';
+  // double XP + recorde de XP (sinergia com itens 1 e 3)
+  const dx = doubleXpActive() ? `<div style="background:linear-gradient(90deg,rgba(240,192,64,.22),rgba(240,192,64,.05));border:1px solid var(--gold);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px">⚡ <b style="color:var(--gold)">XP DOBRADO ativo</b> — termina em <b>${fmtHM(doubleXpLeftMs()/60000)}</b></div>` : '';
+  const xpToday = (G.xpDay && G.xpDay.date===todayStr()) ? G.xpDay.xp : 0;
+  const recBox = `<div style="display:flex;justify-content:space-between;gap:10px;margin-top:12px;font-size:12.5px;color:var(--text)">
+      <span>⭐ XP hoje: <b>${xpToday}</b></span>
+      <span>🏆 Recorde: <b>${G.xpRecord||0}</b></span>
+    </div>`;
+  // por missão (hoje): concluídas + planejadas pendentes, com tempo de cada
+  const t = todayStr();
+  const doneToday = (G.missions||[]).filter(m=>m.done && m.doneAt && todayStr(new Date(m.doneAt))===t);
+  const planToday = (G.missions||[]).filter(m=>!m.future && !m.done && isTodayMission(m));
+  const planMin = planToday.reduce((s,m)=>s+missionDurMin(m),0);
+  const missionRow = (m,doneFlag)=>`
+    <div style="display:flex;align-items:center;gap:8px;margin:4px 0;font-size:12.5px">
+      <span style="width:20px;text-align:center">${m.icon||m.cat}</span>
+      <span style="flex:1;${doneFlag?'':'color:var(--muted)'}">${doneFlag?'✅':'⬜'} ${m.name}</span>
+      <span style="color:#8fc7ff;white-space:nowrap">⏱ ${fmtHM(missionDurMin(m))}${m.durMin==null?' ~':''}</span>
+    </div>`;
+  const perMission = (doneToday.length||planToday.length)
+    ? doneToday.map(m=>missionRow(m,true)).join('') + planToday.map(m=>missionRow(m,false)).join('')
+    : '<div style="color:var(--muted);font-size:13px;padding:6px 0">Nenhuma missão de hoje ainda.</div>';
+  // gráfico de 7 dias (tempo total de tarefas por dia)
+  const nowD=new Date(); const week=[];
+  for(let i=6;i>=0;i--){ const dd=new Date(nowD); dd.setDate(nowD.getDate()-i); const lg=(G.timeLog||{})[todayStr(dd)]||{}; const mn=Object.values(lg).reduce((s,v)=>s+v,0); week.push({lbl:['D','S','T','Q','Q','S','S'][dd.getDay()], mn, today:i===0}); }
+  const wkMax=Math.max(60,...week.map(w=>w.mn));
+  const chart=`<div style="display:flex;align-items:flex-end;gap:6px;height:100px;margin-top:8px">`+week.map(w=>`
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;height:100%;justify-content:flex-end">
+      <div style="font-size:9px;color:var(--muted);white-space:nowrap">${w.mn?fmtHM(w.mn):''}</div>
+      <div title="${fmtHM(w.mn)}" style="width:100%;height:${Math.round(w.mn/wkMax*72)}px;min-height:2px;background:${w.today?'var(--gold)':'#46c46a'};border-radius:4px 4px 0 0"></div>
+      <div style="font-size:10px;color:${w.today?'var(--gold)':'var(--muted)'}">${w.lbl}</div>
+    </div>`).join('')+`</div>`;
+  el.innerHTML = `${dx}
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:10px">Como você gasta suas <b>24h</b> hoje. Sono é uma meta editável; tarefas vêm do tempo das missões concluídas; o resto é tempo livre.</div>
+    ${dayBar}
+    <div style="display:flex;flex-direction:column;gap:5px;margin-top:10px">${legend}</div>
+    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="pixel-btn btn-sm" onclick="setSleepGoal()">😴 Ajustar sono (${G.sleepGoalH||8}h)</button>
+      <span style="font-size:11.5px;color:var(--muted)">Planejado pendente hoje: <b style="color:#8fc7ff">${fmtHM(planMin)}</b></span>
+    </div>
+    ${recBox}
+    <div class="sep"></div>
+    <div class="section-title" style="margin-bottom:4px">📋 POR MISSÃO (hoje)</div>
+    ${perMission}
+    <div class="sep"></div>
+    <div class="section-title" style="margin-bottom:4px">🗂 TEMPO POR CATEGORIA (hoje)</div>
+    ${catRows}
+    <div class="sep"></div>
+    <div class="section-title" style="margin-bottom:4px">📈 ÚLTIMOS 7 DIAS (tempo de tarefas)</div>
+    ${chart}
+    <div style="font-size:12.5px;color:var(--muted);margin-top:8px">📊 Média de tarefas/dia (dias com registro): <b style="color:var(--text)">${fmtHM(timeAvg7())}</b></div>`;
 }
 
 function renderDungeons() {
@@ -3105,6 +3338,9 @@ function travelZone(i){
   renderWorld(); save();
 }
 
+// 🛒 por enquanto a loja só vende o Amuleto do XP Dobrado (a pedido).
+// Pra reabrir a loja inteira: esvazie SHOP_ONLY (= []) ou remova o filtro abaixo.
+const SHOP_ONLY = ['double_xp'];
 function renderShop() {
   const grid = document.getElementById('shop-grid');
   // agrupa por categoria
@@ -3112,7 +3348,9 @@ function renderShop() {
   const catIcon = {'Consumível':'🧪','Arma':'⚔','Armadura':'🛡','Acessório':'💍'};
   let html = '';
   cats.forEach(cat=>{
-    const items = SHOP_ITEMS.map((it,i)=>({it,i})).filter(x=>(x.it.cat||'Consumível')===cat);
+    const items = SHOP_ITEMS.map((it,i)=>({it,i}))
+      .filter(x=> !SHOP_ONLY.length || SHOP_ONLY.includes(x.it.id))
+      .filter(x=>(x.it.cat||'Consumível')===cat);
     if(!items.length) return;
     html += `<div class="shop-cat-title">${catIcon[cat]||''} ${cat}</div>`;
     html += `<div class="shop-grid-inner">` + items.map(({it,i})=>{
@@ -3335,10 +3573,14 @@ function addMission() {
   const diff = document.getElementById('mission-diff').value;
   const time = (document.getElementById('mission-time')||{}).value || '';
   const date = (document.getElementById('mission-date')||{}).value || '';
-  const recur = (document.getElementById('mission-rec')||{}).value || '';
+  let recur = (document.getElementById('mission-rec')||{}).value || '';
+  const future = ((document.getElementById('mission-when')||{}).value || 'active') === 'future';
+  if(future && recur){ showToast('🔮 No portal só entram missões ÚNICAS — repetição ignorada.', 'info'); recur = ''; }
   const xpRaw = parseInt((document.getElementById('mission-xp')||{}).value);
   const lcRaw = parseInt((document.getElementById('mission-lc')||{}).value);
   const penRaw = parseInt((document.getElementById('mission-pen')||{}).value);
+  const durRaw = parseInt((document.getElementById('mission-dur')||{}).value);
+  const durMin = (!isNaN(durRaw) && durRaw>0) ? durRaw : null;
   let aiXp = (!isNaN(xpRaw) && xpRaw>0) ? xpRaw : null;
   let aiValue = (!isNaN(lcRaw) && lcRaw>0) ? lcRaw : null;
   const penXp = (!isNaN(penRaw) && penRaw>0) ? penRaw : null;
@@ -3375,15 +3617,16 @@ function addMission() {
   }
 
   const icon = missionIconSel || '';
-  G.missions.unshift({name, cat, icon, diff, time, date, recur, recurring:!!recur, done:false, id:Date.now(), stats:{done:0,failed:0}, createdAt:Date.now(), aiValue, aiXp, penXp});
+  G.missions.unshift({name, cat, icon, diff, time, date, recur, recurring:!!recur, done:false, future, sealedAt:(future?Date.now():null), durMin, id:Date.now(), stats:{done:0,failed:0}, createdAt:Date.now(), aiValue, aiXp, penXp});
   // registra no catálogo do grupo (primeiro a criar fixa o valor canônico)
   const finalVals = effVals(diff, aiXp, aiValue);
   registerCatalog(name, finalVals.xp, finalVals.lc);
   input.value = '';
-  ['mission-time','mission-date','mission-rec','mission-xp','mission-lc','mission-pen'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['mission-time','mission-date','mission-rec','mission-xp','mission-lc','mission-pen','mission-dur'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['mission-when'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value='active'; });
   resetMissionIcon();
   renderMissions(); save();
-  showToast("Nova missão criada!", "info");
+  showToast(future ? "🔮 Missão guardada nas Futuras!" : "Nova missão criada!", "info");
 }
 
 // salva a missão que está no formulário como "pronta" (template do usuário)
@@ -3503,10 +3746,11 @@ function completeMission(i) {
   const pStreak = G.perfectStreak || 0;
   const perfMult = 1.0;   // bônus de XP/LC por streak perfeito REMOVIDO (a pedido)
   const recMult = recurMult(m);   // bônus de rotina (constância)
+  const futureMult = m.fromFuture ? 1.5 : 1.0;   // 🔮 bônus de +50% XP de missão vinda do portal (só XP)
   const baseCoins = (m.aiValue!=null) ? m.aiValue : (d.coins[0] + Math.floor(Math.random()*(d.coins[1]-d.coins[0])));
   const baseXp = (m.aiXp!=null) ? m.aiXp : d.xp;
   const coins = Math.floor(baseCoins * perfMult * recMult);
-  const xp = Math.floor(baseXp * perfMult * recMult);
+  const xp = Math.floor(baseXp * perfMult * recMult * futureMult);
   G.coins += coins; addLedger('in', coins, 'Missão: '+m.name);
   G.totalMissions++;
   G.streak++;
@@ -3517,6 +3761,7 @@ function completeMission(i) {
   G.todayCounters.missions++;
   if(m.diff==='hard'||m.diff==='legendary') G.todayCounters.hard++;
   G.todayCounters.byCat[m.cat] = (G.todayCounters.byCat[m.cat]||0)+1;
+  logActivityTime(m);   // ⏱ item 4: registra o tempo gasto por categoria hoje
   ensureSeason(); G.seasonMissions = (G.seasonMissions||0) + 1;   // temporada (v4 #14)
   ensureWeek(); G.weekMissions = (G.weekMissions||0) + 1;         // destaque semanal (v4.1)
 
@@ -3543,6 +3788,7 @@ function completeMission(i) {
   const parts = [];
   if(perfMult > 1) parts.push(`🔥x${perfMult.toFixed(1)}`);
   if(recMult > 1) parts.push(`🔁+${Math.round((recMult-1)*100)}%`);
+  if(futureMult > 1) parts.push(`🔮+50%`);
   const multStr = parts.length ? ` (${parts.join(' ')})` : '';
   showToast(`+${coins} LC +${xp} XP!${multStr}`);
   if(bonusAttrs.length) showToast(`+1 ${G.attrs[bonusAttrs[0]].name}`, "info");
@@ -3623,10 +3869,46 @@ function oldXpTotal(level, xp){
   for(let L=1; L<(level||1); L++){ t += n; n = Math.floor(n*1.35); }
   return t;
 }
+// ⏱ Tempo de atividades (item 4): duração da missão (informada ou estimada pela dificuldade)
+const DUR_BY_DIFF = {easy:15, medium:30, hard:60, legendary:120};
+function missionDurMin(m){ return (m.durMin && m.durMin>0) ? m.durMin : (DUR_BY_DIFF[m.diff]||30); }
+function logActivityTime(m){
+  const t = todayStr();
+  if(!G.timeLog || typeof G.timeLog!=='object') G.timeLog = {};
+  if(!G.timeLog[t]) G.timeLog[t] = {};
+  const cat = m.cat || '✅';
+  G.timeLog[t][cat] = (G.timeLog[t][cat]||0) + missionDurMin(m);
+}
+// 🏆 Recorde de XP diário (item 3): +50 XP extra ao superar o recorde, 1x por dia
+function trackDailyXp(amount){
+  const t = todayStr();
+  if(!G.xpDay || G.xpDay.date !== t) G.xpDay = {date:t, xp:0, recordHit:false};
+  G.xpDay.xp += amount;
+  if(!G.xpDay.recordHit && (G.xpRecord||0) > 0 && G.xpDay.xp > G.xpRecord){
+    G.xpDay.recordHit = true;
+    G.xpRecord = G.xpDay.xp;                 // novo recorde
+    showToast('🏆 NOVO RECORDE DE XP DO DIA! +50 XP de bônus','heal');
+    try{ spawnPanelSparks(); }catch(e){}
+    gainXP(50);                              // reentra: recordHit já é true → não re-premia
+  } else if(G.xpDay.xp > (G.xpRecord||0)){
+    G.xpRecord = G.xpDay.xp;                 // mantém o recorde subindo no mesmo dia
+  }
+}
+// ⚡ Double XP (item 1): ativo enquanto não passou das 24h
+function doubleXpActive(){ return G.doubleXpUntil && Date.now() < G.doubleXpUntil; }
+function doubleXpLeftMs(){ return doubleXpActive() ? (G.doubleXpUntil - Date.now()) : 0; }
+function activateDoubleXp(){
+  const base = Math.max(Date.now(), G.doubleXpUntil||0);   // empilha se comprar de novo
+  G.doubleXpUntil = base + 24*60*60*1000;
+  showToast('⚡ XP DOBRADO ativado por 24h!','heal');
+  updateUI(); save();
+}
 function gainXP(amount) {
   amount = Math.round(amount * prestigeXpMult());   // bônus permanente de prestígio (v4 #10)
+  if(doubleXpActive()) amount *= 2;                 // ⚡ item 1: dobra o XP por 24h
   G.xp += amount;
   G.xpEarned = (G.xpEarned||0) + amount;            // XP acumulado p/ ranking total (v6)
+  trackDailyXp(amount);                             // 🏆 item 3: recorde de XP do dia
   while(G.xp >= G.xpNext){
     G.xp -= G.xpNext;
     const prevTitle = titleFor(G.level);
@@ -3701,7 +3983,7 @@ function buyItem(i) {
     const existing = G.inventory.find(it=>it&&it.name===g.name);
     if(existing){ existing.count=(existing.count||1)+1; }
     else { G.inventory.push({...g, count:1}); }
-    showToast(`🛒 ${g.name} comprado! Equipe na bolsa.`,'heal');
+    showToast(`🛒 ${g.name} comprado! ${g.type==='consumable'?'Use na bolsa pra ativar.':'Equipe na bolsa.'}`,'heal');
     renderInventory();
   } else if(item.fn){
     item.fn();
@@ -3794,7 +4076,8 @@ function equipItem(i) {
 function useConsumable(i){
   const item = G.inventory[i];
   if(!item) return;
-  if(item.hp){ healPlayer(item.hp); }
+  if(item.doublexp){ activateDoubleXp(); }
+  else if(item.hp){ healPlayer(item.hp); }
   else { showToast(`Usou ${item.name}`,'info'); }
   item.count = (item.count||1) - 1;
   if(item.count<=0){
@@ -4347,6 +4630,7 @@ function syncOnline() {
       const t = todayStr();
       // PENDENTES (da lista atual, ainda não feitas e devidas hoje)
       const pend = G.missions.filter(m=>{
+        if(m.future) return false;   // 🔮 selada no portal: não aparece pros manos
         if(m.done) return false;
         if(m.date && t < m.date) return false;
         if(missionRecur(m)) return missionDueOn(Object.assign({}, m, {done:false}), new Date());
@@ -5462,7 +5746,7 @@ function checkMissionReminders(){
   const hm = now.getHours()*60 + now.getMinutes();
   const today = todayStr();
   (G.missions||[]).forEach(m=>{
-    if(!m.time || m.done) return;
+    if(!m.time || m.done || m.future) return;
     if(missionRecur(m) && !dueToday(m)) return;     // não é o dia dela
     const parts = m.time.split(':'); const target = (+parts[0])*60 + (+parts[1]);
     if(hm >= target && hm <= target+1 && m._notifDate !== today){
@@ -5474,7 +5758,7 @@ function checkMissionReminders(){
 
 // próxima missão pendente de hoje (com horário tem prioridade, pela ordem do relógio)
 function nextPendingMission(){
-  const due = (G.missions||[]).filter(m=> !m.done && (!missionRecur(m) || dueToday(m)));
+  const due = (G.missions||[]).filter(m=> !m.done && !m.future && (!missionRecur(m) || dueToday(m)));
   if(!due.length) return null;
   const withTime = due.filter(m=>m.time).sort((a,b)=>{
     const pa=a.time.split(':'), pb=b.time.split(':');
@@ -5494,7 +5778,7 @@ function checkNextMissionReminder(){
   const m = nextPendingMission();
   if(!m) return;                                                // tudo feito → não incomoda
   G.nextReminderLast = now; save();
-  const dueList = (G.missions||[]).filter(x=> !missionRecur(x) || dueToday(x));
+  const dueList = (G.missions||[]).filter(x=> !x.future && (!missionRecur(x) || dueToday(x)));
   const doneCount = dueList.filter(x=>x.done).length;
   const when = m.time ? ` (⏰ ${m.time})` : '';
   const name = (G.profile&&G.profile.name)||'Herói';
@@ -5505,7 +5789,7 @@ function checkNextMissionReminder(){
 function switchTab(name, btn) {
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  const tabs = ['missions','dungeons','world','shop','rewards','ranking','history','inventory','stats','screen'];
+  const tabs = ['missions','dungeons','world','shop','rewards','ranking','history','inventory','stats','screen','future','time'];
   tabs.forEach(t=>{
     const el = document.getElementById('tab-'+t);
     if(el){
@@ -5524,6 +5808,8 @@ function switchTab(name, btn) {
   else if(name==='missions'){ renderMissions(); renderPresets(); }
   else if(name==='stats') renderDashboard();
   else if(name==='screen') renderScreenTime();
+  else if(name==='future') renderFutureMissions();
+  else if(name==='time') renderTimeTab();
 }
 
 // ===== DASHBOARD / ESTATÍSTICAS (v4 #8) =====
@@ -5675,7 +5961,8 @@ function save(){
       manoBank:G.manoBank, debts:G.debts,
       migratedDefaults:G.migratedDefaults, nextReminderLast:G.nextReminderLast,
       wokeUpDate:G.wokeUpDate, wakeNerfDate:G.wakeNerfDate, wakeRemindDate:G.wakeRemindDate, wakeStartDate:G.wakeStartDate,
-      xpCurveV2:G.xpCurveV2, xpCurveV3:G.xpCurveV3
+      xpCurveV2:G.xpCurveV2, xpCurveV3:G.xpCurveV3,
+      doubleXpUntil:G.doubleXpUntil, xpDay:G.xpDay, xpRecord:G.xpRecord, timeLog:G.timeLog, sleepGoalH:G.sleepGoalH
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     G._lastSaveTs = Date.now();
@@ -5742,6 +6029,10 @@ function load(){
     G.weekMissions = G.weekMissions || 0;
     G.weekMark = G.weekMark || '';
     G.xpEarned = G.xpEarned || 0;
+    G.doubleXpUntil = G.doubleXpUntil || 0;
+    G.xpRecord = G.xpRecord || 0;
+    G.timeLog = (G.timeLog && typeof G.timeLog==='object') ? G.timeLog : {};
+    G.sleepGoalH = G.sleepGoalH || 8;
     G.dayFailSeen = G.dayFailSeen || {};
     G.graceDate = G.graceDate || '';
     G.customTemplates = Array.isArray(G.customTemplates) ? G.customTemplates : [];
@@ -5920,6 +6211,7 @@ function checkDailyReset(){
   const closedDay = new Date(G.lastResetDate + 'T12:00:00'); // o dia que acabou de terminar
   const penOf = (m)=> (m.penXp!=null ? m.penXp : Math.round((m.aiXp!=null?m.aiXp:DIFFS[m.diff].xp) * 0.5));
   G.missions.forEach(m=>{
+    if(m.future) return;   // 🔮 selada no portal: não pune enquanto não for ativada
     if(missionRecur(m)){
       if(missionDueOn(m, closedDay)){
         dueCount++;
@@ -5939,6 +6231,8 @@ function checkDailyReset(){
       }
     }
   });
+  // 🏆 fecha o dia de XP: o total de ontem vira o recorde a ser batido
+  if(G.xpDay && G.xpDay.date !== today){ G.xpRecord = Math.max(G.xpRecord||0, G.xpDay.xp||0); G.xpDay = {date:today, xp:0, recordHit:false}; }
   ensureToday(); // arquiva o dia anterior no dayLog e gera desafios novos
   if(!G.didToday) G.streak = 0;   // não fez nada ontem → perde a sequência
   // streak perfeito: todas as missões diárias completas
@@ -6997,7 +7291,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.24 • v51';
+  window.APP_VERSION = '2026.06.24 • v54';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
