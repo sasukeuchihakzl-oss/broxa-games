@@ -3879,20 +3879,12 @@ function logActivityTime(m){
   const cat = m.cat || '✅';
   G.timeLog[t][cat] = (G.timeLog[t][cat]||0) + missionDurMin(m);
 }
-// 🏆 Recorde de XP diário (item 3): +50 XP extra ao superar o recorde, 1x por dia
+// 🏆 Recorde de XP diário (item 3): só ACUMULA o XP de hoje.
+// O bônus de +50 é avaliado no FECHAMENTO do dia (checkDailyReset), não na hora.
 function trackDailyXp(amount){
   const t = todayStr();
-  if(!G.xpDay || G.xpDay.date !== t) G.xpDay = {date:t, xp:0, recordHit:false};
+  if(!G.xpDay || G.xpDay.date !== t) G.xpDay = {date:t, xp:0};
   G.xpDay.xp += amount;
-  if(!G.xpDay.recordHit && (G.xpRecord||0) > 0 && G.xpDay.xp > G.xpRecord){
-    G.xpDay.recordHit = true;
-    G.xpRecord = G.xpDay.xp;                 // novo recorde
-    showToast('🏆 NOVO RECORDE DE XP DO DIA! +50 XP de bônus','heal');
-    try{ spawnPanelSparks(); }catch(e){}
-    gainXP(50);                              // reentra: recordHit já é true → não re-premia
-  } else if(G.xpDay.xp > (G.xpRecord||0)){
-    G.xpRecord = G.xpDay.xp;                 // mantém o recorde subindo no mesmo dia
-  }
 }
 // ⚡ Double XP (item 1): ativo enquanto não passou das 24h
 function doubleXpActive(){ return G.doubleXpUntil && Date.now() < G.doubleXpUntil; }
@@ -6231,8 +6223,14 @@ function checkDailyReset(){
       }
     }
   });
-  // 🏆 fecha o dia de XP: o total de ontem vira o recorde a ser batido
-  if(G.xpDay && G.xpDay.date !== today){ G.xpRecord = Math.max(G.xpRecord||0, G.xpDay.xp||0); G.xpDay = {date:today, xp:0, recordHit:false}; }
+  // 🏆 fecha o dia de XP: se o dia que terminou SUPEROU o recorde, dá +50 XP de bônus
+  let recordBeaten = false;
+  if(G.xpDay && G.xpDay.date !== today){
+    const closedXp = G.xpDay.xp||0;
+    if((G.xpRecord||0) > 0 && closedXp > G.xpRecord) recordBeaten = true;   // bateu o recorde anterior
+    G.xpRecord = Math.max(G.xpRecord||0, closedXp);                          // novo recorde a bater
+    G.xpDay = {date:today, xp:0};
+  }
   ensureToday(); // arquiva o dia anterior no dayLog e gera desafios novos
   if(!G.didToday) G.streak = 0;   // não fez nada ontem → perde a sequência
   // streak perfeito: todas as missões diárias completas
@@ -6270,6 +6268,12 @@ function checkDailyReset(){
   }
   } // fim do else (fora da carência)
   cleanupDoneUnique();   // remove missões únicas já concluídas em dias passados
+  // 🏆 bônus de recorde de XP: avaliado no fechamento do dia
+  if(recordBeaten){
+    showToast('🏆 RECORDE DE XP BATIDO ONTEM! +50 XP de bônus','heal');
+    try{ spawnPanelSparks(); }catch(e){}
+    gainXP(50);
+  }
   G.lastResetDate = today;
   G.day = computeDay();
   save();
@@ -7291,7 +7295,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.24 • v54';
+  window.APP_VERSION = '2026.06.25 • v55';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
