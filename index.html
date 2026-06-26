@@ -1633,6 +1633,8 @@
   .started-badge{ display:inline-block; background:rgba(60,160,255,.18); color:#7fc4ff; border:1px solid rgba(90,170,255,.4); border-radius:6px; font-size:10px; padding:1px 6px; margin-left:4px; }
   .pixel-btn.btn-start{ background:linear-gradient(180deg,#2f78c8,#1f4f8c); color:#fff; }
   .pixel-btn.btn-start:hover{ filter:brightness(1.15); }
+  .pixel-btn.btn-del{ background:linear-gradient(180deg,#b3434a,#7a2a30); color:#fff; }
+  .pixel-btn.btn-del:hover{ filter:brightness(1.15); }
 
   /* ===== ESPIAR: MISSÕES DO AMIGO (v6) ===== */
   .spy-miss-row{ display:flex; align-items:center; gap:6px; font-size:14px; padding:3px 4px; border-bottom:1px solid rgba(255,255,255,.04); }
@@ -3164,6 +3166,7 @@ function renderMissions() {
       <div class="mission-actions">
         ${!m.done ? `<button class="pixel-btn btn-sm" title="Editar missão" onclick="editMission(${i})">✎</button>` : ''}
         <button class="pixel-btn btn-sm" title="Editar tempo da missão" onclick="editMissionDuration(${i})">⏱</button>
+        <button class="pixel-btn btn-sm btn-del" title="Excluir missão" onclick="deleteMission(${i})">✕</button>
         ${m.done
           ? '<span style="color:var(--green);font-size:14px">✓</span>'
           : (m.started
@@ -4650,7 +4653,12 @@ function showPerfectDayBanner(n){
 }
 
 function deleteMission(i) {
-  return;   // excluir missão desativado (evita perda de progresso / trapaça)
+  const m = G.missions[i]; if(!m) return;
+  if(!confirm('Excluir a missão "'+m.name+'"? Essa ação não pode ser desfeita.')) return;
+  G.missions.splice(i, 1);
+  renderMissions(); save();
+  try{ syncOnline(); }catch(e){}
+  showToast('🗑 Missão excluída','info');
 }
 
 // XP necessário p/ subir do nível atual ao próximo (curva mais íngreme: sobe devagar)
@@ -8151,7 +8159,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.26 • v65';
+  window.APP_VERSION = '2026.06.26 • v66';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
