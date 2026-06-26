@@ -5,7 +5,7 @@
    - Mesma origem (GET): cache-first com atualização em segundo plano (stale-while-revalidate).
    - Firebase / fontes (cross-origin): passa direto pela rede (não cacheia dados ao vivo).
    Pra forçar atualização do app, suba o número da versão abaixo. */
-const VERSION = 'fol-v62';
+const VERSION = 'fol-v63';
 const SHELL = [
   './',
   './index.html',
