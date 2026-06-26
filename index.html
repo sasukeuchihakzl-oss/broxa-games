@@ -3401,7 +3401,9 @@ function viewedVillageData(name){
   if(me){ const w=ensureWorld(); return {name, me:true, vitality:worldVitality(), missions:G.totalMissions||0, built:w.built||0, decay:w.decay||0, seeds:w.seeds||0, wealth:wOf(G.coins), late:hasLateMission(), offline:false, color:col}; }
   const d = onlineData[name];
   const recent = d && d.updatedAt && (Date.now()-d.updatedAt < 45*60000);
-  if(d && d.vitality!=null){ const miss=d.totalMissions||0; return {name, me:false, vitality:d.vitality, missions:miss, built:miss, decay:Math.round((1-d.vitality/100)*8), seeds:0, wealth:wOf(d.coins), late:false, offline:!recent, color:col}; }
+  // 👹 atraso do mano: calcula pelas missões de hoje que ele sincronizou (vencidas, não feitas, não iniciadas)
+  const lateOther = !!(d && Array.isArray(d.todayMissions) && d.todayMissions.some(m=>rivalMissionLate(m)));
+  if(d && d.vitality!=null){ const miss=d.totalMissions||0; return {name, me:false, vitality:d.vitality, missions:miss, built:miss, decay:Math.round((1-d.vitality/100)*8), seeds:0, wealth:wOf(d.coins), late:lateOther, offline:!recent, color:col}; }
   return {name, me:false, vitality:null, missions:(d&&d.totalMissions)||0, built:(d&&d.totalMissions)||0, decay:0, seeds:0, wealth:0.4, late:false, offline:true, color:col};
 }
 
@@ -8149,7 +8151,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.26 • v63';
+  window.APP_VERSION = '2026.06.26 • v64';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
