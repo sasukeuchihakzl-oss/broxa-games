@@ -1623,6 +1623,12 @@
   .rank-tot-name{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .rank-tot-val{ color:var(--gold); }
   @media(max-width:560px){ .rank-totals{ grid-template-columns:1fr; } .preset-list{ grid-template-columns:1fr; } }
+  /* ⏱️ Ocupação do dia */
+  #ranking-busy .rank-totals{ grid-template-columns:1fr 1fr; }
+  .busy-hint{ font-size:11px; color:var(--muted); text-align:center; margin-bottom:7px; }
+  .busy-sub{ font-size:10px; color:var(--muted); text-align:center; margin:-3px 0 6px; }
+  .busy-week{ color:var(--muted); font-size:11px; }
+  @media(max-width:560px){ #ranking-busy .rank-totals{ grid-template-columns:1fr; } }
 
   /* ===== ESPIAR: MISSÕES DO AMIGO (v6) ===== */
   .spy-miss-row{ display:flex; align-items:center; gap:6px; font-size:14px; padding:3px 4px; border-bottom:1px solid rgba(255,255,255,.04); }
@@ -1926,6 +1932,9 @@
         <div class="sep"></div>
         <div class="section-title">📊 RANKINGS TOTAIS</div>
         <div id="ranking-totals" class="rank-totals"></div>
+        <div class="sep"></div>
+        <div class="section-title">⏱️ OCUPAÇÃO DO DIA</div>
+        <div id="ranking-busy" class="busy-box"></div>
         <div class="sep"></div>
         <div class="section-title">💸 GASTOS DE MOEDAS</div>
         <div id="ranking-spent" class="hist-box"></div>
@@ -4607,6 +4616,9 @@ function logActivityTime(m){
   const cat = m.cat || '✅';
   G.timeLog[t][cat] = (G.timeLog[t][cat]||0) + missionDurMin(m);
 }
+// ⏱️ tempo total de ATIVIDADE (minutos) gasto em missões — hoje e na semana
+function activeMinToday(){ const lg=(G.timeLog||{})[todayStr()]||{}; return Object.values(lg).reduce((s,v)=>s+(v||0),0); }
+function activeMinWeek(){ let s=0; const now=new Date(); for(let i=0;i<7;i++){ const dd=new Date(now); dd.setDate(now.getDate()-i); const lg=(G.timeLog||{})[todayStr(dd)]; if(lg) s+=Object.values(lg).reduce((a,v)=>a+(v||0),0); } return s; }
 // 🏆 Recorde de XP diário (item 3): só ACUMULA o XP de hoje.
 // O bônus de +50 é avaliado no FECHAMENTO do dia (checkDailyReset), não na hora.
 function trackDailyXp(amount){
@@ -5345,6 +5357,8 @@ function syncOnline() {
     power: myPower(),
     evo: evoOf(G.level).name,
     xpEarned: G.xpEarned || 0,
+    activeMinToday: activeMinToday(),   // ⏱️ tempo de atividade (min) hoje
+    activeMinWeek: activeMinWeek(),     // ⏱️ tempo de atividade (min) na semana
     vitality: worldVitality(),   // 🏘️ estado da vila p/ os manos verem
     // missões de hoje (feitas/não feitas + horário) p/ os amigos acompanharem e cobrarem
     todayMissions: (function(){
@@ -7045,7 +7059,7 @@ function renderRanking(){
     name: myName + ' (você)', id: myName,
     level:G.level, xp:G.xp, xpEarned:G.xpEarned||0, missions:G.totalMissions,
     coins:G.coins, spent:spentTotal(), color:G.profile?.armor||'#888',
-    perfectStreak:pStrk, me:true
+    perfectStreak:pStrk, activeMin:activeMinToday(), activeWeek:activeMinWeek(), me:true
   };
 
   // Usa dados online se disponíveis, senão rivais simulados
@@ -7056,7 +7070,7 @@ function renderRanking(){
       if(d) return {
         name:n, id:n, level:d.level||1, xp:0, xpEarned:d.xpEarned||0, missions:d.totalMissions||0,
         coins:d.coins||0, spent:0, color:d.profileColor||'#888',
-        perfectStreak:d.perfectStreak||0, online:true
+        perfectStreak:d.perfectStreak||0, activeMin:d.activeMinToday||0, activeWeek:d.activeMinWeek||0, online:true
       };
       return {name:n, id:n, level:1, xp:0, xpEarned:0, missions:0, coins:0, spent:0, color:'#444', perfectStreak:0, offline:true};
     });
@@ -7103,6 +7117,30 @@ function renderRanking(){
       col('💰 LULACOINS','coins', v=>v) +
       col('⭐ XP TOTAL','xpEarned', v=>v) +
       col('📋 TAREFAS','missions', v=>v);
+  }
+
+  // ===== ⏱️ OCUPAÇÃO DO DIA (tempo de atividade x tempo livre) =====
+  const busyEl = document.getElementById('ranking-busy');
+  if(busyEl){
+    const WAKE = 16*60;   // orçamento de horas acordado por dia (base p/ tempo livre)
+    const bt = all.map(p=>{ const act=p.activeMin||0; return {me:p.me,name:p.name,color:p.color,act, week:p.activeWeek||0, free:Math.max(0, WAKE-act)}; });
+    const medals=['🥇','🥈','🥉'];
+    const colBusy=(title, sub, key, extraFn)=>{
+      const sorted=[...bt].sort((a,b)=>(b[key]||0)-(a[key]||0));
+      return `<div class="rank-tot-col"><div class="rank-tot-head">${title}</div><div class="busy-sub">${sub}</div>`+
+        sorted.map((p,i)=>`<div class="rank-tot-row ${p.me?'me':''}">
+          <span class="rank-tot-pos">${medals[i]||('#'+(i+1))}</span>
+          <span class="rank-dot" style="background:${p.color}"></span>
+          <span class="rank-tot-name">${p.me?'Você':p.name}</span>
+          <span class="rank-tot-val">${fmtHM(p[key])}${extraFn?extraFn(p):''}</span>
+        </div>`).join('')+`</div>`;
+    };
+    busyEl.innerHTML =
+      `<div class="busy-hint">Quem está mais ocupado vs. mais livre — comparação de hoje.</div>`+
+      `<div class="rank-totals">`+
+        colBusy('🔥 TEMPO ATIVO','fazendo missões hoje','act', p=>p.week>0?`<span class="busy-week"> ·${fmtHM(p.week)}/sem</span>`:'')+
+        colBusy('🌴 TEMPO LIVRE','do dia ainda livre (base 16h)','free', null)+
+      `</div>`;
   }
 
   const sp = document.getElementById('ranking-spent');
@@ -8040,7 +8078,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.26 • v59';
+  window.APP_VERSION = '2026.06.26 • v60';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
