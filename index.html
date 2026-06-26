@@ -1629,6 +1629,10 @@
   .busy-sub{ font-size:10px; color:var(--muted); text-align:center; margin:-3px 0 6px; }
   .busy-week{ color:var(--muted); font-size:11px; }
   @media(max-width:560px){ #ranking-busy .rank-totals{ grid-template-columns:1fr; } }
+  /* ▶ missão iniciada */
+  .started-badge{ display:inline-block; background:rgba(60,160,255,.18); color:#7fc4ff; border:1px solid rgba(90,170,255,.4); border-radius:6px; font-size:10px; padding:1px 6px; margin-left:4px; }
+  .pixel-btn.btn-start{ background:linear-gradient(180deg,#2f78c8,#1f4f8c); color:#fff; }
+  .pixel-btn.btn-start:hover{ filter:brightness(1.15); }
 
   /* ===== ESPIAR: MISSÕES DO AMIGO (v6) ===== */
   .spy-miss-row{ display:flex; align-items:center; gap:6px; font-size:14px; padding:3px 4px; border-bottom:1px solid rgba(255,255,255,.04); }
@@ -3133,12 +3137,13 @@ function renderMissions() {
     let timeBadge = ''; let urgency = '';
     if(m.time){
       const [hh,mm] = m.time.split(':').map(Number); const tmin = hh*60+mm;
-      const overdue = !m.done && dueToday(m) && hm > tmin;        // só atrasa se for missão DE HOJE
-      const soon = !m.done && !overdue && dueToday(m) && (tmin - hm) <= 30 && (tmin - hm) >= 0;
+      const overdue = !m.done && !m.started && dueToday(m) && hm > tmin;        // started tira do atraso
+      const soon = !m.done && !m.started && !overdue && dueToday(m) && (tmin - hm) <= 30 && (tmin - hm) >= 0;
       urgency = overdue ? 'urgent-overdue' : (soon ? 'urgent-soon' : '');
       const lbl = overdue ? ' atrasada' : (soon ? ` em ${tmin-hm}min` : '');
       timeBadge = `<span class="time-badge ${overdue?'overdue':''} ${soon?'soon':''}">⏰ ${m.time}${lbl}</span>`;
     }
+    const startedBadge = (!m.done && m.started) ? `<span class="started-badge">▶ em andamento</span>` : '';
     const r = missionRecur(m);
     const recBonus = recurBonusLabel(m);
     const recBadge = r ? `<span class="rec-badge">${recurLabel(r, m)}${recBonus?` <span style="color:var(--gold)">${recBonus}</span>`:''}</span>` : '';
@@ -3153,13 +3158,17 @@ function renderMissions() {
     return `<div class="mission-item ${m.done?'mission-done':''} ${folga?'mission-rest':''} ${urgency}" style="border-left:3px solid ${col}">
       <span class="mission-cat-icon">${m.icon||m.cat}</span>
       <div class="mission-info">
-        <div class="mission-name">${m.name} ${recBadge}${dateBadge}${folgaBadge}${timeBadge}</div>
+        <div class="mission-name">${m.name} ${recBadge}${dateBadge}${folgaBadge}${timeBadge}${startedBadge}</div>
         <div class="mission-meta">${icImg('lulacoin',11)} ${m.aiValue!=null?(m.aiValue+' LC · +'+m.aiXp+' XP'):(d.coins[0]+'-'+d.coins[1]+' LC · +'+d.xp+' XP')} · <span class="dur-badge" title="${m.durMin!=null?'tempo informado':'estimado pela dificuldade'}" style="color:#8fc7ff">⏱ ${fmtHM(missionDurMin(m))}${m.durMin==null?' ~':''}</span> · <span style="color:var(--green)">✅${st.done}</span> <span style="color:var(--danger)">❌${st.failed}</span>${m.penXp!=null?` · <span style="color:var(--danger)" title="XP perdido se falhar">⚠ -${m.penXp} XP</span>`:''}</div>
       </div>
       <span class="diff-badge ${d.class}">${d.label}</span>
       <div class="mission-actions">
         <button class="pixel-btn btn-sm" title="Editar tempo da missão" onclick="editMissionDuration(${i})">⏱</button>
-        ${!m.done ? `<button class="pixel-btn btn-green btn-sm" title="Concluir" onclick="completeMission(${i})">✓</button>` : '<span style="color:var(--green);font-size:14px">✓</span>'}
+        ${m.done
+          ? '<span style="color:var(--green);font-size:14px">✓</span>'
+          : (m.started
+              ? `<button class="pixel-btn btn-green btn-sm" title="Concluir missão" onclick="completeMission(${i})">✓</button>`
+              : `<button class="pixel-btn btn-start btn-sm" title="Comecei (sai do atraso)" onclick="startMission(${i})">▶</button>`)}
       </div>
     </div>`;
   }).join('');
@@ -3371,7 +3380,7 @@ function traitOf(name){
 // missão de hoje com horário já vencido e não feita
 function hasLateMission(){
   const now=new Date(), hm=now.getHours()*60+now.getMinutes();
-  return (G.missions||[]).some(m=>{ if(m.future||m.done||!m.time) return false; if(!dueToday(m)) return false; const p=m.time.split(':'); return hm > (+p[0])*60+(+p[1]); });
+  return (G.missions||[]).some(m=>{ if(m.future||m.done||m.started||!m.time) return false; if(!dueToday(m)) return false; const p=m.time.split(':'); return hm > (+p[0])*60+(+p[1]); });
 }
 function worldStateLabel(v){
   if(v>=80) return {emoji:'🌞', label:'Próspera'};
@@ -4468,6 +4477,17 @@ function addPreset(i){
   showToast('✅ '+t.name+' adicionada!','info');
 }
 
+// ▶ marca que COMECEI a missão: sai do atraso; pra contar como feita é preciso concluir depois
+function startMission(i){
+  const m = G.missions[i];
+  if(!m || m.done || m.started) return;
+  m.started = true; m.startedAt = Date.now();
+  save();
+  try{ renderMissions(); }catch(e){}
+  try{ renderLateBanner(); }catch(e){}
+  try{ syncOnline(); }catch(e){}
+  showToast('▶ Missão iniciada — saiu do atraso! Conclua quando terminar.', 'info');
+}
 function completeMission(i) {
   const m = G.missions[i];
   if(!m || m.done) return;
@@ -4619,6 +4639,19 @@ function logActivityTime(m){
 // ⏱️ tempo total de ATIVIDADE (minutos) gasto em missões — hoje e na semana
 function activeMinToday(){ const lg=(G.timeLog||{})[todayStr()]||{}; return Object.values(lg).reduce((s,v)=>s+(v||0),0); }
 function activeMinWeek(){ let s=0; const now=new Date(); for(let i=0;i<7;i++){ const dd=new Date(now); dd.setDate(now.getDate()-i); const lg=(G.timeLog||{})[todayStr(dd)]; if(lg) s+=Object.values(lg).reduce((a,v)=>a+(v||0),0); } return s; }
+// 📋 tempo TOTAL das missões do dia (como se TODAS fossem completadas) — base p/ o tempo livre
+function plannedMissionMinToday(){
+  const t = todayStr();
+  return (G.missions||[]).filter(m=>{
+    if(m.future) return false;
+    if(missionRecur(m)) return dueToday(m);                                  // recorrente: só se devida hoje
+    if(m.done) return m.doneAt && todayStr(new Date(m.doneAt))===t;          // única: só se feita hoje
+    if(m.date && t < m.date) return false;                                   // agendada pro futuro
+    return true;                                                             // única pendente de hoje
+  }).reduce((s,m)=>s+missionDurMin(m),0);
+}
+// 🌴 tempo livre do dia = 24h − sono − todas as missões do dia
+function freeMinToday(){ return Math.max(0, 1440 - Math.round((G.sleepGoalH||8)*60) - plannedMissionMinToday()); }
 // 🏆 Recorde de XP diário (item 3): só ACUMULA o XP de hoje.
 // O bônus de +50 é avaliado no FECHAMENTO do dia (checkDailyReset), não na hora.
 function trackDailyXp(amount){
@@ -5357,6 +5390,7 @@ function syncOnline() {
     xpEarned: G.xpEarned || 0,
     activeMinToday: activeMinToday(),   // ⏱️ tempo de atividade (min) hoje
     activeMinWeek: activeMinWeek(),     // ⏱️ tempo de atividade (min) na semana
+    freeMinToday: freeMinToday(),       // 🌴 tempo livre (min) = 24h − sono − todas as missões
     vitality: worldVitality(),   // 🏘️ estado da vila p/ os manos verem
     // missões de hoje (feitas/não feitas + horário) p/ os amigos acompanharem e cobrarem
     todayMissions: (function(){
@@ -5368,7 +5402,7 @@ function syncOnline() {
         if(m.date && t < m.date) return false;
         if(missionRecur(m)) return missionDueOn(Object.assign({}, m, {done:false}), new Date());
         return true;
-      }).map(m=>({n:m.name, c:m.cat, ic:m.icon||'', d:false, t:m.time||''}));
+      }).map(m=>({n:m.name, c:m.cat, ic:m.icon||'', d:false, t:m.time||'', s:!!m.started}));
       // CONCLUÍDAS HOJE (do histórico — confiável mesmo se a missão sumiu/resetou)
       const seen = {};
       const done = (G.history||[])
@@ -5472,7 +5506,7 @@ function openSpy(name) {
 // atraso calculado no lado de QUEM VÊ (funciona mesmo se o mano fechou o app):
 // usa o horário sincronizado da missão vs. hora atual.
 function rivalMissionLate(m){
-  if(m.d || !m.t) return false;
+  if(m.d || m.s || !m.t) return false;   // m.s = já começou (saiu do atraso)
   const now=new Date(); const hm=now.getHours()*60+now.getMinutes();
   const p=String(m.t).split(':'); return hm > (+p[0])*60+(+p[1]);
 }
@@ -6965,6 +6999,7 @@ function checkDailyReset(){
         m._failed = true;   // não pune de novo nos próximos dias
       }
     }
+    m.started = false;   // ▶ "comecei" é por dia: zera na virada
   });
   // 🏆 fecha o dia de XP: se o dia que terminou SUPEROU o recorde, dá +50 XP de bônus
   let recordBeaten = false;
@@ -7057,7 +7092,7 @@ function renderRanking(){
     name: myName + ' (você)', id: myName,
     level:G.level, xp:G.xp, xpEarned:G.xpEarned||0, missions:G.totalMissions,
     coins:G.coins, spent:spentTotal(), color:G.profile?.armor||'#888',
-    perfectStreak:pStrk, activeMin:activeMinToday(), activeWeek:activeMinWeek(), me:true
+    perfectStreak:pStrk, activeMin:activeMinToday(), activeWeek:activeMinWeek(), freeMin:freeMinToday(), me:true
   };
 
   // Usa dados online se disponíveis, senão rivais simulados
@@ -7068,7 +7103,7 @@ function renderRanking(){
       if(d) return {
         name:n, id:n, level:d.level||1, xp:0, xpEarned:d.xpEarned||0, missions:d.totalMissions||0,
         coins:d.coins||0, spent:0, color:d.profileColor||'#888',
-        perfectStreak:d.perfectStreak||0, activeMin:d.activeMinToday||0, activeWeek:d.activeMinWeek||0, online:true
+        perfectStreak:d.perfectStreak||0, activeMin:d.activeMinToday||0, activeWeek:d.activeMinWeek||0, freeMin:(d.freeMinToday!=null?d.freeMinToday:null), online:true
       };
       return {name:n, id:n, level:1, xp:0, xpEarned:0, missions:0, coins:0, spent:0, color:'#444', perfectStreak:0, offline:true};
     });
@@ -7120,8 +7155,7 @@ function renderRanking(){
   // ===== ⏱️ OCUPAÇÃO DO DIA (tempo de atividade x tempo livre) =====
   const busyEl = document.getElementById('ranking-busy');
   if(busyEl){
-    const WAKE = 16*60;   // orçamento de horas acordado por dia (base p/ tempo livre)
-    const bt = all.map(p=>{ const act=p.activeMin||0; return {me:p.me,name:p.name,color:p.color,act, week:p.activeWeek||0, free:Math.max(0, WAKE-act)}; });
+    const bt = all.map(p=>{ const act=p.activeMin||0; return {me:p.me,name:p.name,color:p.color,act, week:p.activeWeek||0, free:(p.freeMin!=null?p.freeMin:Math.max(0,1440-480))}; });
     const medals=['🥇','🥈','🥉'];
     const colBusy=(title, sub, key, extraFn)=>{
       const sorted=[...bt].sort((a,b)=>(b[key]||0)-(a[key]||0));
@@ -7137,7 +7171,7 @@ function renderRanking(){
       `<div class="busy-hint">Quem está mais ocupado vs. mais livre — comparação de hoje.</div>`+
       `<div class="rank-totals">`+
         colBusy('🔥 TEMPO ATIVO','fazendo missões hoje','act', p=>p.week>0?`<span class="busy-week"> ·${fmtHM(p.week)}/sem</span>`:'')+
-        colBusy('🌴 TEMPO LIVRE','do dia ainda livre (base 16h)','free', null)+
+        colBusy('🌴 TEMPO LIVRE','24h − sono − todas as missões','free', null)+
       `</div>`;
   }
 
@@ -8076,7 +8110,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.26 • v61';
+  window.APP_VERSION = '2026.06.26 • v62';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
