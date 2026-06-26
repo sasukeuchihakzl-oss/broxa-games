@@ -3415,7 +3415,10 @@ function buildVillageScene(name, missions, built, decay, seeds){
       chimney: rng()<0.6, garden: rng()<0.4, cph: rng()*6.28 });
   }
   const spots = { well:{mx:0.5,my:0.5}, market:{mx:0.66,my:0.5}, plaza:{mx:0.42,my:0.55}, field:{mx:0.5,my:0.87}, mine:{mx:0.07,my:0.2}, lumber:{mx:0.93,my:0.2}, site:{mx:0.5,my:0.16} };
-  const trees=[]; for(let i=0;i<11;i++){ const mx=0.04+rng()*0.92, my=0.12+rng()*0.8; if(Math.abs(mx-0.5)<0.09||Math.abs(my-0.5)<0.08) continue; trees.push({mx,my,s:0.7+rng()*0.6,ph:rng()*6.28}); }
+  const trees=[]; for(let i=0;i<14;i++){ const mx=0.04+rng()*0.92, my=0.12+rng()*0.8; if(Math.abs(mx-0.5)<0.09||Math.abs(my-0.5)<0.08) continue; trees.push({mx,my,s:0.7+rng()*0.6,ph:rng()*6.28}); }
+  // 🌲 FLORESTAS ao redor da vila — molduram o mapa (faixas externas, fora dos lotes/estradas)
+  const forest=[]; const fzones=[[0.0,0.32,-0.04,0.10],[0.68,1.0,-0.04,0.10],[-0.02,0.10,0.12,0.5],[0.90,1.02,0.12,0.5],[0.0,0.32,0.92,1.04],[0.68,1.0,0.92,1.04]];
+  fzones.forEach(z=>{ const cnt=6+(rng()*5|0); for(let i=0;i<cnt;i++){ const mx=z[0]+rng()*(z[1]-z[0]), my=z[2]+rng()*(z[3]-z[2]); forest.push({mx,my,s:0.7+rng()*0.7,ph:rng()*6.28,pine:rng()<0.62}); } });
   const lamps=[{mx:0.3,my:0.5},{mx:0.7,my:0.5},{mx:0.5,my:0.28},{mx:0.5,my:0.74}];
   const roles=['miner','lumber','builder','water','merchant','farmer','social','wander'];
   // população cresce com a vila (built); + crianças por marcos
@@ -3427,6 +3430,7 @@ function buildVillageScene(name, missions, built, decay, seeds){
     sp:(0.5+rng()*0.5)*trait.speed*pers.spd*(kid?1.3:1), jit:(trait.jitter||0)+(kid?0.8:0), tlines:trait.lines, fear:0, child:kid,
     pers:pers.id, persLines:pers.lines, social:pers.social, carry:null, hp:1, hurt:0, task:'idle', cd:0,
     role: kid?'wander':roles[i%roles.length], home: buildings.length?(i%buildings.length):-1,
+    sched:_npcSched(pers.id, rng, kid), phase:'work',
     skin:_W_SKIN[rng()*_W_SKIN.length|0], hair:_W_HAIR[rng()*_W_HAIR.length|0], hairStyle:rng()*4|0,
     hat: kid?0:(rng()<0.22?(1+(rng()*2|0)):0), shirt:_W_SHIRT[rng()*_W_SHIRT.length|0], pants:_W_PANTS[rng()*_W_PANTS.length|0],
     build:(trait.big&&rng()<trait.big)?1:(rng()<0.38?1:0), sc:(0.9+rng()*0.3)*(kid?0.62:1)
@@ -3456,7 +3460,7 @@ function buildVillageScene(name, missions, built, decay, seeds){
   const fires=[];     // casas pegando fogo (índices) quando o mal ataca
   const sparks=[];    // partículas (faíscas mina/fogo)
   return {name, missions:mi, builtN:built||0, decayN:decay||0, seedsN:seeds||0, trait, key:name+'|'+total, popN, kidsN,
-    buildings, trees, lamps, npcs, spots, props, sprouts:sproutsPts, blights, demon, landmark, site, stumps, fires, sparks, evil:null,
+    buildings, trees, forest, lamps, npcs, spots, props, sprouts:sproutsPts, blights, demon, landmark, site, stumps, fires, sparks, evil:null,
     stars, rain, clouds, patches};
 }
 
@@ -3520,6 +3524,34 @@ const _PERSONA = [
   {id:'brincalhao', lines:['Hehe 😜','Pega essa!','Vida é festa!'], spd:1.15, social:1.4},
   {id:'timido',     lines:['...oi.','*acena*','Hm... bom dia.'], spd:0.9,  social:0.4}
 ];
+// 🕒 ROTINA INDIVIDUAL: cada NPC tem horários PRÓPRIOS (acordar/almoço/fim do trampo/dormir),
+// derivados deterministicamente do seed + personalidade. Trabalhador acorda cedo, preguiçoso
+// dorme até tarde, brincalhão vira a noite — assim cada um "tem uma vida".
+function _npcSched(persId, rng, kid){
+  let wake = 6 + (rng()*2|0);     // 6-7
+  let lunch = 11 + (rng()*2|0);   // 11-12
+  let workEnd = 16 + (rng()*2|0); // 16-17
+  let sleep = 21 + (rng()*2|0);   // 21-22
+  if(persId==='trabalhador'){ wake-=1; workEnd+=1; }
+  else if(persId==='preguicoso'){ wake+=2; workEnd-=1; sleep-=1; }
+  else if(persId==='brincalhao'){ wake+=1; sleep+=2; }
+  else if(persId==='rabugento'){ wake-=1; sleep-=1; }
+  if(kid){ wake=Math.max(6,wake-1); sleep=Math.min(sleep,20); lunch=Math.min(lunch,12); }
+  // clamps de segurança
+  wake=Math.max(4,Math.min(10,wake)); sleep=Math.max(19,Math.min(25,sleep));
+  if(lunch<wake+1) lunch=wake+1; if(workEnd<=lunch+1) workEnd=lunch+2; if(workEnd>=sleep) workEnd=sleep-1;
+  return {wake, lunch, workEnd, sleep};
+}
+// fase do dia DESTE npc conforme a hora real (0-23); sleep pode cruzar a meia-noite
+function npcPhase(npc, hr){
+  const s=npc.sched; if(!s) return 'work';
+  const slp = s.sleep>=24 ? s.sleep-24 : s.sleep; // hora de dormir normalizada (0-23)
+  if(slp<s.wake){ if(hr>=slp && hr<s.wake) return 'sleep'; }   // dorme dentro do mesmo "dia" (ex: 0h→8h)
+  else { if(hr>=slp || hr<s.wake) return 'sleep'; }            // dorme cruzando a meia-noite (ex: 22h→6h)
+  if(hr>=s.lunch && hr<s.lunch+1) return 'lunch';
+  if(hr>=s.wake && hr<s.workEnd) return 'work';
+  return 'social';
+}
 function _npcLine(npc, mood){
   if(npc.tlines && Math.random()<0.45) return npc.tlines[Math.random()*npc.tlines.length|0];
   const rl=_NPC_LINES[npc.role];
@@ -3541,9 +3573,10 @@ function pickTarget(npc, sc){
 }
 function _clampNpc(n){ n.mx=Math.max(0.05,Math.min(0.95,n.mx)); n.my=Math.max(0.12,Math.min(0.92,n.my)); }
 function _moveTo(npc, dt, tx, ty, mult){
-  let dx=tx-npc.mx, dy=ty-npc.my; const dist=Math.hypot(dx,dy), step=npc.sp*(mult||1)*dt*0.00009;
-  if(npc.jit){ dx+=(Math.random()-0.5)*0.04*npc.jit; dy+=(Math.random()-0.5)*0.04*npc.jit; }
-  const n=Math.hypot(dx,dy)||1; npc.mx+=dx/n*step; npc.my+=dy/n*step; npc.face=dx>=0?1:-1; npc.ph+=dt*0.014; _clampNpc(npc);
+  let dx=tx-npc.mx, dy=ty-npc.my; const dist=Math.hypot(dx,dy), step=npc.sp*(mult||1)*dt*0.000055;
+  // 〰️ desvio SUAVE (senoidal perpendicular), não mais sorteio por frame → acaba o "tremido"
+  if(npc.jit){ npc._wob=(npc._wob||0)+dt*0.0025; const w=Math.sin(npc._wob)*0.5*npc.jit, n0=Math.hypot(dx,dy)||1; dx+=(-dy/n0)*w*0.02; dy+=(dx/n0)*w*0.02; }
+  const n=Math.hypot(dx,dy)||1; npc.mx+=dx/n*step; npc.my+=dy/n*step; npc.face=dx>=0?1:-1; npc.ph+=dt*0.009; _clampNpc(npc);
   return dist;
 }
 function pickLumberTree(npc, sc){ if(!sc.trees.length){ npc.tt=null; npc.tx=sc.spots.field.mx; npc.ty=sc.spots.field.my; return; } const i=Math.random()*sc.trees.length|0; npc.tt=i; npc.tx=sc.trees[i].mx; npc.ty=sc.trees[i].my; }
@@ -3563,18 +3596,41 @@ function updateNpc(npc, dt, ctx){
   if(npc.bubbleT>0) npc.bubbleT-=dt;
   if(npc.hurt>0) npc.hurt-=dt;
   if(npc.cd>0) npc.cd-=dt;
+  if(npc.dead){ npc.state='dead'; return; }   // aldeão caído — fica no chão até a paz voltar
   if(npc.child){ npc.age=(npc.age||0)+dt; if(npc.age>40000){ npc.child=false; npc.sc=npc.sc/0.62; npc.role=['water','merchant','social','wander'][Math.random()*4|0]; npc.jit=Math.max(0,(npc.jit||0)-0.8); npc.bubble='🎂 Cresci!'; npc.bubbleT=2600; WORLD._evt={text:'🎓 Uma criança cresceu na vila!', ts:Date.now(), done:false}; } }
   // 😱 fugir do ser maléfico
   if(ctx.demon){ const ddx=npc.mx-ctx.demon.mx, ddy=npc.my-ctx.demon.my, dd=Math.hypot(ddx,ddy);
     if(dd<0.3){ npc.fear=1; const n=dd||0.001, st=npc.sp*2*dt*0.00009; npc.mx+=ddx/n*st; npc.my+=ddy/n*st; npc.face=ddx>=0?1:-1; npc.state='walk'; npc.ph+=dt*0.04; if(npc.bubbleT<=0){ npc.bubble=Math.random()<0.5?'😱':'😭'; npc.bubbleT=900; } _clampNpc(npc); return; }
     npc.fear=0;
   }
-  // 🌙 dormir em casa
+  // 🕒 ROTINA POR HORÁRIO INDIVIDUAL: cada NPC segue a SUA agenda (acordar/almoço/fim do trampo/dormir)
   const homeB = npc.home>=0 ? sc.buildings[npc.home] : null;
-  if(ctx.night && homeB){ if(_moveTo(npc,dt,homeB.mx,homeB.my,1)<0.02) npc.state='home'; else npc.state='walk'; return; }
-  // 🎉 festa na praça (vila próspera) — quem não tem trampo pesado
-  if(ctx.party && !npc.child && npc.role!=='miner' && npc.role!=='lumber' && npc.role!=='builder'){
-    const pl=sc.spots.plaza; if(_moveTo(npc,dt, pl.mx+((npc.ph*7)%1-0.5)*0.14, pl.my+Math.sin(npc.ph)*0.05, 1) < 0.06){ npc.state='party'; npc.ph+=dt*0.02; if(npc.bubbleT<=0 && Math.random()<0.02){ npc.bubble=['🎶','🎉','💃','🥳'][Math.random()*4|0]; npc.bubbleT=1500; } } else npc.state='walk';
+  const phase = npcPhase(npc, ctx.hr); npc.phase=phase;
+  // 🌙 DORMINDO: recolhe pra casa e some (janela acende no draw da casa)
+  if(phase==='sleep' && homeB){ npc._washed=false; if(_moveTo(npc,dt,homeB.mx,homeB.my,1)<0.02){ npc.state='home'; } else { npc.state='walk'; if(npc.bubbleT<=0 && Math.random()<0.006){ npc.bubble=ctx.night?'😴':'🏠'; npc.bubbleT=1400; } } return; }
+  // 🍞 ALMOÇO: todo mundo larga o trampo e vai comer junto na mesa perto do mercado
+  if(phase==='lunch'){
+    const mk=sc.spots.market; const seat=(npc._seat==null)?(npc._seat=(npc.ph*6.28)):npc._seat;
+    const tx=mk.mx-0.02+Math.cos(seat)*0.06, ty=mk.my+0.07+Math.sin(seat)*0.035;
+    if(_moveTo(npc,dt,tx,ty,1) < 0.03){ npc.state='act'; npc.ph+=dt*0.01; sc.lunchOn=true; if(npc.bubbleT<=0 && Math.random()<0.02){ npc.bubble=['😋','🍞','🍲','🥗','Que delícia!','Bom apetite!'][Math.random()*6|0]; npc.bubbleT=1700; } } else npc.state='walk';
+    return;
+  }
+  // 🌆 FIM DE TARDE / SOCIAL: festa se próspero, senão relaxa na praça/poço antes de recolher
+  if(phase==='social'){
+    if(ctx.party && !npc.child && npc.role!=='miner' && npc.role!=='lumber' && npc.role!=='builder'){
+      const pl=sc.spots.plaza; if(_moveTo(npc,dt, pl.mx+((npc.ph*7)%1-0.5)*0.14, pl.my+Math.sin(npc.ph)*0.05, 1) < 0.06){ npc.state='party'; npc.ph+=dt*0.02; if(npc.bubbleT<=0 && Math.random()<0.02){ npc.bubble=['🎶','🎉','💃','🥳'][Math.random()*4|0]; npc.bubbleT=1500; } } else npc.state='walk';
+      return;
+    }
+    // descanso: vagar devagar perto da praça/poço, conversar mais
+    if(npc.state==='act'){ npc.timer-=dt; if(npc.timer<=0){ npc.state='walk'; const sp=Math.random()<0.5?sc.spots.plaza:sc.spots.well; npc.tx=sp.mx+(Math.random()-0.5)*0.18; npc.ty=sp.my+(Math.random()-0.5)*0.14; } return; }
+    if(_moveTo(npc,dt,npc.tx,npc.ty,0.7) > 0.02){ npc.state='walk'; return; }
+    npc.state='act'; npc.timer=1800+Math.random()*3000; if(Math.random()<0.6){ npc.bubble=_pickBubble(npc, ctx); npc.bubbleT=2600; }
+    return;
+  }
+  // 🌅 ROTINA DA MANHÃ: ao acordar, passa no poço pra se lavar antes de ir trabalhar
+  if(phase==='work' && ctx.hr<npc.sched.wake+1 && !npc._washed && !npc.child){
+    const wl=sc.spots.well;
+    if(_moveTo(npc,dt, wl.mx+0.04, wl.my+0.05, 1) < 0.04){ npc.state='act'; if(npc.bubbleT<=0){ npc.bubble=['💦','🧼','Bom dia!','Que sono...','*boceja*'][Math.random()*5|0]; npc.bubbleT=1600; } if(Math.random()<0.04) sc.sparks.push({mx:wl.mx,my:wl.my,vx:(Math.random()-0.5)*0.3,vy:-0.2,t:400,col:'#a0d8ff'}); npc._washCd=(npc._washCd==null?1600:npc._washCd)-dt; if(npc._washCd<=0){ npc._washed=true; npc._washCd=null; } } else npc.state='walk';
     return;
   }
   // 🪓 LENHADOR: vai na árvore → corta → carrega a tora até o canteiro
@@ -3603,6 +3659,17 @@ function updateNpc(npc, dt, ctx){
   else if(Math.random()<0.55){ npc.bubble=_pickBubble(npc, ctx); npc.bubbleT=2600; }
 }
 function drawNpcTD(x, sx, sy, S, npc, ts){
+  // ☠️ aldeão caído (morto pelo demônio) — deitado no chão com X nos olhos
+  if(npc.dead){
+    _softSh(x, sx, sy+1, S*0.4, S*0.12, 0.3);
+    x.save(); x.translate(sx, sy-S*0.1); x.rotate(Math.PI*0.5);
+    x.fillStyle=_wmix(npc.shirt,'#000',0.35); _rr(x,-S*0.18,-S*0.13,S*0.36,S*0.46,S*0.09); x.fill();
+    x.fillStyle=_wmix(npc.skin,'#000',0.2); x.beginPath(); x.arc(0,-S*0.26,S*0.18,0,6.28); x.fill();
+    x.strokeStyle='#3a2a1e'; x.lineWidth=Math.max(1,S*0.05); x.beginPath(); x.moveTo(-S*0.1,-S*0.3); x.lineTo(-S*0.02,-S*0.22); x.moveTo(-S*0.02,-S*0.3); x.lineTo(-S*0.1,-S*0.22); x.moveTo(S*0.02,-S*0.3); x.lineTo(S*0.1,-S*0.22); x.moveTo(S*0.1,-S*0.3); x.lineTo(S*0.02,-S*0.22); x.stroke();
+    x.restore();
+    if(npc.bubble && npc.bubbleT>0){ x.font='600 '+Math.max(8,Math.round(S*0.4))+'px sans-serif'; x.textAlign='center'; x.fillText(String(npc.bubble), sx, sy-S*0.6); x.textAlign='left'; }
+    return;
+  }
   const dir=npc.face>=0?1:-1, walking=npc.state==='walk'||npc.state==='act'||npc.state==='party';
   if(npc.hurt>0) sx += Math.sin(ts*0.05)*S*0.12;
   const sw=walking?Math.sin(npc.ph):0, bob=walking?Math.abs(Math.cos(npc.ph))*S*0.05:0;
@@ -3678,6 +3745,13 @@ function drawTreeTD(x, sx, sy, sz, tr, v, night, ts){
     x.fillStyle=hi; x.beginPath(); x.arc(sx-sz*0.22+sway, sy-sz*1.42, sz*0.3,0,6.28); x.fill();
   }
   else { x.strokeStyle=_wmix('#6b4a2a','#4a3a2a',1-v); x.lineWidth=Math.max(1.2,sz*0.12); x.lineCap='round'; x.beginPath(); x.moveTo(sx,sy-sz*1.1); x.lineTo(sx-sz*0.4,sy-sz*1.5); x.moveTo(sx,sy-sz*1.1); x.lineTo(sx+sz*0.4,sy-sz*1.4); x.stroke(); }
+}
+function drawPineTD(x, sx, sy, sz, tr, v, night, ts){
+  _softSh(x, sx, sy, sz*0.6, sz*0.18, 0.2);
+  const sway=Math.sin(ts*0.001+tr.ph)*sz*0.04;
+  x.fillStyle=_nt('#5a3f24',night); x.fillRect(sx-sz*0.08, sy-sz*0.45, sz*0.16, sz*0.45);
+  const dk=_nt(_wmix('#256a2e','#5f5a34',1-v),night), lt=_nt(_wmix('#347f38','#6f6a3c',1-v),night);
+  for(let i=0;i<3;i++){ const ly=sy-sz*0.35-i*sz*0.42, lw=sz*(0.62-i*0.16); x.fillStyle=i%2?lt:dk; x.beginPath(); x.moveTo(sx-lw+sway, ly); x.lineTo(sx+sway*1.4, ly-sz*0.62); x.lineTo(sx+lw+sway, ly); x.closePath(); x.fill(); }
 }
 function drawWellTD(x, sx, sy, s, v, night){
   x.fillStyle='rgba(0,0,0,.18)'; x.beginPath(); x.ellipse(sx, sy, s*0.75, s*0.24,0,0,6.28); x.fill();
@@ -3765,6 +3839,20 @@ function drawBonfireTD(x, sx, sy, s, ts){
   x.strokeStyle='#6a4a2a'; x.lineWidth=Math.max(1.5,s*0.18); x.lineCap='round'; x.beginPath(); x.moveTo(sx-s*0.5,sy); x.lineTo(sx+s*0.5,sy-s*0.1); x.moveTo(sx+s*0.5,sy); x.lineTo(sx-s*0.5,sy-s*0.1); x.stroke();
   const gl=x.createRadialGradient(sx,sy-s*0.4,1,sx,sy-s*0.4,s*1.6); gl.addColorStop(0,'rgba(255,160,60,.4)'); gl.addColorStop(1,'rgba(255,160,60,0)'); x.fillStyle=gl; x.beginPath(); x.arc(sx,sy-s*0.4,s*1.6,0,6.28); x.fill();
   for(let i=0;i<6;i++){ const t=((ts*0.005)+i*0.17)%1; const fx=sx+Math.sin(ts*0.012+i)*s*0.25; const fy=sy-s*0.1-t*s*1.1; const r=s*(0.5-t*0.4); x.fillStyle=t<0.4?'rgba(255,222,90,'+(0.95-t).toFixed(2)+')':'rgba(255,110,40,'+(0.85-t).toFixed(2)+')'; x.beginPath(); x.arc(fx,fy,Math.max(0.5,r),0,6.28); x.fill(); }
+}
+function drawFoodTableTD(x, sx, sy, s, night){
+  x.fillStyle='rgba(0,0,0,.16)'; x.beginPath(); x.ellipse(sx,sy+s*0.1,s*1.1,s*0.3,0,0,6.28); x.fill();
+  // pernas + tampo de madeira
+  x.fillStyle=_nt('#6a4a2a',night); x.fillRect(sx-s*0.85,sy,s*0.12,s*0.4); x.fillRect(sx+s*0.73,sy,s*0.12,s*0.4);
+  x.fillStyle=_nt('#9a7048',night); _rr(x,sx-s,sy-s*0.18,s*2,s*0.34,s*0.06); x.fill();
+  x.fillStyle=_nt('#b08858',night); _rr(x,sx-s,sy-s*0.22,s*2,s*0.1,s*0.05); x.fill();
+  // comida: toalha, pratos, pão, panela
+  x.fillStyle=_nt('#c4423a',night); _rr(x,sx-s*0.7,sy-s*0.2,s*1.4,s*0.12,s*0.03); x.fill();
+  x.fillStyle=_nt('#e8e0d0',night); for(let i=-1;i<2;i++){ x.beginPath(); x.ellipse(sx+i*s*0.5,sy-s*0.18,s*0.16,s*0.07,0,0,6.28); x.fill(); }
+  x.fillStyle=_nt('#caa06a',night); x.beginPath(); x.ellipse(sx-s*0.5,sy-s*0.22,s*0.1,s*0.06,0,0,6.28); x.fill();
+  x.fillStyle=_nt('#3a3a42',night); x.beginPath(); x.ellipse(sx+s*0.05,sy-s*0.26,s*0.22,s*0.1,0,0,6.28); x.fill();
+  // vaporzinho
+  x.strokeStyle='rgba(220,220,220,.5)'; x.lineWidth=Math.max(1,s*0.05); x.beginPath(); x.moveTo(sx+s*0.05,sy-s*0.3); x.quadraticCurveTo(sx-s*0.05,sy-s*0.55,sx+s*0.05,sy-s*0.8); x.stroke();
 }
 function drawFireTD(x, sx, sy, s, ts){
   for(let i=0;i<6;i++){ const t=((ts*0.004)+i*0.17)%1; const fx=sx+Math.sin(ts*0.01+i)*s*0.3; const fy=sy - t*s*1.3; const r=s*(0.55-t*0.45); x.fillStyle = t<0.4?'rgba(255,222,80,'+(0.9-t).toFixed(2)+')':'rgba(255,90,30,'+(0.85-t).toFixed(2)+')'; x.beginPath(); x.arc(fx,fy,Math.max(0.5,r),0,6.28); x.fill(); }
@@ -3856,6 +3944,8 @@ function drawVillage(ts){
   sc.props.forEach(p=> ents.push([MY(p.my), ()=> drawPropTD(x, MX(p.mx), MY(p.my), SC(p.my)*W*0.024, p, v, night, ts)]));
   sc.buildings.forEach(b=> ents.push([MY(b.my), ()=> drawHouseTD(x, MX(b.mx), MY(b.my), b.w*W*SC(b.my), b, v, night, ts, wealth)]));
   sc.trees.forEach(tr=>{ if(tr.fallen>0){ tr.fallen-=dt; return; } ents.push([MY(tr.my), ()=> drawTreeTD(x, MX(tr.mx), MY(tr.my), SC(tr.my)*tr.s*W*0.03, tr, v, night, ts)]); });
+  // 🌲 floresta ao redor (molduram a vila)
+  if(sc.forest) sc.forest.forEach(ft=> ents.push([MY(ft.my), ()=> (ft.pine?drawPineTD:drawTreeTD)(x, MX(ft.mx), MY(ft.my), SC(ft.my)*ft.s*W*0.03, ft, v, night, ts)]));
   sc.lamps.forEach(l=> ents.push([MY(l.my), ()=> drawLampTD(x, MX(l.mx), MY(l.my), SC(l.my)*W*0.022, v, night)]));
   ents.push([MY(0.5), ()=> drawWellTD(x, MX(0.5), MY(0.5), SC(0.5)*W*0.03, v, night)]);
   if(v>0.3) ents.push([MY(0.5), ()=> drawStallTD(x, MX(sc.spots.market.mx), MY(0.5), SC(0.5)*W*0.028, v, night)]);
@@ -3877,25 +3967,34 @@ function drawVillage(ts){
   const party = !demonOn && v>=0.8 && !night;
   if(party){ ents.push([MY(0.56)+50000, ()=> drawBonfireTD(x, MX(0.42), MY(0.56), SC(0.56)*W*0.026, ts)]); if(Math.random()<0.09) sc.sparks.push({mx:0.42+(Math.random()-0.5)*0.12, my:0.5, vx:(Math.random()-0.5)*0.25, vy:-0.5, t:1100, col:'#ffe49a'}); }
   let demonMap=null;
-  if(demonOn){ const d=sc.demon; let tgt=null,best=9; sc.npcs.forEach((np,i)=>{ if(i>=active)return; const dd=Math.hypot(np.mx-d.mx,np.my-d.my); if(dd<best){best=dd;tgt=np;} }); if(tgt){ d.mx+=(tgt.mx-d.mx)*0.012; d.my+=(tgt.my-d.my)*0.012; } demonMap=d; ents.push([MY(d.my)+99999, ()=> drawDemonTD(x, MX(d.mx), MY(d.my), SC(d.my)*W*0.05, ts)]);
+  if(demonOn){ const d=sc.demon; let tgt=null,best=9; sc.npcs.forEach((np,i)=>{ if(i>=active||np.dead)return; const dd=Math.hypot(np.mx-d.mx,np.my-d.my); if(dd<best){best=dd;tgt=np;} }); if(tgt){ d.mx+=(tgt.mx-d.mx)*0.012; d.my+=(tgt.my-d.my)*0.012; } demonMap=d; ents.push([MY(d.my)+99999, ()=> drawDemonTD(x, MX(d.mx), MY(d.my), SC(d.my)*W*0.05, ts)]);
     if(!sc.evil) sc.evil={mx:0.5,my:0.3,face:1,ph:0,cd:0,fcd:2500};
     const e=sc.evil; e.cd-=dt; e.fcd-=dt; e.ph+=dt*0.02;
-    let near=null,nb=9; sc.npcs.forEach((np,i)=>{ if(i>=active||np.state==='home')return; const dd=Math.hypot(np.mx-e.mx,np.my-e.my); if(dd<nb){nb=dd;near=np;} });
-    if(near){ const dx=near.mx-e.mx, dy=near.my-e.my, n=Math.hypot(dx,dy)||1; e.mx+=dx/n*0.0007*dt; e.my+=dy/n*0.0007*dt; e.face=dx>=0?1:-1; if(nb<0.05 && e.cd<=0){ near.hurt=420; near.hp=Math.max(0,(near.hp||1)-0.34); near.bubble='😭'; near.bubbleT=1200; near.mx+=dx/n*0.06; near.my+=dy/n*0.06; _clampNpc(near); e.cd=800; sc.sparks.push({mx:near.mx,my:near.my-0.02,vx:(Math.random()-0.5)*0.5,vy:-0.3,t:400,col:'#ff5a5a'}); } }
+    let near=null,nb=9; sc.npcs.forEach((np,i)=>{ if(i>=active||np.state==='home'||np.dead)return; const dd=Math.hypot(np.mx-e.mx,np.my-e.my); if(dd<nb){nb=dd;near=np;} });
+    if(near){ const dx=near.mx-e.mx, dy=near.my-e.my, n=Math.hypot(dx,dy)||1; e.mx+=dx/n*0.00055*dt; e.my+=dy/n*0.00055*dt; e.face=dx>=0?1:-1; if(nb<0.05 && e.cd<=0){ near.hurt=420; near.hp=Math.max(0,(near.hp||1)-0.5); near.bubble='😭'; near.bubbleT=1200; near.mx+=dx/n*0.06; near.my+=dy/n*0.06; _clampNpc(near); e.cd=900; sc.sparks.push({mx:near.mx,my:near.my-0.02,vx:(Math.random()-0.5)*0.5,vy:-0.3,t:400,col:'#ff5a5a'});
+      if(near.hp<=0 && !near.dead){ near.dead=true; near.deadT=5000; near.state='dead'; near.bubble='💀'; near.bubbleT=2200; WORLD._evt={text:'☠️ O demônio matou um aldeão!', ts:Date.now(), done:false}; for(let k=0;k<7;k++) sc.sparks.push({mx:near.mx,my:near.my-0.02,vx:(Math.random()-0.5)*0.7,vy:-0.4-Math.random()*0.3,t:650,col:'#8a1020'}); } } }
     e.mx=Math.max(0.06,Math.min(0.94,e.mx)); e.my=Math.max(0.13,Math.min(0.9,e.my));
     if(e.fcd<=0 && sc.buildings.length){ const bi=Math.random()*sc.buildings.length|0; if(!sc.fires.find(f=>f.i===bi)) sc.fires.push({i:bi,t:0}); e.fcd=4000+Math.random()*3000; }
     ents.push([MY(e.my)+99998, ()=> drawEvilNpcTD(x, MX(e.mx), MY(e.my), SC(e.my)*H*0.085, e, ts)]);
-  } else { sc.evil=null; if(sc.fires.length) sc.fires.length=0; }
+  } else { sc.evil=null; if(sc.fires.length) sc.fires.length=0;
+    // ✨ com a paz de volta, os aldeões caídos se recuperam aos poucos
+    const dead=sc.npcs.find(n=>n.dead); if(dead){ sc.reviveCd=(sc.reviveCd||0)-dt; if(sc.reviveCd<=0){ dead.dead=false; dead.hp=1; dead.hurt=0; dead.state='walk'; dead.bubble='✨'; dead.bubbleT=2000; WORLD._evt={text:'✨ Um aldeão se recuperou!', ts:Date.now(), done:false}; for(let k=0;k<6;k++) sc.sparks.push({mx:dead.mx,my:dead.my-0.03,vx:(Math.random()-0.5)*0.4,vy:-0.35,t:600,col:'#a0e0ff'}); sc.reviveCd=5000; } } }
   // 🔥 fogo nas casas
   for(let fi=sc.fires.length-1;fi>=0;fi--){ const f=sc.fires[fi]; const b=sc.buildings[f.i]; if(!b){ sc.fires.splice(fi,1); continue; } f.t+=dt; if(f.t>11000){ b.ruin=true; sc.fires.splice(fi,1); continue; } const bw=b.w*W*SC(b.my); ents.push([MY(b.my)+99990, ()=> drawFireTD(x, MX(b.mx), MY(b.my)-bw*0.5, bw*0.5, ts)]); }
   if(!demonOn){ sc.rebuildCd=(sc.rebuildCd||0)-dt; if(sc.rebuildCd<=0){ const ru=sc.buildings.find(b=>b.ruin); if(ru){ ru.ruin=false; WORLD._evt={text:'🔨 Reconstruíram uma casa!', ts:Date.now(), done:false}; for(let k=0;k<6;k++) sc.sparks.push({mx:ru.mx, my:ru.my-0.03, vx:(Math.random()-0.5)*0.4, vy:-0.3, t:500, col:'#e8c27a'}); } sc.rebuildCd=4500; } }
   if(WORLD._evt && Date.now()-WORLD._evt.ts<4000 && !WORLD._evt.done){ const n0=sc.npcs[0]; if(n0){ n0.bubble=WORLD._evt.text; n0.bubbleT=3500; } WORLD._evt.done=true; }
-  const ctx={night,v,sc,mood,demon:demonMap,wealth,party};
+  sc.lunchOn=false;   // ligado pelos NPCs que estão comendo neste frame
+  sc._zzz={};         // casas com alguém dormindo neste frame (→ 💤)
+  const ctx={night,hr,v,sc,mood,demon:demonMap,wealth,party};
   sc.npcs.forEach((npc,i)=>{ if(i>=active) return; updateNpc(npc, dt, ctx);
     if(npc.icd>0) npc.icd-=dt;
     if(!demonMap && npc.state==='act' && (npc.icd||0)<=0){ for(let j=i+1;j<active;j++){ const o=sc.npcs[j]; if(o.state!=='act'||(o.icd||0)>0) continue; if(Math.abs(o.mx-npc.mx)<0.055 && Math.abs(o.my-npc.my)<0.045){ if(Math.random()<0.5*(npc.social||1)*(o.social||1)){ const c=_CHAT[Math.random()*_CHAT.length|0]; npc.bubble=c[0]; npc.bubbleT=2200; o.bubble=c[1]; o.bubbleT=2500; npc.face=o.mx>=npc.mx?1:-1; o.face=npc.mx>=o.mx?1:-1; npc.icd=o.icd=6000; if(c[0].indexOf('Troca')>=0||c[1].indexOf('❤️')>=0){ for(let k=0;k<3;k++) sc.sparks.push({mx:(npc.mx+o.mx)/2+(Math.random()-0.5)*0.02, my:Math.min(npc.my,o.my)-0.03, vx:(Math.random()-0.5)*0.2, vy:-0.4, t:700, col:'#ff6a9a'}); } } break; } } }
-    if(npc.state==='home') return; ents.push([MY(npc.my), ()=> drawNpcTD(x, MX(npc.mx), MY(npc.my), SC(npc.my)*H*0.075*npc.sc, npc, ts)]); });
+    if(npc.state==='home'){ if(npc.home>=0) sc._zzz[npc.home]=1; return; } ents.push([MY(npc.my), ()=> drawNpcTD(x, MX(npc.mx), MY(npc.my), SC(npc.my)*H*0.075*npc.sc, npc, ts)]); });
+  // 🍞 mesa do almoço aparece só quando há gente comendo perto do mercado
+  if(sc.lunchOn){ const mk=sc.spots.market, my=mk.my+0.07; ents.push([MY(my)-1, ()=> drawFoodTableTD(x, MX(mk.mx-0.02), MY(my), SC(my)*W*0.03, night)]); }
   ents.sort((a,b)=>a[0]-b[0]); ents.forEach(e=>e[1]());
+  // 💤 quem foi dormir solta um "Zzz" subindo da casa
+  for(const bi in sc._zzz){ const b=sc.buildings[bi]; if(!b||b.ruin) continue; const bx=MX(b.mx), by=MY(b.my)-b.w*W*SC(b.my)*0.9; for(let z=0;z<2;z++){ const t=((ts*0.0004)+z*0.5)%1; x.globalAlpha=(1-t)*0.7; x.fillStyle='#cfe0ff'; x.font='600 '+Math.round(SC(b.my)*W*0.022*(0.8+z*0.5))+'px sans-serif'; x.fillText('z', bx+t*SC(b.my)*W*0.03, by-t*SC(b.my)*W*0.06); } x.globalAlpha=1; }
   for(let i=sc.sparks.length-1;i>=0;i--){ const p=sc.sparks[i]; p.t-=dt; if(p.t<=0){ sc.sparks.splice(i,1); continue; } p.mx+=p.vx*dt*0.0002; p.my+=(p.vy+0.5*(1-p.t/500))*dt*0.0002; x.globalAlpha=Math.max(0,p.t/500); x.fillStyle=p.col; x.beginPath(); x.arc(MX(p.mx),MY(p.my),Math.max(1,SC(p.my)*2.2),0,6.28); x.fill(); x.globalAlpha=1; }
   if(demonOn) x.fillStyle='rgba(60,0,15,'+(0.16+0.05*Math.sin(ts*0.004)).toFixed(3)+')', x.fillRect(0,0,W,H);
   if(!demonOn && !unknown && wealth<0.3){ x.fillStyle='rgba(92,86,72,'+(0.2*(1-wealth/0.3)).toFixed(2)+')'; x.fillRect(0,0,W,H); }
@@ -3905,6 +4004,13 @@ function drawVillage(ts){
   if(unknown){ x.fillStyle='rgba(20,22,30,.5)'; x.fillRect(0,0,W,H); x.fillStyle='rgba(255,255,255,.55)'; x.font=Math.round(H*0.07)+'px sans-serif'; x.textAlign='center'; x.fillText('sem sinal', W/2, H*0.5); x.textAlign='left'; }
   // atmosfera (luz quente de dia / azulada de noite vinda do alto)
   x.fillStyle=_vg(x,0,0,0,H*0.55, night?'rgba(60,80,150,0.08)':'rgba(255,242,205,0.09)','rgba(0,0,0,0)'); x.fillRect(0,0,W,H);
+  // 🌅 amanhecer dourado / 🌇 pôr-do-sol alaranjado conforme a hora real
+  const mins=hr*60+new Date().getMinutes();
+  let warm=0, wcol='255,170,90';
+  if(mins>=300 && mins<480){ warm=(1-Math.abs(mins-390)/90)*0.5; wcol='255,190,120'; }   // 5h-8h pico 6h30
+  else if(mins>=1020 && mins<1200){ warm=(1-Math.abs(mins-1110)/90)*0.55; wcol='255,130,60'; } // 17h-20h pico 18h30
+  if(warm>0){ x.fillStyle=_vg(x,0,0,0,H*0.7,'rgba('+wcol+','+warm.toFixed(3)+')','rgba(0,0,0,0)'); x.fillRect(0,0,W,H);
+    x.fillStyle=_vg(x,0,H,0,H*0.4,'rgba('+wcol+','+(warm*0.5).toFixed(3)+')','rgba(0,0,0,0)'); x.fillRect(0,0,W,H); }
   // vinheta
   const vg2=x.createRadialGradient(W/2,H*0.46,H*0.32,W/2,H*0.5,H*0.92); vg2.addColorStop(0,'rgba(0,0,0,0)'); vg2.addColorStop(1, night?'rgba(0,0,12,.42)':'rgba(20,10,0,.32)'); x.fillStyle=vg2; x.fillRect(0,0,W,H);
   x.restore();
@@ -7934,7 +8040,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.25 • v58';
+  window.APP_VERSION = '2026.06.26 • v59';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
