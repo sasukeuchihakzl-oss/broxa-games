@@ -3008,6 +3008,7 @@ function renderDailyChallenges(){
 // ===== EDITAR / REORDENAR MISSÕES =====
 let _editIdx = -1;
 function editMission(i){
+  return;   // editar missão desativado temporariamente (a pedido)
   const m = G.missions[i]; if(!m) return;
   _editIdx = i;
   const catSel = document.getElementById('edit-m-cat');
@@ -3164,9 +3165,7 @@ function renderMissions() {
       </div>
       <span class="diff-badge ${d.class}">${d.label}</span>
       <div class="mission-actions">
-        ${!m.done ? `<button class="pixel-btn btn-sm" title="Editar missão" onclick="editMission(${i})">✎</button>` : ''}
         <button class="pixel-btn btn-sm" title="Editar tempo da missão" onclick="editMissionDuration(${i})">⏱</button>
-        <button class="pixel-btn btn-sm btn-del" title="Excluir missão" onclick="deleteMission(${i})">✕</button>
         ${m.done
           ? '<span style="color:var(--green);font-size:14px">✓</span>'
           : (m.started
@@ -4653,12 +4652,7 @@ function showPerfectDayBanner(n){
 }
 
 function deleteMission(i) {
-  const m = G.missions[i]; if(!m) return;
-  if(!confirm('Excluir a missão "'+m.name+'"? Essa ação não pode ser desfeita.')) return;
-  G.missions.splice(i, 1);
-  renderMissions(); save();
-  try{ syncOnline(); }catch(e){}
-  showToast('🗑 Missão excluída','info');
+  return;   // excluir missão desativado temporariamente (a pedido)
 }
 
 // XP necessário p/ subir do nível atual ao próximo (curva mais íngreme: sobe devagar)
@@ -8159,7 +8153,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.26 • v66';
+  window.APP_VERSION = '2026.06.26 • v67';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
