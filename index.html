@@ -1611,19 +1611,20 @@
   .preset-del:hover{ color:#ff6677; }
   .preset-edit{ font-family:var(--pixel); font-size:11px; color:var(--cyan); cursor:pointer; padding:0 2px; }
   .preset-edit:hover{ color:#8fe0ff; }
-  /* 🧔 MENTOR (guia bravo/calmo) */
-  .mentor{ position:fixed; left:10px; bottom:10px; z-index:140; width:240px; transform:translateX(-140%); opacity:0; pointer-events:none; transition:transform .55s cubic-bezier(.18,.9,.32,1.25), opacity .4s ease; }
-  .mentor.show{ transform:translateX(0); opacity:1; pointer-events:auto; }
+  /* 🧔 MENTOR (guia bravo/calmo) — posição/transform controlados via JS (muda de lugar a cada peek) */
+  .mentor{ position:fixed; z-index:140; width:240px; opacity:0; pointer-events:none; transition:transform .55s cubic-bezier(.18,.9,.32,1.25), opacity .4s ease; }
+  .mentor.show{ opacity:1; pointer-events:auto; }
   .mentor-img{ width:100%; height:auto; display:block; cursor:pointer; filter:drop-shadow(0 4px 7px rgba(0,0,0,.55)); animation:mentorBob 3.2s ease-in-out infinite; }
   .mentor.angry .mentor-img{ animation:mentorShake .28s ease-in-out infinite; }
-  .mentor-bubble{ position:absolute; bottom:100%; left:0; margin-bottom:5px; max-width:190px; min-width:104px; background:#fff; color:#161020; font-size:11.5px; font-weight:700; line-height:1.25; padding:6px 9px; border-radius:10px; box-shadow:0 5px 12px rgba(0,0,0,.45); }
-  .mentor-bubble:after{ content:''; position:absolute; top:100%; left:18px; border:6px solid transparent; border-top-color:#fff; }
+  /* balão centrado e bem alinhado em cima do personagem, em qualquer posição da tela */
+  .mentor-bubble{ position:absolute; bottom:100%; left:50%; transform:translateX(-50%); margin-bottom:9px; max-width:260px; min-width:140px; width:max-content; background:#fff; color:#161020; font-size:15px; font-weight:700; line-height:1.32; padding:10px 16px; border-radius:15px; box-shadow:0 6px 14px rgba(0,0,0,.45); text-align:center; }
+  .mentor-bubble:after{ content:''; position:absolute; top:100%; left:50%; transform:translateX(-50%); border:9px solid transparent; border-top-color:#fff; }
   .mentor.angry .mentor-bubble{ background:#ffe2e2; color:#8a1020; border:1px solid #d24a4a; }
   .mentor.angry .mentor-bubble:after{ border-top-color:#ffe2e2; }
-  .mentor-x{ position:absolute; top:-6px; right:-6px; width:17px; height:17px; line-height:15px; text-align:center; border-radius:50%; border:none; background:#2a2335; color:#fff; font-size:9px; cursor:pointer; z-index:2; box-shadow:0 2px 4px rgba(0,0,0,.4); }
+  .mentor-x{ position:absolute; top:-7px; right:-7px; width:20px; height:20px; line-height:18px; text-align:center; border-radius:50%; border:none; background:#2a2335; color:#fff; font-size:10px; cursor:pointer; z-index:2; box-shadow:0 2px 4px rgba(0,0,0,.4); }
   @keyframes mentorBob{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
   @keyframes mentorShake{ 0%,100%{transform:translateX(0) rotate(0)} 25%{transform:translateX(-2px) rotate(-2.5deg)} 75%{transform:translateX(2px) rotate(2.5deg)} }
-  @media (max-width:480px){ .mentor{ width:196px } .mentor-bubble{ font-size:11px; max-width:160px } }
+  @media (max-width:480px){ .mentor{ width:196px } .mentor-bubble{ font-size:13px; max-width:200px; padding:8px 13px } }
   .preset-item.custom{ background:rgba(255,210,74,.06); }
   .preset-save-btn{ grid-column:1/-1; width:100%; padding:8px; border:1px dashed var(--gold); background:rgba(255,210,74,.08); color:var(--gold); border-radius:7px; cursor:pointer; font-family:var(--vt); font-size:14px; }
   .preset-save-btn:hover{ background:rgba(255,210,74,.16); }
@@ -3543,6 +3544,21 @@ const MENTOR_CALM_LINES = [
 let _mentorDismissed = false, _mentorLastLine = '', _mentorHideTimer = null;
 const MENTOR_VISIBLE_MS = 7000;     // quanto tempo ele fica na tela falando
 const MENTOR_EVERY_MS   = 20000;    // de quanto em quanto tempo ele reaparece
+// 📍 lugares onde ele pode aparecer (varia a cada peek) — cada um com a direção certa de entrada/saída
+const MENTOR_SPOTS = [
+  {left:'10px',  right:'auto', top:'auto',  bottom:'10px', off:'translateX(-140%)'},
+  {left:'auto',  right:'10px', top:'auto',  bottom:'10px', off:'translateX(140%)'},
+  {left:'10px',  right:'auto', top:'68px',  bottom:'auto', off:'translateX(-140%)'},
+  {left:'auto',  right:'10px', top:'68px',  bottom:'auto', off:'translateX(140%)'},
+  {left:'10px',  right:'auto', top:'auto',  bottom:'46%',  off:'translateX(-140%)'},
+  {left:'auto',  right:'10px', top:'auto',  bottom:'46%',  off:'translateX(140%)'}
+];
+let _mentorLastSpotIdx = -1, _mentorCurSpot = MENTOR_SPOTS[0];
+function mentorPickSpot(){
+  let idx=_mentorLastSpotIdx;
+  for(let k=0;k<6;k++){ idx=Math.random()*MENTOR_SPOTS.length|0; if(idx!==_mentorLastSpotIdx) break; }
+  _mentorLastSpotIdx=idx; return MENTOR_SPOTS[idx];
+}
 function mentorState(){
   try{
     if(hasLateMission()) return 'angry';
@@ -3569,16 +3585,30 @@ function mentorBuild(){
     <img class="mentor-img" src="${MENTOR_IMG_ANGRY}" alt="mentor" onclick="mentorPeek(true)">`;
   return el;
 }
-// 👋 aparece deslizando, fala, e some sozinho depois de um tempo
+function mentorApplySpot(el, spot, off){
+  el.style.left=spot.left; el.style.right=spot.right; el.style.top=spot.top; el.style.bottom=spot.bottom;
+  el.style.transform = off ? spot.off : 'translate(0,0)';
+}
+// 👋 aparece deslizando (em um lugar diferente a cada vez), fala, e some sozinho depois de um tempo
 function mentorPeek(){
   if(_mentorDismissed || !(G.profile && G.profile.name)) return;
-  const el=mentorBuild(); if(!el) return;
-  void el.offsetWidth;          // força reflow p/ animar a entrada
+  const el=document.getElementById('mentor'); if(!el) return;
+  const wasShown = el.classList.contains('show');
+  if(!wasShown){
+    _mentorCurSpot = mentorPickSpot();
+    mentorApplySpot(el, _mentorCurSpot, true);   // posiciona fora da tela antes de aparecer
+  }
+  mentorBuild();
+  if(!wasShown){ void el.offsetWidth; el.style.transform='translate(0,0)'; }   // força reflow p/ animar a entrada
   el.classList.add('show');
   if(_mentorHideTimer) clearTimeout(_mentorHideTimer);
   _mentorHideTimer = setTimeout(mentorRetreat, MENTOR_VISIBLE_MS);
 }
-function mentorRetreat(){ const el=document.getElementById('mentor'); if(el) el.classList.remove('show'); }
+function mentorRetreat(){
+  const el=document.getElementById('mentor'); if(!el) return;
+  el.classList.remove('show');
+  el.style.transform = _mentorCurSpot.off;   // sai pelo mesmo lado que entrou
+}
 function hideMentor(e){ if(e) e.stopPropagation(); _mentorDismissed=true; if(_mentorHideTimer) clearTimeout(_mentorHideTimer); mentorRetreat(); }
 function mentorAngry(ms){ G._mentorAngryUntil = Date.now() + (ms||90000); try{ mentorPeek(); }catch(e){} }
 // 🔔 minutos até a PRÓXIMA missão agendada de hoje ainda não feita (null = nenhuma à frente)
@@ -8477,7 +8507,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.27 • v78';
+  window.APP_VERSION = '2026.06.27 • v79';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
