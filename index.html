@@ -1609,6 +1609,8 @@
   .preset-add{ font-family:var(--pixel); font-size:11px; color:var(--gold); }
   .preset-del{ font-family:var(--pixel); font-size:10px; color:var(--danger); cursor:pointer; padding:0 2px; }
   .preset-del:hover{ color:#ff6677; }
+  .preset-edit{ font-family:var(--pixel); font-size:11px; color:var(--cyan); cursor:pointer; padding:0 2px; }
+  .preset-edit:hover{ color:#8fe0ff; }
   .preset-item.custom{ background:rgba(255,210,74,.06); }
   .preset-save-btn{ grid-column:1/-1; width:100%; padding:8px; border:1px dashed var(--gold); background:rgba(255,210,74,.08); color:var(--gold); border-radius:7px; cursor:pointer; font-family:var(--vt); font-size:14px; }
   .preset-save-btn:hover{ background:rgba(255,210,74,.16); }
@@ -2181,7 +2183,7 @@
 <!-- ===== MODAL: EDITAR MISSÃO ===== -->
 <div id="mission-edit-modal" class="modal">
   <div class="modal-box">
-    <div class="modal-title">✎ EDITAR MISSÃO</div>
+    <div class="modal-title" id="edit-m-title">✎ EDITAR MISSÃO</div>
     <label class="cust-label">Nome</label>
     <input type="text" id="edit-m-name" class="cust-input" maxlength="40">
     <label class="cust-label">Categoria</label>
@@ -2193,8 +2195,10 @@
       <option value="hard">Difícil</option>
       <option value="legendary">Lendário</option>
     </select>
+    <div id="edit-m-date-row">
     <label class="cust-label">📅 Data (calendário, opcional)</label>
     <input type="date" id="edit-m-date" class="cust-input">
+    </div>
     <label class="cust-label">Horário-limite (opcional)</label>
     <input type="time" id="edit-m-time" class="cust-input">
     <label class="cust-label">Repetição</label>
@@ -3046,6 +3050,7 @@ function renderDailyChallenges(){
 
 // ===== EDITAR / REORDENAR MISSÕES =====
 let _editIdx = -1;
+let _editTemplateIdx = -1;
 function editMission(i){
   return;   // editar missão desativado temporariamente (a pedido)
   const m = G.missions[i]; if(!m) return;
@@ -3061,11 +3066,42 @@ function editMission(i){
   const pf=document.getElementById('edit-m-pen'); if(pf) pf.value = (m.penXp!=null?m.penXp:'');
   document.getElementById('mission-edit-modal').classList.add('show');
 }
-function closeMissionEdit(){ document.getElementById('mission-edit-modal').classList.remove('show'); _editIdx=-1; }
+function closeMissionEdit(){ document.getElementById('mission-edit-modal').classList.remove('show'); _editIdx=-1; _editTemplateIdx=-1; const dr=document.getElementById('edit-m-date-row'); if(dr) dr.style.display=''; const tt=document.getElementById('edit-m-title'); if(tt) tt.textContent='✎ EDITAR MISSÃO'; }
+// ✎ editar uma MISSÃO PRÉ PRONTA (customTemplate) — reaproveita o modal de edição
+function editCustomTemplate(i){
+  const t = (G.customTemplates||[])[i]; if(!t) return;
+  _editTemplateIdx = i; _editIdx = -1;
+  const catSel = document.getElementById('edit-m-cat');
+  catSel.innerHTML = Object.entries(CATEGORIES).map(([e,c])=>`<option value="${e}">${e} ${c.name}</option>`).join('');
+  document.getElementById('edit-m-name').value = t.name;
+  catSel.value = t.cat;
+  document.getElementById('edit-m-diff').value = t.diff;
+  document.getElementById('edit-m-time').value = t.time || '';
+  document.getElementById('edit-m-rec').value = t.recur || '';
+  const pf=document.getElementById('edit-m-pen'); if(pf) pf.value = (t.penXp!=null?t.penXp:'');
+  const dr=document.getElementById('edit-m-date-row'); if(dr) dr.style.display='none';   // pré pronta não usa data de calendário
+  const tt=document.getElementById('edit-m-title'); if(tt) tt.textContent='✎ EDITAR PRÉ PRONTA';
+  document.getElementById('mission-edit-modal').classList.add('show');
+}
 function saveMissionEdit(){
-  const m = G.missions[_editIdx]; if(!m){ closeMissionEdit(); return; }
   const name = document.getElementById('edit-m-name').value.trim();
   if(!name){ showToast('Digite o nome da missão!','dmg'); return; }
+  // 🟢 editando uma PRÉ PRONTA
+  if(_editTemplateIdx>=0){
+    const t = (G.customTemplates||[])[_editTemplateIdx]; if(!t){ closeMissionEdit(); return; }
+    if(G.customTemplates.some((o,j)=>j!==_editTemplateIdx && o.name===name)){ showToast('Já existe uma pré pronta com esse nome!','dmg'); return; }
+    t.name = name;
+    t.cat  = document.getElementById('edit-m-cat').value;
+    t.diff = document.getElementById('edit-m-diff').value;
+    t.time = document.getElementById('edit-m-time').value || '';
+    t.recur = document.getElementById('edit-m-rec').value;
+    const penRaw0 = parseInt((document.getElementById('edit-m-pen')||{}).value);
+    t.penXp = (!isNaN(penRaw0) && penRaw0>0) ? penRaw0 : null;
+    closeMissionEdit(); renderPresets(); save();
+    showToast('✎ Pré pronta atualizada!','info');
+    return;
+  }
+  const m = G.missions[_editIdx]; if(!m){ closeMissionEdit(); return; }
   m.name = name;
   m.cat  = document.getElementById('edit-m-cat').value;
   m.diff = document.getElementById('edit-m-diff').value;
@@ -3221,6 +3257,7 @@ function renderMissions() {
           : (m.started
               ? `<button class="pixel-btn btn-green btn-sm" title="Concluir missão" onclick="completeMission(${i})">✓</button>`
               : `<button class="pixel-btn btn-start btn-sm" title="Comecei (sai do atraso)" onclick="startMission(${i})">▶</button>`)}
+        <button class="pixel-btn btn-red btn-sm" title="Excluir missão" onclick="deleteMission(${i})">🗑</button>
       </div>
     </div>`;
   }
@@ -3276,6 +3313,7 @@ function renderFutureMissions(){
         ${ready
           ? `<button class="pixel-btn btn-gold btn-sm" title="Ativar agora" onclick="event.stopPropagation();activateMission(${i})">▶ ATIVAR</button>`
           : `<button class="pixel-btn btn-sm" disabled style="opacity:.45;cursor:not-allowed">🔒</button>`}
+        <button class="pixel-btn btn-red btn-sm" title="Excluir missão" onclick="event.stopPropagation();deleteMission(${i})">🗑</button>
       </div>
     </div>`;
   }).join('');
@@ -4600,8 +4638,13 @@ function addCustomPreset(i){
 }
 function deleteCustomTemplate(i){
   if(!Array.isArray(G.customTemplates)) return;
-  G.customTemplates.splice(i,1);
-  save(); renderPresets();
+  const t = G.customTemplates[i]; if(!t) return;
+  gameConfirm({
+    title:'🗑 Excluir pré pronta?',
+    label:'"'+t.name+'" será removida das suas missões prontas.\n(Não afeta missões já adicionadas na lista.)',
+    okText:'EXCLUIR',
+    onYes:()=>{ G.customTemplates.splice(i,1); save(); renderPresets(); showToast('🗑 Pré pronta excluída.','info'); }
+  });
 }
 
 // ===== MISSÕES PRÉ-PRONTAS =====
@@ -4620,7 +4663,8 @@ function renderPresets(){
         <span class="preset-tag diff-${t.diff}">${d.label}</span>
         <span class="preset-rec">${recurLabel(t.recur, t)||'única'}</span>
         <span class="preset-add" onclick="addCustomPreset(${i})" style="cursor:pointer">+</span>
-        <span class="preset-del" title="Excluir" onclick="deleteCustomTemplate(${i})">✕</span>
+        <span class="preset-edit" title="Editar pré pronta" onclick="editCustomTemplate(${i})">✎</span>
+        <span class="preset-del" title="Excluir pré pronta" onclick="deleteCustomTemplate(${i})">✕</span>
       </div>`;
     }).join('');
   }
@@ -4808,7 +4852,20 @@ function showPerfectDayBanner(n){
 }
 
 function deleteMission(i) {
-  return;   // excluir missão desativado temporariamente (a pedido)
+  const m = G.missions[i]; if(!m) return;
+  gameConfirm({
+    title:'🗑 Excluir missão?',
+    label:'"'+m.name+'" será removida da sua lista.\n(O XP e as moedas que você já ganhou com ela não mudam.)',
+    okText:'EXCLUIR',
+    onYes:()=>{
+      G.missions.splice(i,1);
+      try{ renderMissions(); }catch(e){}
+      try{ renderFutureMissions(); }catch(e){}
+      try{ syncOnline(); }catch(e){}
+      save();
+      showToast('🗑 Missão excluída.','info');
+    }
+  });
 }
 
 // XP necessário p/ subir do nível atual ao próximo (curva mais íngreme: sobe devagar)
@@ -7486,6 +7543,20 @@ function gameAsk(opts){
   if(opts.onOk){ document.getElementById('ask-ok').onclick=()=>{ const v=inp.value; closeAsk(); opts.onOk(v); }; }
 }
 function closeAsk(){ const m=document.getElementById('ask-modal'); if(m) m.classList.remove('show'); }
+// confirmação sim/não (pra ações que apagam coisas)
+function gameConfirm(opts){
+  let modal=document.getElementById('ask-modal');
+  if(!modal){ modal=document.createElement('div'); modal.id='ask-modal'; modal.className='modal'; document.body.appendChild(modal); }
+  modal.innerHTML=`<div class="modal-box">
+    <div class="modal-title">${opts.title||'Tem certeza?'}</div>
+    ${opts.label?`<div style="font-size:13px;color:var(--text);margin:6px 0 6px;white-space:pre-line">${opts.label}</div>`:''}
+    <div class="modal-actions" style="display:flex;gap:8px;margin-top:12px">
+      <button class="pixel-btn btn-sm" style="flex:1" onclick="closeAsk()">${opts.cancelText||'CANCELAR'}</button>
+      <button class="pixel-btn btn-red btn-sm" style="flex:1" id="ask-yes">${opts.okText||'EXCLUIR'}</button>
+    </div></div>`;
+  modal.classList.add('show');
+  document.getElementById('ask-yes').onclick=()=>{ closeAsk(); if(opts.onYes) opts.onYes(); };
+}
 function finalizeReward(r, cost, label){
   if(G.coins < cost){ showToast('Faltam '+(cost-G.coins)+' LulaCoins!','dmg'); return; }
   G.coins -= cost; addLedger('out', cost, 'Recompensa: '+label);
@@ -8322,7 +8393,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.27 • v72';
+  window.APP_VERSION = '2026.06.27 • v73';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
