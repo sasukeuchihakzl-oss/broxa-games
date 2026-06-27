@@ -1612,7 +1612,7 @@
   .preset-edit{ font-family:var(--pixel); font-size:11px; color:var(--cyan); cursor:pointer; padding:0 2px; }
   .preset-edit:hover{ color:#8fe0ff; }
   /* 🧔 MENTOR (guia bravo/calmo) */
-  .mentor{ position:fixed; left:10px; bottom:10px; z-index:140; width:120px; transform:translateX(-140%); opacity:0; pointer-events:none; transition:transform .55s cubic-bezier(.18,.9,.32,1.25), opacity .4s ease; }
+  .mentor{ position:fixed; left:10px; bottom:10px; z-index:140; width:240px; transform:translateX(-140%); opacity:0; pointer-events:none; transition:transform .55s cubic-bezier(.18,.9,.32,1.25), opacity .4s ease; }
   .mentor.show{ transform:translateX(0); opacity:1; pointer-events:auto; }
   .mentor-img{ width:100%; height:auto; display:block; cursor:pointer; filter:drop-shadow(0 4px 7px rgba(0,0,0,.55)); animation:mentorBob 3.2s ease-in-out infinite; }
   .mentor.angry .mentor-img{ animation:mentorShake .28s ease-in-out infinite; }
@@ -1623,7 +1623,7 @@
   .mentor-x{ position:absolute; top:-6px; right:-6px; width:17px; height:17px; line-height:15px; text-align:center; border-radius:50%; border:none; background:#2a2335; color:#fff; font-size:9px; cursor:pointer; z-index:2; box-shadow:0 2px 4px rgba(0,0,0,.4); }
   @keyframes mentorBob{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
   @keyframes mentorShake{ 0%,100%{transform:translateX(0) rotate(0)} 25%{transform:translateX(-2px) rotate(-2.5deg)} 75%{transform:translateX(2px) rotate(2.5deg)} }
-  @media (max-width:480px){ .mentor{ width:98px } .mentor-bubble{ font-size:11px; max-width:160px } }
+  @media (max-width:480px){ .mentor{ width:196px } .mentor-bubble{ font-size:11px; max-width:160px } }
   .preset-item.custom{ background:rgba(255,210,74,.06); }
   .preset-save-btn{ grid-column:1/-1; width:100%; padding:8px; border:1px dashed var(--gold); background:rgba(255,210,74,.08); color:var(--gold); border-radius:7px; cursor:pointer; font-family:var(--vt); font-size:14px; }
   .preset-save-btn:hover{ background:rgba(255,210,74,.16); }
@@ -8477,7 +8477,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.27 • v77';
+  window.APP_VERSION = '2026.06.27 • v78';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
