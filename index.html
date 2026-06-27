@@ -1612,8 +1612,9 @@
   .preset-edit{ font-family:var(--pixel); font-size:11px; color:var(--cyan); cursor:pointer; padding:0 2px; }
   .preset-edit:hover{ color:#8fe0ff; }
   /* 🧔 MENTOR (guia bravo/calmo) */
-  .mentor{ position:fixed; left:8px; bottom:8px; z-index:140; width:62px; }
-  .mentor-img{ width:62px; height:auto; display:block; cursor:pointer; filter:drop-shadow(0 3px 6px rgba(0,0,0,.55)); animation:mentorBob 3.2s ease-in-out infinite; }
+  .mentor{ position:fixed; left:10px; bottom:10px; z-index:140; width:120px; transform:translateX(-140%); opacity:0; pointer-events:none; transition:transform .55s cubic-bezier(.18,.9,.32,1.25), opacity .4s ease; }
+  .mentor.show{ transform:translateX(0); opacity:1; pointer-events:auto; }
+  .mentor-img{ width:100%; height:auto; display:block; cursor:pointer; filter:drop-shadow(0 4px 7px rgba(0,0,0,.55)); animation:mentorBob 3.2s ease-in-out infinite; }
   .mentor.angry .mentor-img{ animation:mentorShake .28s ease-in-out infinite; }
   .mentor-bubble{ position:absolute; bottom:100%; left:0; margin-bottom:5px; max-width:190px; min-width:104px; background:#fff; color:#161020; font-size:11.5px; font-weight:700; line-height:1.25; padding:6px 9px; border-radius:10px; box-shadow:0 5px 12px rgba(0,0,0,.45); }
   .mentor-bubble:after{ content:''; position:absolute; top:100%; left:18px; border:6px solid transparent; border-top-color:#fff; }
@@ -1622,7 +1623,7 @@
   .mentor-x{ position:absolute; top:-6px; right:-6px; width:17px; height:17px; line-height:15px; text-align:center; border-radius:50%; border:none; background:#2a2335; color:#fff; font-size:9px; cursor:pointer; z-index:2; box-shadow:0 2px 4px rgba(0,0,0,.4); }
   @keyframes mentorBob{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
   @keyframes mentorShake{ 0%,100%{transform:translateX(0) rotate(0)} 25%{transform:translateX(-2px) rotate(-2.5deg)} 75%{transform:translateX(2px) rotate(2.5deg)} }
-  @media (max-width:480px){ .mentor{ width:50px } .mentor-img{ width:50px } .mentor-bubble{ font-size:11px; max-width:150px } }
+  @media (max-width:480px){ .mentor{ width:98px } .mentor-bubble{ font-size:11px; max-width:160px } }
   .preset-item.custom{ background:rgba(255,210,74,.06); }
   .preset-save-btn{ grid-column:1/-1; width:100%; padding:8px; border:1px dashed var(--gold); background:rgba(255,210,74,.08); color:var(--gold); border-radius:7px; cursor:pointer; font-family:var(--vt); font-size:14px; }
   .preset-save-btn:hover{ background:rgba(255,210,74,.16); }
@@ -3539,7 +3540,9 @@ const MENTOR_CALM_LINES = [
   'Orgulho de você. Continue.',
   'Hoje rendeu. Bora pra próxima.'
 ];
-let _mentorHidden = false, _mentorLastLine = '';
+let _mentorDismissed = false, _mentorLastLine = '', _mentorHideTimer = null;
+const MENTOR_VISIBLE_MS = 7000;     // quanto tempo ele fica na tela falando
+const MENTOR_EVERY_MS   = 70000;    // de quanto em quanto tempo ele reaparece
 function mentorState(){
   try{
     if(hasLateMission()) return 'angry';
@@ -3549,26 +3552,35 @@ function mentorState(){
   }catch(e){}
   return 'calm';
 }
-function mentorPickLine(state){
-  const arr = state==='angry' ? MENTOR_ANGRY_LINES : (MENTOR_CALM_LINES.length?MENTOR_CALM_LINES:MENTOR_ANGRY_LINES);
+function mentorPickLine(){
+  const arr = MENTOR_ANGRY_LINES;
   let l=arr[0]; for(let k=0;k<6;k++){ l=arr[Math.random()*arr.length|0]; if(l!==_mentorLastLine) break; }
   _mentorLastLine=l; return l;
 }
-function renderMentor(newLine){
-  const el=document.getElementById('mentor'); if(!el) return;
-  if(_mentorHidden || !(G.profile && G.profile.name)){ el.style.display='none'; return; }
+function mentorBuild(){
+  const el=document.getElementById('mentor'); if(!el) return null;
   const state=mentorState();
-  const img = MENTOR_IMG_ANGRY;   // imagem única (sem versão calma)
-  const line = newLine ? mentorPickLine('angry') : (_mentorLastLine || mentorPickLine('angry'));   // sempre as frases enviadas
-  el.className='mentor '+state;
+  const line=mentorPickLine();
+  const keepShow = el.classList.contains('show') ? ' show' : '';
+  el.className='mentor '+state+keepShow;
   el.style.display='block';
-  el.innerHTML = `<button class="mentor-x" title="esconder até reabrir" onclick="hideMentor(event)">✕</button>
+  el.innerHTML = `<button class="mentor-x" title="esconder até reabrir o app" onclick="hideMentor(event)">✕</button>
     <div class="mentor-bubble">${line}</div>
-    <img class="mentor-img" src="${img}" alt="mentor" onclick="renderMentor(true)">`;
+    <img class="mentor-img" src="${MENTOR_IMG_ANGRY}" alt="mentor" onclick="mentorPeek(true)">`;
+  return el;
 }
-function hideMentor(e){ if(e) e.stopPropagation(); _mentorHidden=true; const el=document.getElementById('mentor'); if(el) el.style.display='none'; }
-function mentorAngry(ms){ G._mentorAngryUntil = Date.now() + (ms||90000); try{ renderMentor(true); }catch(e){} }
-function mentorTick(){ if(_mentorHidden) return; try{ renderMentor(true); }catch(e){} }
+// 👋 aparece deslizando, fala, e some sozinho depois de um tempo
+function mentorPeek(){
+  if(_mentorDismissed || !(G.profile && G.profile.name)) return;
+  const el=mentorBuild(); if(!el) return;
+  void el.offsetWidth;          // força reflow p/ animar a entrada
+  el.classList.add('show');
+  if(_mentorHideTimer) clearTimeout(_mentorHideTimer);
+  _mentorHideTimer = setTimeout(mentorRetreat, MENTOR_VISIBLE_MS);
+}
+function mentorRetreat(){ const el=document.getElementById('mentor'); if(el) el.classList.remove('show'); }
+function hideMentor(e){ if(e) e.stopPropagation(); _mentorDismissed=true; if(_mentorHideTimer) clearTimeout(_mentorHideTimer); mentorRetreat(); }
+function mentorAngry(ms){ G._mentorAngryUntil = Date.now() + (ms||90000); try{ mentorPeek(); }catch(e){} }
 // 🔔 minutos até a PRÓXIMA missão agendada de hoje ainda não feita (null = nenhuma à frente)
 function minsToNextMission(){
   const now=new Date(), hm=now.getHours()*60+now.getMinutes(); let best=null;
@@ -8294,14 +8306,15 @@ function finishInit() {
   renderEquipped();
   renderHabits();
   updateUI();
-  try{ renderMentor(true); }catch(e){}   // 🧔 mentor aparece assim que o herói entra
+  // 🧔 mentor: aparece 10s depois de entrar, fala e some; depois reaparece de tempos em tempos
+  setTimeout(function(){ try{ mentorPeek(); }catch(e){} }, 10000);
   checkAchievements();
   initFxBg();
   requestAnimationFrame(visualLoop);
   updateClock();
   setInterval(updateClock, 1000);
   setInterval(checkDailyReset, 60000);
-  setInterval(mentorTick, 22000);   // 🧔 mentor troca de fala/estado periodicamente
+  setInterval(function(){ try{ mentorPeek(); }catch(e){} }, MENTOR_EVERY_MS);   // 🧔 mentor reaparece de tempos em tempos
   setInterval(save, 8000);   // autosave + sync online mais frequente (atualiza os manos mais rápido)
   window.addEventListener('online', updateUI);
   window.addEventListener('offline', updateUI);
@@ -8464,7 +8477,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.27 • v75';
+  window.APP_VERSION = '2026.06.27 • v76';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
