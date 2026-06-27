@@ -3542,7 +3542,7 @@ const MENTOR_CALM_LINES = [
 ];
 let _mentorDismissed = false, _mentorLastLine = '', _mentorHideTimer = null;
 const MENTOR_VISIBLE_MS = 7000;     // quanto tempo ele fica na tela falando
-const MENTOR_EVERY_MS   = 70000;    // de quanto em quanto tempo ele reaparece
+const MENTOR_EVERY_MS   = 20000;    // de quanto em quanto tempo ele reaparece
 function mentorState(){
   try{
     if(hasLateMission()) return 'angry';
@@ -8477,7 +8477,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.27 • v76';
+  window.APP_VERSION = '2026.06.27 • v77';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
