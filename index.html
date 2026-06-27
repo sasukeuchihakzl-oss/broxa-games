@@ -3464,6 +3464,12 @@ function hasLateMission(){
   const now=new Date(), hm=now.getHours()*60+now.getMinutes();
   return (G.missions||[]).some(m=>{ if(m.future||m.done||m.started||!m.time) return false; if(!dueToday(m)) return false; const p=m.time.split(':'); return hm > (+p[0])*60+(+p[1]); });
 }
+// 🔔 minutos até a PRÓXIMA missão agendada de hoje ainda não feita (null = nenhuma à frente)
+function minsToNextMission(){
+  const now=new Date(), hm=now.getHours()*60+now.getMinutes(); let best=null;
+  (G.missions||[]).forEach(m=>{ if(m.future||m.done||m.started||!m.time) return; if(!dueToday(m)) return; const p=String(m.time).split(':'); const t=(+p[0])*60+(+p[1]); const diff=t-hm; if(diff>=0 && (best===null||diff<best)) best=diff; });
+  return best;
+}
 function worldStateLabel(v){
   if(v>=80) return {emoji:'🌞', label:'Próspera'};
   if(v>=55) return {emoji:'🌤', label:'Estável'};
@@ -3480,13 +3486,49 @@ function viewedVillageData(name){
   const me = name === (G.profile && G.profile.name);
   const col = (CHAR_PRESETS[name]||{}).armor || '#888';
   const wOf = c => Math.max(0, Math.min(1, (c||0)/1500));   // 💰 riqueza pela LulaCoins
-  if(me){ const w=ensureWorld(); return {name, me:true, vitality:worldVitality(), missions:G.totalMissions||0, built:w.built||0, decay:w.decay||0, seeds:w.seeds||0, wealth:wOf(G.coins), late:hasLateMission(), offline:false, color:col}; }
+  if(me){ const w=ensureWorld(); return {name, me:true, vitality:worldVitality(), missions:G.totalMissions||0, built:w.built||0, decay:w.decay||0, seeds:w.seeds||0, wealth:wOf(G.coins), late:hasLateMission(), offline:false, streak:(G.streak||0), color:col}; }
   const d = onlineData[name];
   const recent = d && d.updatedAt && (Date.now()-d.updatedAt < 45*60000);
   // 👹 atraso do mano: calcula pelas missões de hoje que ele sincronizou (vencidas, não feitas, não iniciadas)
   const lateOther = !!(d && Array.isArray(d.todayMissions) && d.todayMissions.some(m=>rivalMissionLate(m)));
-  if(d && d.vitality!=null){ const miss=d.totalMissions||0; return {name, me:false, vitality:d.vitality, missions:miss, built:miss, decay:Math.round((1-d.vitality/100)*8), seeds:0, wealth:wOf(d.coins), late:lateOther, offline:!recent, color:col}; }
-  return {name, me:false, vitality:null, missions:(d&&d.totalMissions)||0, built:(d&&d.totalMissions)||0, decay:0, seeds:0, wealth:0.4, late:false, offline:true, color:col};
+  if(d && d.vitality!=null){ const miss=d.totalMissions||0; return {name, me:false, vitality:d.vitality, missions:miss, built:miss, decay:Math.round((1-d.vitality/100)*8), seeds:0, wealth:wOf(d.coins), late:lateOther, offline:!recent, streak:(d.streak||0), color:col}; }
+  return {name, me:false, vitality:null, missions:(d&&d.totalMissions)||0, built:(d&&d.totalMissions)||0, decay:0, seeds:0, wealth:0.4, late:false, offline:true, streak:0, color:col};
+}
+// 🔴 atividade de HOJE da vila (pra deixar a vila do mano viva em tempo real)
+function villageTodayActivity(name){
+  const me = name === (G.profile && G.profile.name);
+  if(me){
+    const t = todayStr();
+    const due = (G.missions||[]).filter(m=>!m.future && dueToday(m));
+    const done = (G.todayCounters && G.todayCounters.date===t) ? (G.todayCounters.missions||0) : 0;
+    const inprog = (G.missions||[]).filter(m=>!m.future && !m.done && m.started && dueToday(m)).length;
+    const pend = due.filter(m=>!m.done).length;
+    const late = hasLateMission();
+    const allDone = !!G.allDoneToday || (pend===0 && done>0);
+    return {done, inprog, pend, late, allDone, active:(done+inprog)>0, nodata:false};
+  }
+  const d = onlineData[name];
+  if(!d || d.dayDate!==todayStr()) return {done:0,inprog:0,pend:0,late:false,allDone:false,active:false,nodata:true};
+  const tm = d.todayMissions||[];
+  const done = Math.max((d.todayMark===todayStr()?(d.todayCount||0):0), tm.filter(m=>m.d).length);
+  const inprog = tm.filter(m=>!m.d && m.s).length;
+  const pend = tm.filter(m=>!m.d).length;
+  const late = tm.some(m=>rivalMissionLate(m));
+  const allDone = pend===0 && done>0;
+  return {done, inprog, pend, late, allDone, active:(done+inprog)>0, nodata:false};
+}
+// 🏗️ perfil de categorias da vila (pra vila virar espelho da rotina)
+function villageCatProfile(name){
+  const me = name===(G.profile&&G.profile.name);
+  const counts = {};
+  if(me){
+    (G.missions||[]).forEach(m=>{ const c=m.cat; if(!c) return; counts[c]=(counts[c]||0)+((m.stats&&m.stats.done)||0); });
+  } else {
+    const d=onlineData[name];
+    ((d&&d.feed)||[]).forEach(h=>{ const c=h.c; if(!c) return; counts[c]=(counts[c]||0)+1; });
+    ((d&&d.todayMissions)||[]).forEach(m=>{ if(m.d&&m.c){ counts[m.c]=(counts[m.c]||0)+1; } });
+  }
+  return counts;
 }
 
 const _W_SKIN  = ['#f6cda3','#ecbb91','#d49e72','#b27c50','#8a5a38','#6e4427'];
@@ -3516,6 +3558,13 @@ function buildVillageScene(name, missions, built, decay, seeds){
       roofStyle: rng()<0.4?1:0, floors: rng()<twoFloorChance?2:1,
       chimney: rng()<0.6, garden: rng()<0.4, cph: rng()*6.28 });
   }
+  // 🪧 ESPELHO DA ROTINA: marca casas com o emoji das categorias que mais se cumpre nesta vila
+  const _prof = villageCatProfile(name);
+  const _topCats = Object.entries(_prof).filter(e=>e[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,4);
+  const _totC = _topCats.reduce((s,e)=>s+e[1],0)||1;
+  const _maxSigns = Math.min(buildings.length, 8);
+  let _bi=0;
+  _topCats.forEach(e=>{ const share=Math.max(1, Math.round(e[1]/_totC*_maxSigns)); for(let k=0;k<share && _bi<_maxSigns;k++){ buildings[_bi++].catIcon=e[0]; } });
   const spots = { well:{mx:0.5,my:0.5}, market:{mx:0.66,my:0.5}, plaza:{mx:0.42,my:0.55}, field:{mx:0.5,my:0.87}, mine:{mx:0.07,my:0.2}, lumber:{mx:0.93,my:0.2}, site:{mx:0.5,my:0.16} };
   const trees=[]; for(let i=0;i<14;i++){ const mx=0.04+rng()*0.92, my=0.12+rng()*0.8; if(Math.abs(mx-0.5)<0.09||Math.abs(my-0.5)<0.08) continue; trees.push({mx,my,s:0.7+rng()*0.6,ph:rng()*6.28}); }
   // 🌲 FLORESTAS ao redor da vila — molduram o mapa (faixas externas, fora dos lotes/estradas)
@@ -4083,7 +4132,7 @@ function drawVillage(ts){
   sc.blights.forEach(b=> ents.push([MY(b.my), ()=> drawBlightTD(x, MX(b.mx), MY(b.my), SC(b.my)*W*0.022, b, night)]));
   sc.sprouts.forEach(sp=> ents.push([MY(sp.my), ()=> drawSproutTD(x, MX(sp.mx), MY(sp.my), SC(sp.my)*W*0.028, v, night)]));
   sc.props.forEach(p=> ents.push([MY(p.my), ()=> drawPropTD(x, MX(p.mx), MY(p.my), SC(p.my)*W*0.024, p, v, night, ts)]));
-  sc.buildings.forEach(b=> ents.push([MY(b.my), ()=> drawHouseTD(x, MX(b.mx), MY(b.my), b.w*W*SC(b.my), b, v, night, ts, wealth)]));
+  sc.buildings.forEach(b=> ents.push([MY(b.my), ()=>{ drawHouseTD(x, MX(b.mx), MY(b.my), b.w*W*SC(b.my), b, v, night, ts, wealth); if(b.catIcon && !b.ruin){ const bw=b.w*W*SC(b.my), ix=MX(b.mx), iy=MY(b.my)-bw*(b.floors>1?1.7:1.25); const s=bw*0.62; x.save(); x.fillStyle='rgba(20,16,10,.55)'; x.beginPath(); (x.roundRect?x.roundRect(ix-s*0.62,iy-s*0.62,s*1.24,s*1.04,s*0.2):x.rect(ix-s*0.62,iy-s*0.62,s*1.24,s*1.04)); x.fill(); x.strokeStyle='rgba(0,0,0,.35)'; x.lineWidth=Math.max(1,bw*0.04); x.beginPath(); x.moveTo(ix,iy+s*0.4); x.lineTo(ix,MY(b.my)-bw*0.6); x.stroke(); x.font=Math.round(s*0.8)+'px sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(b.catIcon, ix, iy-s*0.05); x.textAlign='left'; x.textBaseline='alphabetic'; x.restore(); } }]));
   sc.trees.forEach(tr=>{ if(tr.fallen>0){ tr.fallen-=dt; return; } ents.push([MY(tr.my), ()=> drawTreeTD(x, MX(tr.mx), MY(tr.my), SC(tr.my)*tr.s*W*0.03, tr, v, night, ts)]); });
   // 🌲 floresta ao redor (molduram a vila)
   if(sc.forest) sc.forest.forEach(ft=> ents.push([MY(ft.my), ()=> (ft.pine?drawPineTD:drawTreeTD)(x, MX(ft.mx), MY(ft.my), SC(ft.my)*ft.s*W*0.03, ft, v, night, ts)]));
@@ -4102,11 +4151,27 @@ function drawVillage(ts){
   // 💰 fonte da praça quando a vila é rica
   if(wealth>0.55) ents.push([MY(0.55), ()=> drawFountainTD(x, MX(0.5), MY(0.55), SC(0.55)*W*0.034, v, night, ts, wealth)]);
   // NPCs, festa, ser maléfico
-  const active = Math.max(1, Math.round(v*sc.npcs.length));
+  const act = villageTodayActivity(data.name);
+  let active = Math.max(1, Math.round(v*sc.npcs.length));
+  if(act.active) active = Math.min(sc.npcs.length, active + 2 + Math.min(3, act.done));   // 🔴 produzindo hoje → vila mais movimentada
   const mood = v>=0.66?'happy':(v>=0.36?'ok':'sad');
   const demonOn = data.late && !unknown;
-  const party = !demonOn && v>=0.8 && !night;
+  const festival = !demonOn && !night && ((data.streak||0) >= 7);   // 🎉 streak de 7+ dias = festival
+  const perfectDay = !demonOn && act.allDone && !act.nodata;        // 🎆 fechou todas as missões de hoje
+  const party = !demonOn && (v>=0.8 || festival || perfectDay) && !night;
   if(party){ ents.push([MY(0.56)+50000, ()=> drawBonfireTD(x, MX(0.42), MY(0.56), SC(0.56)*W*0.026, ts)]); if(Math.random()<0.09) sc.sparks.push({mx:0.42+(Math.random()-0.5)*0.12, my:0.5, vx:(Math.random()-0.5)*0.25, vy:-0.5, t:1100, col:'#ffe49a'}); }
+  if(festival && !sc._festShown){ sc._festShown=true; WORLD._evt={text:'🎉 FESTIVAL! '+(data.streak)+' dias de sequência!', ts:Date.now(), done:false}; }
+  // 🎉 PACOTE 1: comemoração imediata ao concluir missão (efeito ao vivo na vila)
+  if(WORLD._cheer){
+    if(data.me && Date.now()-WORLD._cheer.ts < 4000){
+      for(let k=0;k<24;k++) sc.sparks.push({mx:0.5+(Math.random()-0.5)*0.5, my:0.38+Math.random()*0.22, vx:(Math.random()-0.5)*0.6, vy:-0.55-Math.random()*0.45, t:1300, col:['#ffd24a','#ff6a8a','#6fb0ff','#7fe0a0','#e87fb0','#ffffff'][k%6]});
+      let cnt=0; for(const np of sc.npcs){ if(np.dead) continue; np.bubble='🎉'; np.bubbleT=1900; np.state='act'; if(++cnt>=3) break; }
+      sc.site.prog=Math.min(0.98,(sc.site.prog||0)+0.12); sc.site.logs=Math.min(8,(sc.site.logs||0)+1);
+    }
+    WORLD._cheer=null;
+  }
+  // 🎆 PACOTE 4: fogos quando a vila fechou TODAS as missões do dia
+  if(perfectDay){ sc._fwCd=(sc._fwCd||0)-dt; if(sc._fwCd<=0){ sc._fwCd=1100+Math.random()*900; const fx=0.2+Math.random()*0.6, fy=0.12+Math.random()*0.12, col=['#ffd24a','#ff6a8a','#6fb0ff','#7fe0a0','#e87fb0','#ffae5a'][Math.random()*6|0]; for(let k=0;k<18;k++){ const a=k/18*6.28; sc.sparks.push({mx:fx,my:fy,vx:Math.cos(a)*0.5,vy:Math.sin(a)*0.5-0.1,t:900,col}); } } }
   let demonMap=null;
   if(demonOn){ const d=sc.demon; let tgt=null,best=9; sc.npcs.forEach((np,i)=>{ if(i>=active||np.dead)return; const dd=Math.hypot(np.mx-d.mx,np.my-d.my); if(dd<best){best=dd;tgt=np;} }); if(tgt){ d.mx+=(tgt.mx-d.mx)*0.012; d.my+=(tgt.my-d.my)*0.012; } demonMap=d; ents.push([MY(d.my)+99999, ()=> drawDemonTD(x, MX(d.mx), MY(d.my), SC(d.my)*W*0.05, ts)]);
     if(!sc.evil) sc.evil={mx:0.5,my:0.3,face:1,ph:0,cd:0,fcd:2500};
@@ -4137,6 +4202,8 @@ function drawVillage(ts){
   // 💤 quem foi dormir solta um "Zzz" subindo da casa
   for(const bi in sc._zzz){ const b=sc.buildings[bi]; if(!b||b.ruin) continue; const bx=MX(b.mx), by=MY(b.my)-b.w*W*SC(b.my)*0.9; for(let z=0;z<2;z++){ const t=((ts*0.0004)+z*0.5)%1; x.globalAlpha=(1-t)*0.7; x.fillStyle='#cfe0ff'; x.font='600 '+Math.round(SC(b.my)*W*0.022*(0.8+z*0.5))+'px sans-serif'; x.fillText('z', bx+t*SC(b.my)*W*0.03, by-t*SC(b.my)*W*0.06); } x.globalAlpha=1; }
   for(let i=sc.sparks.length-1;i>=0;i--){ const p=sc.sparks[i]; p.t-=dt; if(p.t<=0){ sc.sparks.splice(i,1); continue; } p.mx+=p.vx*dt*0.0002; p.my+=(p.vy+0.5*(1-p.t/500))*dt*0.0002; x.globalAlpha=Math.max(0,p.t/500); x.fillStyle=p.col; x.beginPath(); x.arc(MX(p.mx),MY(p.my),Math.max(1,SC(p.my)*2.2),0,6.28); x.fill(); x.globalAlpha=1; }
+  // 🔔 PACOTE 4: sino na praça quando falta pouco pra uma missão agendada (só na sua vila)
+  if(data.me && !demonOn){ const mn=minsToNextMission(); if(mn!=null && mn<=15){ const swing=Math.sin(ts*0.012)*0.18; const bx=MX(0.5), by=MY(0.5)-W*0.085; x.save(); x.translate(bx,by); x.rotate(swing); x.font=Math.round(W*0.05)+'px sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('🔔', 0, 0); x.restore(); x.fillStyle='#ffe49a'; x.font='bold '+Math.round(W*0.024)+'px sans-serif'; x.textAlign='center'; x.fillText(mn<=0?'missão agora!':'missão em '+mn+'min', bx, by-W*0.045); x.textAlign='left'; x.textBaseline='alphabetic'; if(Math.random()<0.04) sc.sparks.push({mx:0.5+(Math.random()-0.5)*0.06,my:0.45,vx:(Math.random()-0.5)*0.2,vy:-0.3,t:700,col:'#ffe49a'}); } }
   if(demonOn) x.fillStyle='rgba(60,0,15,'+(0.16+0.05*Math.sin(ts*0.004)).toFixed(3)+')', x.fillRect(0,0,W,H);
   if(!demonOn && !unknown && wealth<0.3){ x.fillStyle='rgba(92,86,72,'+(0.2*(1-wealth/0.3)).toFixed(2)+')'; x.fillRect(0,0,W,H); }
   // chuva quando baixo
@@ -4167,7 +4234,16 @@ function renderWorldStatus(){
     <div class="ws-head"><b>${d.name}</b>${d.me?' <span style="color:var(--muted)">(você)</span>':''}${(!d.me&&d.offline)?'<span class="ws-off">⚠ sem sinal recente</span>':''}</div>
     <div class="ws-state">${st.emoji} ${st.label}${v==null?' — o mano ainda não sincronizou':` · vitalidade ${Math.round(v)}/100`}</div>
     <div class="ws-bar"><div class="ws-fill" style="width:${v==null?50:v}%;background:${barCol}"></div></div>
-    <div class="ws-meta">🏘️ ${d.missions} missões ergueram esta vila</div>`;
+    <div class="ws-meta">🏘️ ${d.missions} missões ergueram esta vila${(d.streak||0)>=2?` · 🔥 ${d.streak} dias`:''}</div>
+    ${(function(){
+      const a=villageTodayActivity(d.name);
+      if(a.nodata) return '<div class="ws-meta" style="opacity:.7">📡 sem dados de hoje ainda</div>';
+      const tag = a.late?'<span style="color:var(--danger)">👹 atrasado — a vila tá sob ataque!</span>'
+        : a.allDone?'<span style="color:var(--green)">🎆 fechou o dia! festa na vila</span>'
+        : a.active?'<span style="color:#7fc4ff">🔨 produzindo agora</span>'
+        : '<span style="opacity:.7">😴 vila parada hoje</span>';
+      return `<div class="ws-meta">Hoje: ✅ ${a.done}${a.inprog?` · ▶️ ${a.inprog}`:''} · ⬜ ${a.pend} &nbsp; ${tag}</div>`;
+    })()}`;
 }
 
 function viewVillage(n){ WORLD.view=n; WORLD.scene=null; renderWorld(); }
@@ -4641,7 +4717,7 @@ function completeMission(i) {
   logActivityTime(m);   // ⏱ item 4: registra o tempo gasto por categoria hoje
   bumpWorld(2);         // 🏘️ a vila verdeja um pouco a cada missão
   { ensureWorld(); G.world.built=(G.world.built||0)+1; if((G.world.decay||0)>0 && Math.random()<0.5) G.world.decay--;   // fazer o bem limpa um pouco da podridão
-    const cheers=['🎉 Mais uma conquista!','💪 A vila tá orgulhosa!','✨ Boa! Continua!','🏗️ Construindo o futuro!']; WORLD._evt={text:cheers[Math.random()*cheers.length|0], ts:Date.now(), done:false}; }
+    const cheers=['🎉 Mais uma conquista!','💪 A vila tá orgulhosa!','✨ Boa! Continua!','🏗️ Construindo o futuro!']; WORLD._evt={text:cheers[Math.random()*cheers.length|0], ts:Date.now(), done:false}; WORLD._cheer={cat:m.cat, ts:Date.now()}; }
   ensureSeason(); G.seasonMissions = (G.seasonMissions||0) + 1;   // temporada (v4 #14)
   ensureWeek(); G.weekMissions = (G.weekMissions||0) + 1;         // destaque semanal (v4.1)
 
@@ -8098,6 +8174,8 @@ function finishInit() {
   setTimeout(checkNextMissionReminder, 90000);   // primeiro lembrete ~1,5 min após abrir
   // reavalia atraso dos manos (depende da hora) a cada 2 min, mesmo sem mudança no Firebase
   setInterval(function(){ try{ renderLateBanner(); checkRivalOverdue(); renderTeamMissions(); }catch(e){} }, 120000);
+  // 🏘️ status da vila ao vivo (atualiza "Hoje: ✅/▶️/⬜" enquanto a aba Mundo está aberta)
+  setInterval(function(){ try{ if(_worldVisible()) renderWorldStatus(); }catch(e){} }, 4000);
   // botão "Acordei": verifica o nerf das 9h ao abrir e a cada minuto
   setTimeout(function(){ try{ checkWakeNerf(); }catch(e){} }, 4000);
   setInterval(function(){ try{ checkWakeNerf(); }catch(e){} }, 60000);
@@ -8244,7 +8322,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.27 • v71';
+  window.APP_VERSION = '2026.06.27 • v72';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
