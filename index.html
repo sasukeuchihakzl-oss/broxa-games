@@ -2139,6 +2139,7 @@
     <div class="section-title">🔧 CONSERTAR ESTE HERÓI (local)</div>
     <button class="pixel-btn btn-green btn-sm" style="width:100%;margin:4px 0" onclick="admFix100()">✅ Zerar falhas → conclusão 100%</button>
     <button class="pixel-btn btn-cyan btn-sm" style="width:100%;margin:4px 0" onclick="admClearTodayFail()">🧹 Limpar "furou o dia" (hoje/ontem)</button>
+    <button class="pixel-btn btn-sm" id="adm-del-toggle" style="width:100%;margin:4px 0" onclick="admToggleDelete()">🗑 Excluir missão: …</button>
     <div style="display:flex;gap:6px;align-items:center;margin:6px 0">
       <input type="number" id="adm-xp" placeholder="XP" style="flex:1">
       <button class="pixel-btn btn-green btn-sm" onclick="admGiveXP(1)">+ XP</button>
@@ -2318,6 +2319,7 @@ const G = {
   dayFailSeen: {},
   graceDate: '',          // v6.1: penalidades só valem a partir desta data (amanhã)
   customTemplates: [],    // v6.1: missões prontas criadas pelo usuário
+  allowDeleteMissions: false,   // v73: excluir missão desligado por padrão; liga no painel ADM
   allDoneToday: false,
   perfectDayDate: '',     // dia em que o alarde de "100% concluído" já tocou
   // v52: Double XP (item 1) + recorde de XP diário (item 3) + tempo de atividades (item 4)
@@ -3257,7 +3259,7 @@ function renderMissions() {
           : (m.started
               ? `<button class="pixel-btn btn-green btn-sm" title="Concluir missão" onclick="completeMission(${i})">✓</button>`
               : `<button class="pixel-btn btn-start btn-sm" title="Comecei (sai do atraso)" onclick="startMission(${i})">▶</button>`)}
-        <button class="pixel-btn btn-red btn-sm" title="Excluir missão" onclick="deleteMission(${i})">🗑</button>
+        ${G.allowDeleteMissions ? `<button class="pixel-btn btn-red btn-sm" title="Excluir missão" onclick="deleteMission(${i})">🗑</button>` : ''}
       </div>
     </div>`;
   }
@@ -3313,7 +3315,7 @@ function renderFutureMissions(){
         ${ready
           ? `<button class="pixel-btn btn-gold btn-sm" title="Ativar agora" onclick="event.stopPropagation();activateMission(${i})">▶ ATIVAR</button>`
           : `<button class="pixel-btn btn-sm" disabled style="opacity:.45;cursor:not-allowed">🔒</button>`}
-        <button class="pixel-btn btn-red btn-sm" title="Excluir missão" onclick="event.stopPropagation();deleteMission(${i})">🗑</button>
+        ${G.allowDeleteMissions ? `<button class="pixel-btn btn-red btn-sm" title="Excluir missão" onclick="event.stopPropagation();deleteMission(${i})">🗑</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -4852,6 +4854,7 @@ function showPerfectDayBanner(n){
 }
 
 function deleteMission(i) {
+  if(!G.allowDeleteMissions){ try{ showToast('Excluir missão está desligado. Ative no 🛠️ painel ADM.','dmg'); }catch(e){} return; }
   const m = G.missions[i]; if(!m) return;
   gameConfirm({
     title:'🗑 Excluir missão?',
@@ -6988,7 +6991,7 @@ function save(){
       duelSeen:G.duelSeen, nudgeSeen:G.nudgeSeen, giftSeen:G.giftSeen, reactSeen:G.reactSeen,
       weekMissions:G.weekMissions, weekMark:G.weekMark,
       xpEarned:G.xpEarned, dayFailSeen:G.dayFailSeen,
-      graceDate:G.graceDate, customTemplates:G.customTemplates,
+      graceDate:G.graceDate, customTemplates:G.customTemplates, allowDeleteMissions:G.allowDeleteMissions,
       manoBank:G.manoBank, debts:G.debts,
       migratedDefaults:G.migratedDefaults, nextReminderLast:G.nextReminderLast,
       wokeUpDate:G.wokeUpDate, wakeNerfDate:G.wakeNerfDate, wakeRemindDate:G.wakeRemindDate, wakeStartDate:G.wakeStartDate,
@@ -8393,7 +8396,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.27 • v73';
+  window.APP_VERSION = '2026.06.27 • v74';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
@@ -8511,7 +8514,23 @@ init();
       `Herói: <b>${(G.profile&&G.profile.name)||'?'}</b> · Lv ${G.level} · XP ${G.xp}/${G.xpNext} (total ${G.xpEarned||0})<br>`+
       `LulaCoins ${G.coins} · Gems ${G.gems} · Streak ${G.streak}<br>`+
       `Conclusão: <b>${rate}%</b> &nbsp;(✅ ${done} / ❌ ${failed})`;
+    admUpdateDelToggle();
   }
+  function admUpdateDelToggle(){
+    const b = document.getElementById('adm-del-toggle'); if(!b) return;
+    const on = !!G.allowDeleteMissions;
+    b.textContent = '🗑 Excluir missão: ' + (on ? 'LIGADO ✅' : 'desligado');
+    b.classList.toggle('btn-red', on);
+    b.classList.toggle('btn-green', !on);
+  }
+  window.admToggleDelete = function(){
+    G.allowDeleteMissions = !G.allowDeleteMissions;
+    save();
+    try{ renderMissions(); }catch(e){}
+    try{ renderFutureMissions(); }catch(e){}
+    admUpdateDelToggle();
+    try{ showToast(G.allowDeleteMissions ? '🗑 Excluir missão LIGADO' : '🔒 Excluir missão desligado', G.allowDeleteMissions?'heal':'info'); }catch(e){}
+  };
 
   window.admFix100 = function(){
     let cleared = 0;
