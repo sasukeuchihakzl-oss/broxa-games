@@ -1719,7 +1719,7 @@
 
       <div class="char-name" id="char-name-display">HERÓI</div>
       <div class="char-title" id="char-title">🏷️ Aprendiz</div>
-      <div class="char-level">Nível <span id="char-level">1</span> · <span id="total-missions">0</span> missões</div>
+      <div class="char-level" onclick="admGesture()">Nível <span id="char-level">1</span> · <span id="total-missions">0</span> missões</div>
       <div id="evo-panel" class="evo-panel"></div>
       <button class="pixel-btn btn-purple btn-sm" style="width:100%;margin:4px 0" onclick="openCustomizer()">🎨 Personalizar</button>
       <div class="char-status status-healthy" id="char-status">✅ SAUDÁVEL</div>
@@ -2122,6 +2122,42 @@
     <div style="font-size:11px;color:var(--muted);margin-top:6px">Dica: o print é baixado como imagem — é só anexar no Discord. O webhook envia o texto do progresso automaticamente.</div>
     <div class="sep"></div>
     <button class="pixel-btn btn-red btn-sm" style="width:100%" onclick="resetGame()">🗑️ APAGAR PROGRESSO (recomeçar)</button>
+  </div>
+</div>
+
+<!-- ===== MODAL: MODO ADM ===== -->
+<div id="adm-modal" class="modal">
+  <div class="modal-box">
+    <div class="modal-title">🛠️ MODO ADM</div>
+    <div id="adm-info" style="font-size:13px;line-height:1.7;color:var(--text);background:rgba(0,0,0,.25);border-radius:8px;padding:10px;margin-bottom:10px"></div>
+
+    <div class="section-title">🔧 CONSERTAR ESTE HERÓI (local)</div>
+    <button class="pixel-btn btn-green btn-sm" style="width:100%;margin:4px 0" onclick="admFix100()">✅ Zerar falhas → conclusão 100%</button>
+    <button class="pixel-btn btn-cyan btn-sm" style="width:100%;margin:4px 0" onclick="admClearTodayFail()">🧹 Limpar "furou o dia" (hoje/ontem)</button>
+    <div style="display:flex;gap:6px;align-items:center;margin:6px 0">
+      <input type="number" id="adm-xp" placeholder="XP" style="flex:1">
+      <button class="pixel-btn btn-green btn-sm" onclick="admGiveXP(1)">+ XP</button>
+      <button class="pixel-btn btn-red btn-sm" onclick="admGiveXP(-1)">− XP</button>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;margin:6px 0">
+      <input type="number" id="adm-coins" placeholder="LulaCoins" style="flex:1">
+      <button class="pixel-btn btn-gold btn-sm" onclick="admGiveCoins(1)">+ LC</button>
+      <button class="pixel-btn btn-red btn-sm" onclick="admGiveCoins(-1)">− LC</button>
+    </div>
+
+    <div class="sep"></div>
+    <div class="section-title">🌐 OUTROS JOGADORES (Firebase)</div>
+    <select id="adm-target" class="cust-input" style="width:100%;margin:4px 0"></select>
+    <div style="display:flex;gap:6px;align-items:center;margin:6px 0">
+      <input type="number" id="adm-rxp" placeholder="XP (+/−)" style="flex:1">
+      <button class="pixel-btn btn-purple btn-sm" onclick="admRemoteGift()">🎁 Enviar XP</button>
+    </div>
+    <button class="pixel-btn btn-cyan btn-sm" style="width:100%;margin:4px 0" onclick="admRemoteClearFail()">🧹 Limpar "furou o dia" do jogador</button>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px">⚠ A conclusão %/falhas dos outros é local no aparelho deles — só dá pra ajustar XP e "furou o dia" remotamente. Pra cravar 100% no save de outro, abra o jogo no aparelho dele e use "Consertar este herói".</div>
+
+    <div class="modal-actions" style="margin-top:10px">
+      <button class="pixel-btn btn-gold" onclick="admClose()">FECHAR</button>
+    </div>
   </div>
 </div>
 
@@ -2937,7 +2973,7 @@ function missionDueOn(m, date){
   const ds = todayStr(date);
   if(m.date && ds < m.date) return false;   // agendada p/ uma data futura → ainda não está ativa
   if(!r) return !m.done;            // missão única: ativa até concluir (a partir da data, se houver)
-  const dow = date.getDay();        // 0=dom ... 6=sáb
+  const dow = new Date(date.getTime() - DAY_CUTOFF_MS).getDay();  // 0=dom ... 6=sáb (com corte das 01h)
   if(r==='daily') return true;
   if(r==='weekdays') return dow>=1 && dow<=5;
   if(r==='weekends') return dow===0 || dow===6;
@@ -3129,10 +3165,21 @@ function renderMissions() {
     list.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:10px 0;text-align:center;">Nenhuma missão ativa.<br>Adicione tarefas acima' + (G.missions.some(m=>m.future)?' ou abra o portal 🔮 ??? pra ativar uma selada.':'!') + '</div>';
     return;
   }
+  // 📅 separa missões de HOJE das PRÓXIMAS (agendadas p/ outra data ou recorrentes de outro dia, ex: segunda)
+  function bucketOf(m){
+    if(m.done) return 'today';                              // concluída hoje fica em Hoje
+    if(m.date && todayStr() < m.date) return 'upcoming';    // agendada p/ data futura
+    const r = missionRecur(m);
+    if(r) return dueToday(m) ? 'today' : 'upcoming';        // recorrente: hoje ou dia de folga
+    return 'today';                                         // única ativa, sem data futura
+  }
   // Ordenação padrão: pendentes primeiro, por horário (mais cedo → mais tarde; sem horário no fim); concluídas embaixo
-  const ordered = G.missions.map((m,i)=>({m,i})).filter(o=>!o.m.future)
-    .sort((a,b)=> ( (a.m.done?1:0) - (b.m.done?1:0) ) || ( mins(a.m) - mins(b.m) ) );
-  list.innerHTML = ordered.map(({m,i})=>{
+  const orderFn = (a,b)=> ( (a.m.done?1:0) - (b.m.done?1:0) ) || ( mins(a.m) - mins(b.m) );
+  const all = G.missions.map((m,i)=>({m,i})).filter(o=>!o.m.future);
+  const todayArr    = all.filter(o=>bucketOf(o.m)==='today').sort(orderFn);
+  const upcomingArr = all.filter(o=>bucketOf(o.m)==='upcoming').sort(orderFn);
+
+  function itemHTML(m,i){
     const d = DIFFS[m.diff];
     const col = catColor(m.cat);
     const st = m.stats || {done:0,failed:0};
@@ -3173,7 +3220,19 @@ function renderMissions() {
               : `<button class="pixel-btn btn-start btn-sm" title="Comecei (sai do atraso)" onclick="startMission(${i})">▶</button>`)}
       </div>
     </div>`;
-  }).join('');
+  }
+
+  const headCss = 'font-family:var(--pixel,monospace);font-size:11px;letter-spacing:1px;margin:12px 2px 6px;display:flex;justify-content:space-between;align-items:center';
+  const pendHoje = todayArr.filter(o=>!o.m.done).length;
+  let html = `<div style="${headCss};color:var(--gold)">📅 HOJE <span style="color:var(--muted);font-size:10px">${pendHoje} pendente(s)</span></div>`;
+  html += todayArr.length
+    ? todayArr.map(o=>itemHTML(o.m,o.i)).join('')
+    : '<div style="color:var(--muted);font-size:13px;padding:10px 0;text-align:center">Nada pendente pra hoje. 🎉</div>';
+  if(upcomingArr.length){
+    html += `<div style="${headCss};color:#8fc7ff">🔜 PRÓXIMAS <span style="color:var(--muted);font-size:10px">${upcomingArr.length} agendada(s)</span></div>`;
+    html += upcomingArr.map(o=>itemHTML(o.m,o.i)).join('');
+  }
+  list.innerHTML = html;
 }
 
 // 🔮 PORTAL DO TEMPO — missões seladas por 7 dias. Ao abrir o selo, ativa e dá +50% XP ao concluir.
@@ -6985,7 +7044,10 @@ function pasteSaveCode(){
 }
 
 // ===== DATA / HORA REAL =====
-function todayStr(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+// 🌙 o dia do jogo encerra às 01:00 da madrugada (não à meia-noite).
+// Assim 00:00–00:59 ainda conta como o dia anterior — dá 1h de folga pra concluir.
+const DAY_CUTOFF_MS = 60*60*1000;
+function todayStr(d){ d = d ? new Date(d) : new Date(); d = new Date(d.getTime() - DAY_CUTOFF_MS); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function computeDay(){
   const start = new Date(G.startTs||Date.now()); start.setHours(0,0,0,0);
   const now = new Date(); now.setHours(0,0,0,0);
@@ -8153,7 +8215,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.26 • v67';
+  window.APP_VERSION = '2026.06.27 • v69';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
@@ -8230,6 +8292,110 @@ init();
       };
     }
   });
+</script>
+
+<!-- ===== 🛠️ MODO ADM (painel de correção do mestre) ===== -->
+<script>
+(function(){
+  const ADM_PIN = '2020';   // 🔑 troque aqui o PIN de acesso
+  let _taps = 0, _tapTs = 0;
+
+  window.admGesture = function(){
+    const now = Date.now();
+    if(now - _tapTs > 1200) _taps = 0;
+    _tapTs = now; _taps++;
+    if(_taps >= 5){ _taps = 0; admPrompt(); }
+  };
+  function admPrompt(){
+    const pin = prompt('🛠️ MODO ADM — digite o PIN:');
+    if(pin === null) return;
+    if(pin !== ADM_PIN){ try{ showToast('PIN incorreto','dmg'); }catch(e){} return; }
+    admOpen();
+  }
+  window.admOpen = function(){
+    const sel = document.getElementById('adm-target');
+    if(sel && !sel.options.length){
+      (window.ONLINE_PLAYERS||['Rodrigo','Mizuki','Craudo']).forEach(n=>{
+        const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o);
+      });
+    }
+    admRefreshInfo();
+    document.getElementById('adm-modal').classList.add('show');
+  };
+  window.admClose = function(){ document.getElementById('adm-modal').classList.remove('show'); };
+
+  function admRefreshInfo(){
+    let done=0, failed=0;
+    (G.missions||[]).forEach(m=>{ const s=m.stats||{}; done+=s.done||0; failed+=s.failed||0; });
+    const rate = (done+failed)>0 ? Math.round(done/(done+failed)*100) : 100;
+    const el = document.getElementById('adm-info'); if(!el) return;
+    el.innerHTML =
+      `Herói: <b>${(G.profile&&G.profile.name)||'?'}</b> · Lv ${G.level} · XP ${G.xp}/${G.xpNext} (total ${G.xpEarned||0})<br>`+
+      `LulaCoins ${G.coins} · Gems ${G.gems} · Streak ${G.streak}<br>`+
+      `Conclusão: <b>${rate}%</b> &nbsp;(✅ ${done} / ❌ ${failed})`;
+  }
+
+  window.admFix100 = function(){
+    let cleared = 0;
+    (G.missions||[]).forEach(m=>{ if(m.stats){ cleared += m.stats.failed||0; m.stats.failed = 0; } m._failed = false; });
+    G.history = (G.history||[]).filter(h=>h.type !== 'failed');
+    save(); updateUI(); admRefreshInfo();
+    try{ showToast(`✅ ${cleared} falha(s) zeradas — conclusão 100%`,'heal'); }catch(e){}
+  };
+
+  window.admClearTodayFail = function(){
+    (G.missions||[]).forEach(m=>{ m._failed = false; });
+    const n = (G.profile&&G.profile.name)||'';
+    if(typeof db!=='undefined' && db && n){
+      [todayStr(), todayStr(new Date(Date.now()-86400000))].forEach(d=>{
+        try{ db.ref('forge_dayfail/'+d+'/'+n).remove(); }catch(e){}
+      });
+    }
+    if(G.dayFailSeen) G.dayFailSeen = {};
+    save();
+    try{ showToast('🧹 Marcas de "furou o dia" limpas','heal'); }catch(e){}
+  };
+
+  window.admGiveXP = function(sign){
+    const v = parseInt((document.getElementById('adm-xp')||{}).value,10);
+    if(isNaN(v) || v<=0){ try{ showToast('Valor inválido','dmg'); }catch(e){} return; }
+    if(sign>0) gainXP(v); else loseXP(v);
+    save(); admRefreshInfo();
+    try{ showToast(`${sign>0?'+':'−'}${v} XP (local)`, sign>0?'heal':'dmg'); }catch(e){}
+  };
+  window.admGiveCoins = function(sign){
+    const v = parseInt((document.getElementById('adm-coins')||{}).value,10);
+    if(isNaN(v) || v<=0) return;
+    G.coins = Math.max(0, G.coins + sign*v);
+    save(); updateUI(); admRefreshInfo();
+    try{ showToast(`${sign>0?'+':'−'}${v} LC`, sign>0?'heal':'dmg'); }catch(e){}
+  };
+
+  window.admRemoteGift = function(){
+    const name = (document.getElementById('adm-target')||{}).value;
+    const v = parseInt((document.getElementById('adm-rxp')||{}).value,10);
+    if(!name){ return; }
+    if(isNaN(v)){ try{ showToast('Valor inválido','dmg'); }catch(e){} return; }
+    if(typeof db==='undefined' || !db){ try{ showToast('Firebase não conectado','dmg'); }catch(e){} return; }
+    db.ref('forge_gift/'+name).set({ from:'ADM', xp:v, reason:'(ajuste do mestre)', at:Date.now() })
+      .then(()=>{ try{ showToast(`🎁 ${v>=0?'+':''}${v} XP enviado a ${name}`,'heal'); }catch(e){} })
+      .catch(()=>{ try{ showToast('Falha ao enviar','dmg'); }catch(e){} });
+  };
+  window.admRemoteClearFail = function(){
+    const name = (document.getElementById('adm-target')||{}).value;
+    if(!name) return;
+    if(typeof db==='undefined' || !db){ try{ showToast('Firebase não conectado','dmg'); }catch(e){} return; }
+    [todayStr(), todayStr(new Date(Date.now()-86400000))].forEach(d=>{
+      try{ db.ref('forge_dayfail/'+d+'/'+name).remove(); }catch(e){}
+    });
+    try{ showToast(`🧹 "Furou o dia" de ${name} limpo (hoje/ontem)`,'heal'); }catch(e){}
+  };
+
+  // atalho de teclado p/ desktop: Ctrl+Shift+A
+  window.addEventListener('keydown', function(e){
+    if(e.ctrlKey && e.shiftKey && (e.key==='A' || e.key==='a')){ e.preventDefault(); admPrompt(); }
+  });
+})();
 </script>
 </body>
 </html>
