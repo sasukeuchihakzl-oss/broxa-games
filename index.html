@@ -1223,6 +1223,9 @@
   .tm-miss.late .tm-time{ color:var(--danger); font-weight:bold; }
   .tm-miss.done span:first-child{ color:var(--green); }
   .tm-miss.done .tm-time{ color:var(--green); font-size:11px; }
+  .tm-miss.inprog{ background:rgba(60,160,255,.10); border-radius:6px; }
+  .tm-miss.inprog span:first-child{ color:#7fc4ff; }
+  .tm-miss.inprog .tm-time{ color:#7fc4ff; font-weight:bold; }
   .tm-nudge{ margin-top:6px; width:100%; padding:7px; border:1px solid var(--gold); border-radius:7px; background:rgba(240,192,64,.12); color:var(--gold); font-family:var(--pixel); font-size:8px; cursor:pointer; }
   .tm-nudge.urgent{ border-color:var(--danger); background:rgba(255,51,68,.15); color:var(--danger); animation:glow-pulse .8s ease infinite alternate; }
   .tm-nudge:active{ transform:translateY(1px); }
@@ -3321,14 +3324,22 @@ function setSleepGoal(){
 }
 function renderTimeTab(){
   const el = document.getElementById('time-content'); if(!el) return;
-  const catMins = (G.timeLog||{})[todayStr()] || {};
-  const tasksMin = timeTasksToday();
+  const t = todayStr();
+  const catMins = (G.timeLog||{})[t] || {};
   const sleepMin = Math.round((G.sleepGoalH||8)*60);
-  const freeMin = Math.max(0, 1440 - sleepMin - tasksMin);
+  // 🎯 META DE TAREFAS DO DIA: tempo de TODAS as missões de hoje (feitas + pendentes), calculado de uma vez.
+  const doneToday = (G.missions||[]).filter(m=>m.done && m.doneAt && todayStr(new Date(m.doneAt))===t);
+  const planToday = (G.missions||[]).filter(m=>!m.future && !m.done && isTodayMission(m));
+  const goalMin = plannedMissionMinToday();                  // meta total do dia (todas as missões)
+  const doneMin = doneToday.reduce((s,m)=>s+missionDurMin(m),0);
+  const pendMin = Math.max(0, goalMin - doneMin);
+  const freeMin = Math.max(0, 1440 - sleepMin - goalMin);    // tempo livre já sabendo a meta inteira
+  const over = (sleepMin + goalMin) > 1440;                  // planejou mais do que cabe no dia
   const segs = [
-    {label:'😴 Sono',    min:sleepMin, color:'#5b76d6'},
-    {label:'✅ Tarefas', min:tasksMin, color:'#46c46a'},
-    {label:'🎮 Livre',   min:freeMin,  color:'#f0c040'}
+    {label:'😴 Sono',            min:sleepMin, color:'#5b76d6'},
+    {label:'✅ Tarefas feitas',   min:doneMin,  color:'#46c46a'},
+    {label:'⬜ Tarefas restantes', min:pendMin,  color:'#2e7d46'},
+    {label:'🎮 Livre',           min:freeMin,  color:'#f0c040'}
   ];
   const pct = (m)=> (m/1440*100).toFixed(1);
   // barra empilhada do dia (24h)
@@ -3357,11 +3368,21 @@ function renderTimeTab(){
       <span>⭐ XP hoje: <b>${xpToday}</b></span>
       <span>🏆 Recorde: <b>${G.xpRecord||0}</b></span>
     </div>`;
-  // por missão (hoje): concluídas + planejadas pendentes, com tempo de cada
-  const t = todayStr();
-  const doneToday = (G.missions||[]).filter(m=>m.done && m.doneAt && todayStr(new Date(m.doneAt))===t);
-  const planToday = (G.missions||[]).filter(m=>!m.future && !m.done && isTodayMission(m));
-  const planMin = planToday.reduce((s,m)=>s+missionDurMin(m),0);
+  // 🎯 painel principal: meta de tarefas do dia (de uma vez) + tempo livre resultante
+  const goalBox = `<div style="background:linear-gradient(90deg,rgba(70,196,106,.14),rgba(240,192,64,.10));border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px">
+      <div style="font-size:12.5px;color:var(--muted);margin-bottom:6px">🎯 Meta de tarefas de hoje <span style="opacity:.8">(todas as missões do dia, de uma vez)</span></div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
+        <span style="font-size:21px;font-weight:bold;color:#46c46a">${fmtHM(goalMin)}</span>
+        <span style="font-size:12px;color:var(--muted)">✅ ${fmtHM(doneMin)} feito · ⬜ ${fmtHM(pendMin)} restante</span>
+      </div>
+      <div class="sep" style="margin:10px 0"></div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
+        <span style="font-size:13px;color:var(--muted)">🎮 Tempo livre do dia <span style="opacity:.7">(24h − sono − meta)</span></span>
+        <span style="font-size:21px;font-weight:bold;color:var(--gold)">${fmtHM(freeMin)}</span>
+      </div>
+      ${over?`<div style="font-size:12px;color:var(--danger);margin-top:8px">⚠️ Você planejou mais do que cabe no dia (sono + tarefas passam de 24h). Reduza missões ou o sono.</div>`:''}
+    </div>`;
+  // por missão (hoje): concluídas + planejadas pendentes (doneToday/planToday já calculados acima)
   const missionRow = (m,doneFlag)=>`
     <div style="display:flex;align-items:center;gap:8px;margin:4px 0;font-size:12.5px">
       <span style="width:20px;text-align:center">${m.icon||m.cat}</span>
@@ -3382,12 +3403,12 @@ function renderTimeTab(){
       <div style="font-size:10px;color:${w.today?'var(--gold)':'var(--muted)'}">${w.lbl}</div>
     </div>`).join('')+`</div>`;
   el.innerHTML = `${dx}
-    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:10px">Como você gasta suas <b>24h</b> hoje. Sono é uma meta editável; tarefas vêm do tempo das missões concluídas; o resto é tempo livre.</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:10px">Suas <b>24h</b> de hoje com a <b>meta de tarefas do dia inteira calculada de uma vez</b> — assim você já sabe quanto tempo livre sobra. Sono é editável.</div>
+    ${goalBox}
     ${dayBar}
     <div style="display:flex;flex-direction:column;gap:5px;margin-top:10px">${legend}</div>
     <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <button class="pixel-btn btn-sm" onclick="setSleepGoal()">😴 Ajustar sono (${G.sleepGoalH||8}h)</button>
-      <span style="font-size:11.5px;color:var(--muted)">Planejado pendente hoje: <b style="color:#8fc7ff">${fmtHM(planMin)}</b></span>
     </div>
     ${recBox}
     <div class="sep"></div>
@@ -5583,8 +5604,11 @@ function openSpy(name) {
       const done = tm.filter(m=>m.d).length;
       sm.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:3px">${done}/${tm.length} concluídas hoje</div>` +
         tm.map(m=>{
-          const gain = (m.d && (m.lc||m.xp)) ? `<span style="margin-left:auto;font-size:12px;color:var(--gold)">+${m.lc||0} LC · +${m.xp||0} XP</span>` : '';
-          return `<div class="spy-miss-row"><span class="mk ${m.d?'spy-miss-done':'spy-miss-todo'}">${m.d?'✅':'⬜'}</span><span class="${m.d?'spy-miss-done':'spy-miss-todo'}">${m.c||''} ${m.n}</span>${gain}</div>`;
+          const inProg = !m.d && !!m.s;
+          const mark = m.d?'✅':(inProg?'▶️':'⬜');
+          const right = (m.d && (m.lc||m.xp)) ? `<span style="margin-left:auto;font-size:12px;color:var(--gold)">+${m.lc||0} LC · +${m.xp||0} XP</span>`
+                      : (inProg ? `<span style="margin-left:auto;font-size:12px;color:#7fc4ff">em andamento</span>` : '');
+          return `<div class="spy-miss-row"><span class="mk ${m.d?'spy-miss-done':'spy-miss-todo'}">${mark}</span><span class="${m.d?'spy-miss-done':(inProg?'':'spy-miss-todo')}" ${inProg?'style="color:#7fc4ff"':''}>${m.c||''} ${m.n}</span>${right}</div>`;
         }).join('');
     }
   }
@@ -5622,6 +5646,7 @@ function renderTeamMissions(){
     const fresh = d && d.dayDate===todayStr();
     const tm = fresh ? (d.todayMissions||[]) : [];
     const pend = tm.filter(m=>!m.d);
+    const prog = pend.filter(m=>m.s).length;   // ▶️ em andamento (mano já começou)
     const doneListed = tm.filter(m=>m.d).length;
     // contagem OFICIAL de feitas hoje: todayCount (toda versão envia) — robusto contra app desatualizado
     const todayCountAuth = (d && d.todayMark===todayStr()) ? (d.todayCount||0) : 0;
@@ -5635,7 +5660,7 @@ function renderTeamMissions(){
     const seenBadge = `<span class="tm-seen${stale?' stale':''}">${stale?'⚠️ ':'🟢 '}${seenTxt}</span>`;
     html += `<div class="tm-player" style="border-color:${col}55">
       <div class="tm-head"><span class="tm-name" style="color:${col}">${n}</span>
-        <span class="tm-count">✅ ${doneAuth} feita${doneAuth!==1?'s':''} · ⬜ ${pend.length} pendente${pend.length!==1?'s':''}</span></div>
+        <span class="tm-count">✅ ${doneAuth} feita${doneAuth!==1?'s':''}${prog?` · ▶️ ${prog} em andamento`:''} · ⬜ ${pend.length} pendente${pend.length!==1?'s':''}</span></div>
       <div class="tm-seen-row">${seenBadge}</div>`;
     if(!fresh && doneAuth===0){ html += `<div class="tm-empty">${stale?'dados desatualizados — pediu pra ele abrir o app?':'sem dados de hoje ainda'}</div>`; }
     else if(!tm.length && doneAuth===0){ html += `<div class="tm-empty">nenhuma missão hoje ainda</div>`; }
@@ -5643,10 +5668,14 @@ function renderTeamMissions(){
       // mostra TODAS de hoje: ✅ feitas + ⬜ pendentes (⚠️ atrasadas)
       html += tm.map(m=>{
         if(m.d) return `<div class="tm-miss done"><span>✅ ${m.c||''} ${m.n}</span><span class="tm-time">${(m.lc||m.xp)?`+${m.lc||0} LC · +${m.xp||0} XP`:'feita'}</span></div>`;
+        const inProg = !!m.s;                  // já começou = em andamento
         const late=rivalMissionLate(m);
-        return `<div class="tm-miss${late?' late':''}">
-          <span>${late?'⚠️':'⬜'} ${m.c||''} ${m.n}</span>
-          <span class="tm-time">${m.t?(late?'⏰ atrasou '+m.t:'⏰ '+m.t):''}</span>
+        const icon = inProg ? '▶️' : (late?'⚠️':'⬜');
+        const time = inProg ? ('▶️ em andamento'+(m.t?' · '+m.t:''))
+                            : (m.t?(late?'⏰ atrasou '+m.t:'⏰ '+m.t):'');
+        return `<div class="tm-miss${late?' late':''}${inProg?' inprog':''}">
+          <span>${icon} ${m.c||''} ${m.n}</span>
+          <span class="tm-time">${time}</span>
         </div>`;
       }).join('');
       // feitas que o app dele (desatualizado) não detalhou, mas contou no todayCount
@@ -8215,7 +8244,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.27 • v70';
+  window.APP_VERSION = '2026.06.27 • v71';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
