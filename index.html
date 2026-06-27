@@ -3596,6 +3596,7 @@ function mentorApplySpot(el, spot, off){
 // 👋 aparece deslizando (em um lugar diferente a cada vez), fala, e some sozinho depois de um tempo
 function mentorPeek(){
   if(_mentorDismissed || !(G.profile && G.profile.name)) return;
+  if(G.profile.name === 'Craudo') return;   // no Craudo só a mentora dele (mentor2) aparece
   const el=document.getElementById('mentor'); if(!el) return;
   const wasShown = el.classList.contains('show');
   if(!wasShown){
@@ -8394,8 +8395,11 @@ function finishInit() {
   renderEquipped();
   renderHabits();
   updateUI();
-  // 🧔 mentor: aparece 10s depois de entrar, fala e some; depois reaparece de tempos em tempos
-  setTimeout(function(){ try{ mentorPeek(); }catch(e){} }, 10000);
+  // 🧔 mentor bravo: aparece 10s depois de entrar, fala e some; depois reaparece de tempos em tempos
+  // (não agenda pro Craudo — ele só vê a mentora exclusiva dele, mentor2)
+  if(!mentor2IsAllowed()){
+    setTimeout(function(){ try{ mentorPeek(); }catch(e){} }, 10000);
+  }
   // 💅 mentor exclusiva do Craudo — só agenda se o herói deste aparelho for o Craudo
   if(mentor2IsAllowed()){
     setTimeout(function(){ try{ mentor2Peek(); }catch(e){} }, 16000);
@@ -8407,7 +8411,7 @@ function finishInit() {
   updateClock();
   setInterval(updateClock, 1000);
   setInterval(checkDailyReset, 60000);
-  setInterval(function(){ try{ mentorPeek(); }catch(e){} }, MENTOR_EVERY_MS);   // 🧔 mentor reaparece de tempos em tempos
+  if(!mentor2IsAllowed()) setInterval(function(){ try{ mentorPeek(); }catch(e){} }, MENTOR_EVERY_MS);   // 🧔 mentor bravo reaparece (não pro Craudo)
   setInterval(save, 8000);   // autosave + sync online mais frequente (atualiza os manos mais rápido)
   window.addEventListener('online', updateUI);
   window.addEventListener('offline', updateUI);
@@ -8571,7 +8575,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.27 • v80';
+  window.APP_VERSION = '2026.06.27 • v81';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
