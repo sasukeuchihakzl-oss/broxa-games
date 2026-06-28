@@ -3526,6 +3526,16 @@ const WORLD = { view:null, scene:null, lastTs:0, _resizeHooked:false };
 function ensureWorld(){ if(!G.world || typeof G.world!=='object') G.world = {vitality:60, lastTick:todayStr()}; const w=G.world; if(w.built==null) w.built=G.totalMissions||0; if(w.decay==null) w.decay=0; if(w.seeds==null) w.seeds=0; return w; }
 function worldVitality(){ return Math.max(0, Math.min(100, ensureWorld().vitality)); }
 function bumpWorld(n){ ensureWorld(); G.world.vitality = Math.max(0, Math.min(100, (G.world.vitality||60)+n)); }
+// 🌦️ a vila reage DURANTE o dia (não só no fechamento): se tem missão atrasada agora, ela murcha um pouquinho
+// a cada 15min (cosmético, só NUNCA empurra a vitalidade pra cima — a punição "de verdade" continua só no fechamento do dia)
+function tickLiveVitality(){
+  ensureWorld();
+  if(!hasLateMission()) return;
+  const now = Date.now();
+  if((G.world._lastLateDecayTs||0) && now - G.world._lastLateDecayTs < 900000) return;
+  G.world._lastLateDecayTs = now;
+  if(G.world.vitality > 15) G.world.vitality = Math.max(15, G.world.vitality - 2);
+}
 // 🧬 cada vila é única conforme o traço do dono
 function traitOf(name){
   if(name==='Rodrigo') return {key:'smart',  roofs:['#3f6da0','#3a7a6a','#5a6acb','#46794a','#4a7bd2'], accent:'#6fb0ff', lines:['🤓','📖','🧠','📐','✅'], speed:0.9, wob:0.6};
@@ -3706,13 +3716,13 @@ function viewedVillageData(name){
   const me = name === (G.profile && G.profile.name);
   const col = (CHAR_PRESETS[name]||{}).armor || '#888';
   const wOf = c => Math.max(0, Math.min(1, (c||0)/1500));   // 💰 riqueza pela LulaCoins
-  if(me){ const w=ensureWorld(); return {name, me:true, vitality:worldVitality(), missions:G.totalMissions||0, built:w.built||0, decay:w.decay||0, seeds:w.seeds||0, wealth:wOf(G.coins), late:hasLateMission(), offline:false, streak:(G.streak||0), wokeUpDate:(G.wokeUpDate||''), color:col}; }
+  if(me){ const w=ensureWorld(); return {name, me:true, vitality:worldVitality(), missions:G.totalMissions||0, built:w.built||0, decay:w.decay||0, seeds:w.seeds||0, wealth:wOf(G.coins), late:hasLateMission(), offline:false, streak:(G.streak||0), wokeUpDate:(G.wokeUpDate||''), level:(G.level||1), color:col}; }
   const d = onlineData[name];
   const recent = d && d.updatedAt && (Date.now()-d.updatedAt < 45*60000);
   // 👹 atraso do mano: calcula pelas missões de hoje que ele sincronizou (vencidas, não feitas, não iniciadas)
   const lateOther = !!(d && Array.isArray(d.todayMissions) && d.todayMissions.some(m=>rivalMissionLate(m)));
-  if(d && d.vitality!=null){ const miss=d.totalMissions||0; return {name, me:false, vitality:d.vitality, missions:miss, built:miss, decay:Math.round((1-d.vitality/100)*8), seeds:0, wealth:wOf(d.coins), late:lateOther, offline:!recent, streak:(d.streak||0), wokeUpDate:((d&&d.wokeUpDate)||''), color:col}; }
-  return {name, me:false, vitality:null, missions:(d&&d.totalMissions)||0, built:(d&&d.totalMissions)||0, decay:0, seeds:0, wealth:0.4, late:false, offline:true, streak:0, wokeUpDate:'', color:col};
+  if(d && d.vitality!=null){ const miss=d.totalMissions||0; return {name, me:false, vitality:d.vitality, missions:miss, built:miss, decay:Math.round((1-d.vitality/100)*8), seeds:0, wealth:wOf(d.coins), late:lateOther, offline:!recent, streak:(d.streak||0), wokeUpDate:((d&&d.wokeUpDate)||''), level:(d.level||1), color:col}; }
+  return {name, me:false, vitality:null, missions:(d&&d.totalMissions)||0, built:(d&&d.totalMissions)||0, decay:0, seeds:0, wealth:0.4, late:false, offline:true, streak:0, wokeUpDate:'', level:((d&&d.level)||1), color:col};
 }
 // 🌙 a vila inteira "some" (todos dormindo) a partir das 22h até o herói apertar "Acordei"
 function villageAsleep(data){
@@ -3768,7 +3778,7 @@ function buildVillageScene(name, missions, built, decay, seeds){
   const rng = _wrng(_whash(name));
   const mi = missions||0;
   const trait = traitOf(name);
-  const total = Math.min(24, 3 + Math.floor(mi/6));   // SEMPRE cresce
+  const total = Math.min(24, Math.floor(mi/5));   // 🏘️ a vila começa DO ZERO — cada casa é conquistada de verdade (1 a cada 5 missões)
   const twoFloorChance = Math.max(0, Math.min(0.5, (mi-30)/320));
   // lotes em 4 quadrantes (centro reservado p/ praça + estradas em cruz)
   const quads=[[0.08,0.40,0.13,0.43],[0.60,0.92,0.13,0.43],[0.08,0.40,0.59,0.90],[0.60,0.92,0.59,0.90]];
@@ -3792,15 +3802,18 @@ function buildVillageScene(name, missions, built, decay, seeds){
   const _maxSigns = Math.min(buildings.length, 8);
   let _bi=0;
   _topCats.forEach(e=>{ const share=Math.max(1, Math.round(e[1]/_totC*_maxSigns)); for(let k=0;k<share && _bi<_maxSigns;k++){ buildings[_bi++].catIcon=e[0]; } });
-  const spots = { well:{mx:0.5,my:0.5}, market:{mx:0.66,my:0.5}, plaza:{mx:0.42,my:0.55}, field:{mx:0.5,my:0.87}, mine:{mx:0.07,my:0.2}, lumber:{mx:0.93,my:0.2}, site:{mx:0.5,my:0.16} };
+  const spots = { well:{mx:0.5,my:0.5}, market:{mx:0.66,my:0.5}, plaza:{mx:0.42,my:0.55}, field:{mx:0.5,my:0.87}, mine:{mx:0.07,my:0.2}, lumber:{mx:0.93,my:0.2}, site:{mx:0.5,my:0.16}, monument:{mx:0.84,my:0.66} };
+  // 🌾 a horta só aparece depois de um progresso real (não é decoração de fábrica)
+  const FIELD_UNLOCK_BUILT = 8;
+  const fieldUnlocked = (built||0) >= FIELD_UNLOCK_BUILT;
   const trees=[]; for(let i=0;i<14;i++){ const mx=0.04+rng()*0.92, my=0.12+rng()*0.8; if(Math.abs(mx-0.5)<0.09||Math.abs(my-0.5)<0.08) continue; trees.push({mx,my,s:0.7+rng()*0.6,ph:rng()*6.28}); }
   // 🌲 FLORESTAS ao redor da vila — molduram o mapa (faixas externas, fora dos lotes/estradas)
   const forest=[]; const fzones=[[0.0,0.32,-0.04,0.10],[0.68,1.0,-0.04,0.10],[-0.02,0.10,0.12,0.5],[0.90,1.02,0.12,0.5],[0.0,0.32,0.92,1.04],[0.68,1.0,0.92,1.04]];
   fzones.forEach(z=>{ const cnt=6+(rng()*5|0); for(let i=0;i<cnt;i++){ const mx=z[0]+rng()*(z[1]-z[0]), my=z[2]+rng()*(z[3]-z[2]); forest.push({mx,my,s:0.7+rng()*0.7,ph:rng()*6.28,pine:rng()<0.62}); } });
   const lamps=[{mx:0.3,my:0.5},{mx:0.7,my:0.5},{mx:0.5,my:0.28},{mx:0.5,my:0.74}];
   const roles=['miner','lumber','builder','water','merchant','farmer','social','wander'];
-  // população cresce com a vila (built); + crianças por marcos
-  const popN = Math.max(6, Math.min(16, 6 + Math.floor((built||0)/8)));
+  // 👥 começa com só 2 aldeões — população cresce de verdade com a vila (built); + crianças por marcos
+  const popN = Math.max(2, Math.min(16, 2 + Math.floor((built||0)/6)));
   const kidsN = Math.min(6, Math.floor((built||0)/20));
   const npcs=[];
   for(let i=0;i<popN+kidsN;i++){ const kid=i>=popN; const pers=_PERSONA[rng()*_PERSONA.length|0]; npcs.push({
@@ -3839,7 +3852,7 @@ function buildVillageScene(name, missions, built, decay, seeds){
   const sparks=[];    // partículas (faíscas mina/fogo)
   return {name, missions:mi, builtN:built||0, decayN:decay||0, seedsN:seeds||0, trait, key:name+'|'+total, popN, kidsN,
     buildings, trees, forest, lamps, npcs, spots, props, sprouts:sproutsPts, blights, demon, landmark, site, stumps, fires, sparks, evil:null,
-    stars, rain, clouds, patches};
+    stars, rain, clouds, patches, fieldUnlocked};
 }
 
 function sizeWorldCanvas(){
@@ -4322,6 +4335,25 @@ function drawLandmarkTD(x, sx, sy, s, kind, v, night, ts){
     x.fillStyle=_nt('#6b4a2a',night); x.fillRect(sx-s*0.18,sy-s*1.0,s*0.36,s*1.0); x.fillStyle=_nt(_wmix('#357f34','#6f6336',1-v),night); x.beginPath(); x.arc(sx,sy-s*1.2,s*0.8,0,6.28); x.arc(sx-s*0.5,sy-s*0.95,s*0.5,0,6.28); x.arc(sx+s*0.5,sy-s*0.95,s*0.5,0,6.28); x.fill();
   }
 }
+// 🏆 MONUMENTO DE NÍVEL — cresce de andar conforme o herói sobe de nível (marco PERMANENTE de progresso)
+function drawLevelMonumentTD(x, sx, sy, s, tier, night, ts){
+  x.fillStyle='rgba(0,0,0,.22)'; x.beginPath(); x.ellipse(sx, sy+s*0.05, s*0.62, s*0.16, 0,0,6.28); x.fill();
+  const w = s*0.6;
+  for(let i=0;i<tier;i++){
+    const shrink = 1-i*0.07;
+    const fy = sy - s*0.34*i;
+    const shade = _nt(_wmix('#e3cf8a','#8a6a2a', i/Math.max(1,tier-1)*0.55), night);
+    x.fillStyle = shade;
+    _rr(x, sx-w*shrink/2, fy-s*0.32, w*shrink, s*0.32, s*0.05); x.fill();
+    x.strokeStyle='rgba(0,0,0,.28)'; x.lineWidth=Math.max(1,s*0.025); x.strokeRect(sx-w*shrink/2, fy-s*0.32, w*shrink, s*0.32);
+  }
+  const topY = sy - s*0.34*tier;
+  const starR = s*0.15;
+  x.fillStyle='#ffd24a'; x.beginPath(); x.arc(sx, topY-starR, starR*0.62, 0, 6.28); x.fill();
+  x.strokeStyle='#fff3c0'; x.lineWidth=Math.max(1,s*0.035);
+  for(let k=0;k<4;k++){ const a=ts*0.0012+k*1.5708; x.beginPath(); x.moveTo(sx,topY-starR); x.lineTo(sx+Math.cos(a)*starR*1.4, topY-starR+Math.sin(a)*starR*1.4); x.stroke(); }
+  if(night){ x.fillStyle='rgba(255,224,150,.5)'; x.beginPath(); x.arc(sx, topY-starR, starR*1.5, 0, 6.28); x.fill(); }
+}
 function drawVillage(ts){
   const cv = document.getElementById('world-canvas'); if(!cv) return;
   const W = cv.width, H = cv.height; if(!W || !H) return;
@@ -4376,7 +4408,9 @@ function drawVillage(ts){
   sc.lamps.forEach(l=> ents.push([MY(l.my), ()=> drawLampTD(x, MX(l.mx), MY(l.my), SC(l.my)*W*0.022, v, night)]));
   ents.push([MY(0.5), ()=> drawWellTD(x, MX(0.5), MY(0.5), SC(0.5)*W*0.03, v, night)]);
   if(v>0.3) ents.push([MY(0.5), ()=> drawStallTD(x, MX(sc.spots.market.mx), MY(0.5), SC(0.5)*W*0.028, v, night)]);
-  ents.push([MY(0.87), ()=> drawFieldTD(x, MX(0.5), MY(0.87), SC(0.87)*W*0.05, v, night)]);
+  // 🌾 horta: só existe depois de um progresso real (não nasce pronta)
+  if(sc.fieldUnlocked) ents.push([MY(0.87), ()=> drawFieldTD(x, MX(0.5), MY(0.87), SC(0.87)*W*0.05, v, night)]);
+  if(data.me && sc.fieldUnlocked && !G.world.fieldEvtShown){ G.world.fieldEvtShown=true; save(); WORLD._evt={emoji:'🌾', ts:Date.now(), done:false}; }
   // pontos de trabalho + marco do traço
   ents.push([MY(sc.spots.mine.my), ()=> drawMineTD(x, MX(sc.spots.mine.mx), MY(sc.spots.mine.my), SC(sc.spots.mine.my)*W*0.038, v, night)]);
   ents.push([MY(sc.spots.lumber.my), ()=> drawWoodpileTD(x, MX(sc.spots.lumber.mx), MY(sc.spots.lumber.my), SC(sc.spots.lumber.my)*W*0.03, v, night)]);
@@ -4384,6 +4418,9 @@ function drawVillage(ts){
   if(sc.site.prog>=1){ if(sc.buildings.length<42){ sc.buildings.push({mx:Math.max(0.08,Math.min(0.92,sc.site.mx)), my:Math.max(0.14,Math.min(0.44,sc.site.my+0.05)), w:0.1, roof:sc.site.roof, wall:sc.site.wall, roofStyle:sc.site.roofStyle, floors:1, chimney:true, garden:Math.random()<0.4, cph:Math.random()*6.28}); } WORLD._evt={text:'🏗️ Casa nova construída!', ts:Date.now(), done:false}; sc.site.prog=0; sc.site.logs=0; sc.site.mx=0.2+Math.random()*0.6; sc.site.my=0.14+Math.random()*0.1; sc.site.roof=sc.trait.roofs[Math.random()*sc.trait.roofs.length|0]; }
   ents.push([MY(sc.site.my), ()=> drawSiteTD(x, MX(sc.site.mx), MY(sc.site.my), SC(sc.site.my)*W*0.04, 0.12+0.88*sc.site.prog, v, night, ts)]);
   ents.push([MY(sc.landmark.my), ()=> drawLandmarkTD(x, MX(sc.landmark.mx), MY(sc.landmark.my), SC(sc.landmark.my)*W*0.052, sc.landmark.kind, v, night, ts)]);
+  // 🏆 monumento de nível — só aparece a partir de um nível mínimo (vila começando não tem ainda)
+  { const lvlTier = Math.min(5, Math.floor((data.level||1)/4));
+    if(lvlTier>=1){ const mm=sc.spots.monument; ents.push([MY(mm.my), ()=> drawLevelMonumentTD(x, MX(mm.mx), MY(mm.my), SC(mm.my)*W*0.045, lvlTier, night, ts)]); } }
   for(let i=sc.stumps.length-1;i>=0;i--){ const st=sc.stumps[i]; st.t-=dt; if(st.t<=0){ sc.stumps.splice(i,1); continue; } const my=st.my; ents.push([MY(my), ()=> drawStumpTD(x, MX(st.mx), MY(my), SC(my)*W*0.018, night)]); }
   // 💰 fonte da praça quando a vila é rica
   if(wealth>0.55) ents.push([MY(0.55), ()=> drawFountainTD(x, MX(0.5), MY(0.55), SC(0.55)*W*0.034, v, night, ts, wealth)]);
@@ -8463,7 +8500,7 @@ function finishInit() {
   setInterval(checkNextMissionReminder, 600000);
   setTimeout(checkNextMissionReminder, 90000);   // primeiro lembrete ~1,5 min após abrir
   // reavalia atraso dos manos (depende da hora) a cada 2 min, mesmo sem mudança no Firebase
-  setInterval(function(){ try{ renderLateBanner(); checkRivalOverdue(); renderTeamMissions(); }catch(e){} }, 120000);
+  setInterval(function(){ try{ renderLateBanner(); checkRivalOverdue(); renderTeamMissions(); tickLiveVitality(); }catch(e){} }, 120000);
   // 🏘️ status da vila ao vivo (atualiza "Hoje: ✅/▶️/⬜" enquanto a aba Mundo está aberta)
   setInterval(function(){ try{ if(_worldVisible()) renderWorldStatus(); }catch(e){} }, 4000);
   // botão "Acordei": verifica o nerf das 9h ao abrir e a cada minuto
@@ -8614,7 +8651,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.28 • v83';
+  window.APP_VERSION = '2026.06.28 • v84';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
