@@ -255,7 +255,18 @@
   .world-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
   .world-tab { flex:1 1 auto; min-width:64px; padding:7px 8px; font-size:11px; border:1px solid var(--border); border-radius:8px; background:#1a1426; color:var(--text); cursor:pointer; border-bottom:2px solid var(--wc,#888); transition:background .15s, box-shadow .15s; }
   .world-tab.active { background:rgba(255,255,255,.08); box-shadow:0 0 10px var(--wc,#888); color:#fff; }
-  .world-stage { width:100%; aspect-ratio:16/10; border-radius:12px; overflow:hidden; border:1px solid var(--border); background:#0a0814; box-shadow:inset 0 0 24px rgba(0,0,0,.5); }
+  /* 🎮 moldura retrô da vila (inspirada em janelas de sim de vila pixelada) */
+  .world-stage { position:relative; width:100%; aspect-ratio:16/10; border-radius:7px; overflow:hidden;
+    border:3px solid #1a1422; background:#0a0814;
+    box-shadow: 0 0 0 2px #4a4060, 0 0 0 4px #1a1422, inset 0 0 26px rgba(0,0,0,.55), 0 6px 16px rgba(0,0,0,.5); }
+  .world-stage:before{ content:''; position:absolute; inset:0; z-index:5; pointer-events:none; border-radius:5px;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
+  .world-stage:after{ content:''; position:absolute; inset:0; z-index:6; pointer-events:none;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.10) 0px, rgba(0,0,0,.10) 1px, transparent 1px, transparent 3px);
+    mix-blend-mode:multiply; opacity:.35; }
+  .world-stage-corner{ position:absolute; width:7px; height:7px; background:#4a4060; z-index:7; pointer-events:none; }
+  .world-stage-corner.tl{ top:0; left:0; } .world-stage-corner.tr{ top:0; right:0; }
+  .world-stage-corner.bl{ bottom:0; left:0; } .world-stage-corner.br{ bottom:0; right:0; }
   #world-canvas { width:100%; height:100%; display:block; }
   .world-status { margin-top:10px; }
   .ws-head { font-size:14px; }
@@ -1899,7 +1910,10 @@
         <div class="section-title">🏘️ A VILA</div>
         <div class="config-hint" style="margin-bottom:8px">A vila de cada um reflete a vida real: cresce quando você cumpre suas missões e definha quando você some.</div>
         <div id="world-tabs" class="world-tabs"></div>
-        <div class="world-stage"><canvas id="world-canvas"></canvas></div>
+        <div class="world-stage"><canvas id="world-canvas"></canvas>
+          <span class="world-stage-corner tl"></span><span class="world-stage-corner tr"></span>
+          <span class="world-stage-corner bl"></span><span class="world-stage-corner br"></span>
+        </div>
         <div id="world-status" class="world-status"></div>
         <div class="zone-grid" id="zone-grid" style="display:none"></div>
       </div>
@@ -3514,10 +3528,10 @@ function worldVitality(){ return Math.max(0, Math.min(100, ensureWorld().vitalit
 function bumpWorld(n){ ensureWorld(); G.world.vitality = Math.max(0, Math.min(100, (G.world.vitality||60)+n)); }
 // 🧬 cada vila é única conforme o traço do dono
 function traitOf(name){
-  if(name==='Rodrigo') return {key:'smart',  roofs:['#3f6da0','#3a7a6a','#5a6acb','#46794a','#4a7bd2'], accent:'#6fb0ff', lines:['Estudei isso ontem 🤓','A lógica é clara.','Conhecimento é poder.','Tô lendo um livro 📖','Planejei tudo.'], speed:0.9, wob:0.6};
-  if(name==='Craudo'||name==='Claudio') return {key:'strong', roofs:['#b03a4a','#b5482f','#8a4a30','#c08a2a','#9a3a2a'], accent:'#ff7a5a', lines:['Bora treinar! 💪','Sem dor, sem ganho!','Tô forte hoje!','Mais um, mais um!','Peso é vida.'], speed:1.05, wob:0.9, big:0.7};
-  if(name==='Mizuki') return {key:'crazy',  roofs:['#a44ad2','#e87fb0','#3fb6c4','#e0a93e','#e8703a'], accent:'#e87fb0', lines:['UHUUL! 🤪','Cadê a festa?!','Eu sou o caos 🎉','Doidera total!','Vrau vrau!'], speed:1.4, wob:1.8, jitter:1};
-  return {key:'calm', roofs:_W_ROOF, accent:'#7fe0a0', lines:['Que paz...','Natureza boa 🌿','Tudo em harmonia.','Dia tranquilo.'], speed:1.0, wob:0.8};
+  if(name==='Rodrigo') return {key:'smart',  roofs:['#3f6da0','#3a7a6a','#5a6acb','#46794a','#4a7bd2'], accent:'#6fb0ff', lines:['🤓','📖','🧠','📐','✅'], speed:0.9, wob:0.6};
+  if(name==='Craudo'||name==='Claudio') return {key:'strong', roofs:['#b03a4a','#b5482f','#8a4a30','#c08a2a','#9a3a2a'], accent:'#ff7a5a', lines:['💪','🏋️','🔥','👊','🥩'], speed:1.05, wob:0.9, big:0.7};
+  if(name==='Mizuki') return {key:'crazy',  roofs:['#a44ad2','#e87fb0','#3fb6c4','#e0a93e','#e8703a'], accent:'#e87fb0', lines:['🤪','🎉','🌀','🥳','🤸'], speed:1.4, wob:1.8, jitter:1};
+  return {key:'calm', roofs:_W_ROOF, accent:'#7fe0a0', lines:['🌿','🍃','😌','🕊️'], speed:1.0, wob:0.8};
 }
 // missão de hoje com horário já vencido e não feita
 function hasLateMission(){
@@ -3692,13 +3706,20 @@ function viewedVillageData(name){
   const me = name === (G.profile && G.profile.name);
   const col = (CHAR_PRESETS[name]||{}).armor || '#888';
   const wOf = c => Math.max(0, Math.min(1, (c||0)/1500));   // 💰 riqueza pela LulaCoins
-  if(me){ const w=ensureWorld(); return {name, me:true, vitality:worldVitality(), missions:G.totalMissions||0, built:w.built||0, decay:w.decay||0, seeds:w.seeds||0, wealth:wOf(G.coins), late:hasLateMission(), offline:false, streak:(G.streak||0), color:col}; }
+  if(me){ const w=ensureWorld(); return {name, me:true, vitality:worldVitality(), missions:G.totalMissions||0, built:w.built||0, decay:w.decay||0, seeds:w.seeds||0, wealth:wOf(G.coins), late:hasLateMission(), offline:false, streak:(G.streak||0), wokeUpDate:(G.wokeUpDate||''), color:col}; }
   const d = onlineData[name];
   const recent = d && d.updatedAt && (Date.now()-d.updatedAt < 45*60000);
   // 👹 atraso do mano: calcula pelas missões de hoje que ele sincronizou (vencidas, não feitas, não iniciadas)
   const lateOther = !!(d && Array.isArray(d.todayMissions) && d.todayMissions.some(m=>rivalMissionLate(m)));
-  if(d && d.vitality!=null){ const miss=d.totalMissions||0; return {name, me:false, vitality:d.vitality, missions:miss, built:miss, decay:Math.round((1-d.vitality/100)*8), seeds:0, wealth:wOf(d.coins), late:lateOther, offline:!recent, streak:(d.streak||0), color:col}; }
-  return {name, me:false, vitality:null, missions:(d&&d.totalMissions)||0, built:(d&&d.totalMissions)||0, decay:0, seeds:0, wealth:0.4, late:false, offline:true, streak:0, color:col};
+  if(d && d.vitality!=null){ const miss=d.totalMissions||0; return {name, me:false, vitality:d.vitality, missions:miss, built:miss, decay:Math.round((1-d.vitality/100)*8), seeds:0, wealth:wOf(d.coins), late:lateOther, offline:!recent, streak:(d.streak||0), wokeUpDate:((d&&d.wokeUpDate)||''), color:col}; }
+  return {name, me:false, vitality:null, missions:(d&&d.totalMissions)||0, built:(d&&d.totalMissions)||0, decay:0, seeds:0, wealth:0.4, late:false, offline:true, streak:0, wokeUpDate:'', color:col};
+}
+// 🌙 a vila inteira "some" (todos dormindo) a partir das 22h até o herói apertar "Acordei"
+function villageAsleep(data){
+  const h = new Date().getHours();
+  if(!(h>=22 || h<6)) return false;   // só de noite
+  const wd = data.me ? (G.wokeUpDate||'') : (data.wokeUpDate||'');
+  return wd !== todayStr();
 }
 // 🔴 atividade de HOJE da vila (pra deixar a vila do mano viva em tempo real)
 function villageTodayActivity(name){
@@ -3844,25 +3865,26 @@ function _wHat(x,px,cy,r,vg,dir){
   if(vg.hat===1){ x.fillStyle='#39599a'; x.beginPath(); x.arc(px,cy-r*0.25,r*0.98,Math.PI,0); x.fill(); x.fillStyle='#2a487c'; x.fillRect(dir>0?px:px-r*1.15, cy-r*0.42, r*1.15, r*0.22); }
   else { x.fillStyle='#c8a24a'; x.beginPath(); x.ellipse(px, cy-r*0.55, r*1.45, r*0.34, 0,0,6.28); x.fill(); x.fillStyle='#b3902f'; x.beginPath(); x.arc(px,cy-r*0.62,r*0.62,Math.PI,0); x.fill(); }
 }
+// 💬 aldeões conversam SÓ por emoji (sem texto)
 const _NPC_LINES = {
-  happy:['Que dia lindo!','Tô bem hoje 😊','A vila tá viva!','Bom te ver!','Vamos prosperar!','Cheirinho de pão 🥐'],
-  ok:['Tudo certo por aqui.','Mais um dia...','Vamos levando.','Trabalho não falta.','Bom dia!'],
-  sad:['A vila tá largada...','Cadê todo mundo?','Tá difícil 😕','Precisamos de ajuda.','Que frio...','Saudade do movimento.'],
-  water:['Buscando água 💧','O poço tá cheio!'],
-  merchant:['Comprem, comprem! 🛒','Mercado aberto!'],
-  farmer:['Plantando 🌱','A colheita vem aí.'],
-  social:['Soube da novidade? 💬','Bora conversar!'],
-  gossip:['A vila tá maior! 🏘️','Construíram casa nova 🏗️','Madeira fresca chegando 🪓','Trouxeram minério da mina ⛏️','O mercado tá movimentado.','Tanta gente nova!'],
-  rich:['Que vila próspera! 🤑','Ouro pra todo lado!','Tô rico! 💰','A feira tá cheia!'],
-  poor:['Tá difícil ganhar a vida...','Cadê o dinheiro? 😟','Vila pobre coitada.','Nem pão sobra.']
+  happy:['😊','🏘️','👋','🌟','🥐','✨'],
+  ok:['🙂','⏳','🚶','🔨','☀️'],
+  sad:['🥀','🤷','😕','🆘','🥶','💭'],
+  water:['💧','🪣'],
+  merchant:['🛒','🏪'],
+  farmer:['🌱','🌾'],
+  social:['💬','🗣️'],
+  gossip:['🏘️','🏗️','🪵','⛏️','🛒','👥'],
+  rich:['🤑','💰','🪙','🎉'],
+  poor:['😟','💸','🥖','😔']
 };
-const _CHAT = [['Tudo bem?','Tudo ótimo! 😄'],['Viu a vila?','Tá linda!'],['Trocas comigo? 🤝','Fechado! 🤝'],['Bom dia!','Bom dia, amigo!'],['Pega leve hein','Hahaha 😜'],['Cuida-se!','Você também ❤️'],['Troca um pão? 🍞','Toma aí! 🤝']];
-// 🗯️ rivalidade entre vilas por traço (inteligente x forte etc)
+const _CHAT = [['🙂','😄'],['👀','✨'],['🤝','🤝'],['☀️','☀️'],['😅','😜'],['🥰','❤️'],['🍞','🤝']];
+// 🗯️ rivalidade entre vilas por traço (inteligente x forte etc) — só emoji
 const _RIVAL = {
-  smart:{ strong:'Força sem cabeça não leva a nada 🙄', crazy:'O caos do Mizuki me dá dor de cabeça 😵', calm:'Devíamos estudar mais que eles.' },
-  strong:{ smart:'Tanto livro e nenhum músculo 💪😤', crazy:'Esses loucos não treinam!', calm:'Mais ação, menos enrolação!' },
-  crazy:{ smart:'Os nerds são uns chatos kkk', strong:'Marombeiro chato 😜', calm:'Que vila sem graça a deles!' },
-  calm:{ smart:'Vivem se achando...', strong:'Só sabem gritar.', crazy:'Que bagunça a vila deles 😅' }
+  smart:{ strong:'🙄💪', crazy:'😵🌀', calm:'🤓📖' },
+  strong:{ smart:'💪😤', crazy:'😅🏋️', calm:'👊🔥' },
+  crazy:{ smart:'🤪📚', strong:'😜💪', calm:'🤪😴' },
+  calm:{ smart:'😌🤓', strong:'😌💪', crazy:'😅🌀' }
 };
 function _crossLine(sc){
   const self=sc.name, others=ONLINE_PLAYERS.filter(n=>n!==self);
@@ -3870,16 +3892,16 @@ function _crossLine(sc){
   const o=others[Math.random()*others.length|0], od=(typeof onlineData!=='undefined')?onlineData[o]:null;
   const myT=sc.trait.key, oT=traitOf(o).key;
   if(_RIVAL[myT] && _RIVAL[myT][oT] && Math.random()<0.55) return _RIVAL[myT][oT];
-  if(od && od.vitality!=null){ if(od.vitality<30) return 'A vila do '+o+' tá um caos 😬'; if(od.vitality>80) return 'A vila do '+o+' tá voando, hein 👀'; }
-  return 'Será que o '+o+' fez as missões hoje? 🤔';
+  if(od && od.vitality!=null){ if(od.vitality<30) return '😬🏘️'; if(od.vitality>80) return '🚀👀'; }
+  return '🤔❓';
 }
 const _PERSONA = [
-  {id:'amigavel',   lines:['Oi, tudo bem? 😄','Que bom te ver!','Bom dia, vizinho!'], spd:1.0,  social:1.5},
-  {id:'rabugento',  lines:['Hmpf.','Sai da frente.','Que barulho é esse...','Não enche.'], spd:0.85, social:0.3},
-  {id:'preguicoso', lines:['Que sono... 😴','Depois eu faço.','Cinco minutinhos.'], spd:0.65, social:0.7},
-  {id:'trabalhador',lines:['Ao trabalho! 💪','Sem preguiça!','Produzindo.'], spd:1.25, social:0.8},
-  {id:'brincalhao', lines:['Hehe 😜','Pega essa!','Vida é festa!'], spd:1.15, social:1.4},
-  {id:'timido',     lines:['...oi.','*acena*','Hm... bom dia.'], spd:0.9,  social:0.4}
+  {id:'amigavel',   lines:['😄','👋','🙂'], spd:1.0,  social:1.5},
+  {id:'rabugento',  lines:['😠','🙅','😤'], spd:0.85, social:0.3},
+  {id:'preguicoso', lines:['😴','🛌','🥱'], spd:0.65, social:0.7},
+  {id:'trabalhador',lines:['💪','🛠️','🚀'], spd:1.25, social:0.8},
+  {id:'brincalhao', lines:['😜','🎉','😆'], spd:1.15, social:1.4},
+  {id:'timido',     lines:['🙊','👋','😶'], spd:0.9,  social:0.4}
 ];
 // 🕒 ROTINA INDIVIDUAL: cada NPC tem horários PRÓPRIOS (acordar/almoço/fim do trampo/dormir),
 // derivados deterministicamente do seed + personalidade. Trabalhador acorda cedo, preguiçoso
@@ -3915,9 +3937,12 @@ function _npcLine(npc, mood){
   if(rl && Math.random()<0.4) return rl[Math.random()*rl.length|0];
   const pool=_NPC_LINES[mood]||_NPC_LINES.ok; return pool[Math.random()*pool.length|0];
 }
+// 🚶 escolhe pra onde o aldeão vai — agora com PROPÓSITO: vai quase sempre pro posto do seu papel,
+// e quando "passeia" é um giro CURTO perto de onde já está (não mais teleporte pro outro lado do mapa).
 function pickTarget(npc, sc){
-  const s=sc.spots; let t; const r=Math.random();
-  if(r<0.28){ t={mx:0.1+Math.random()*0.8, my:0.16+Math.random()*0.72}; npc._emote=''; }
+  const s=sc.spots; let t;
+  const r=Math.random();
+  if(r<0.1){ t={mx:Math.max(0.1,Math.min(0.9,npc.mx+(Math.random()-0.5)*0.32)), my:Math.max(0.16,Math.min(0.88,npc.my+(Math.random()-0.5)*0.26))}; npc._emote=''; }
   else if(npc.role==='miner'){ t=s.mine; npc._emote='⛏️'; }
   else if(npc.role==='lumber'){ t=sc.trees.length?sc.trees[(Math.random()*sc.trees.length)|0]:s.field; npc._emote='🪓'; }
   else if(npc.role==='builder'){ t=s.site; npc._emote='🏗️'; }
@@ -3925,8 +3950,10 @@ function pickTarget(npc, sc){
   else if(npc.role==='merchant'){ t=s.market; npc._emote='🛒'; }
   else if(npc.role==='farmer'){ t=s.field; npc._emote='🌱'; }
   else if(npc.role==='social'){ t=s.plaza; npc._emote='💬'; }
-  else { t={mx:0.1+Math.random()*0.8, my:0.16+Math.random()*0.72}; npc._emote=''; }
+  else { t={mx:Math.max(0.1,Math.min(0.9,npc.mx+(Math.random()-0.5)*0.32)), my:Math.max(0.16,Math.min(0.88,npc.my+(Math.random()-0.5)*0.26))}; npc._emote=''; }
   npc.tx=t.mx+(Math.random()-0.5)*0.05; npc.ty=t.my+(Math.random()-0.5)*0.05;
+  // 💭 balão de intenção: mostra a emoji do que ele vai fazer JÁ ao sair andando (não só quando chega)
+  npc.bubble = npc._emote || '🚶'; npc.bubbleT = 1300;
 }
 function _clampNpc(n){ n.mx=Math.max(0.05,Math.min(0.95,n.mx)); n.my=Math.max(0.12,Math.min(0.92,n.my)); }
 function _moveTo(npc, dt, tx, ty, mult){
@@ -3954,7 +3981,7 @@ function updateNpc(npc, dt, ctx){
   if(npc.hurt>0) npc.hurt-=dt;
   if(npc.cd>0) npc.cd-=dt;
   if(npc.dead){ npc.state='dead'; return; }   // aldeão caído — fica no chão até a paz voltar
-  if(npc.child){ npc.age=(npc.age||0)+dt; if(npc.age>40000){ npc.child=false; npc.sc=npc.sc/0.62; npc.role=['water','merchant','social','wander'][Math.random()*4|0]; npc.jit=Math.max(0,(npc.jit||0)-0.8); npc.bubble='🎂 Cresci!'; npc.bubbleT=2600; WORLD._evt={text:'🎓 Uma criança cresceu na vila!', ts:Date.now(), done:false}; } }
+  if(npc.child){ npc.age=(npc.age||0)+dt; if(npc.age>40000){ npc.child=false; npc.sc=npc.sc/0.62; npc.role=['water','merchant','social','wander'][Math.random()*4|0]; npc.jit=Math.max(0,(npc.jit||0)-0.8); npc.bubble='🎉'; npc.bubbleT=2600; WORLD._evt={emoji:'🎓', ts:Date.now(), done:false}; } }
   // 😱 fugir do ser maléfico
   if(ctx.demon){ const ddx=npc.mx-ctx.demon.mx, ddy=npc.my-ctx.demon.my, dd=Math.hypot(ddx,ddy);
     if(dd<0.3){ npc.fear=1; const n=dd||0.001, st=npc.sp*2*dt*0.00009; npc.mx+=ddx/n*st; npc.my+=ddy/n*st; npc.face=ddx>=0?1:-1; npc.state='walk'; npc.ph+=dt*0.04; if(npc.bubbleT<=0){ npc.bubble=Math.random()<0.5?'😱':'😭'; npc.bubbleT=900; } _clampNpc(npc); return; }
@@ -3969,7 +3996,7 @@ function updateNpc(npc, dt, ctx){
   if(phase==='lunch'){
     const mk=sc.spots.market; const seat=(npc._seat==null)?(npc._seat=(npc.ph*6.28)):npc._seat;
     const tx=mk.mx-0.02+Math.cos(seat)*0.06, ty=mk.my+0.07+Math.sin(seat)*0.035;
-    if(_moveTo(npc,dt,tx,ty,1) < 0.03){ npc.state='act'; npc.ph+=dt*0.01; sc.lunchOn=true; if(npc.bubbleT<=0 && Math.random()<0.02){ npc.bubble=['😋','🍞','🍲','🥗','Que delícia!','Bom apetite!'][Math.random()*6|0]; npc.bubbleT=1700; } } else npc.state='walk';
+    if(_moveTo(npc,dt,tx,ty,1) < 0.03){ npc.state='act'; npc.ph+=dt*0.01; sc.lunchOn=true; if(npc.bubbleT<=0 && Math.random()<0.02){ npc.bubble=['😋','🍞','🍲','🥗','🍽️'][Math.random()*5|0]; npc.bubbleT=1700; } } else npc.state='walk';
     return;
   }
   // 🌆 FIM DE TARDE / SOCIAL: festa se próspero, senão relaxa na praça/poço antes de recolher
@@ -3979,7 +4006,7 @@ function updateNpc(npc, dt, ctx){
       return;
     }
     // descanso: vagar devagar perto da praça/poço, conversar mais
-    if(npc.state==='act'){ npc.timer-=dt; if(npc.timer<=0){ npc.state='walk'; const sp=Math.random()<0.5?sc.spots.plaza:sc.spots.well; npc.tx=sp.mx+(Math.random()-0.5)*0.18; npc.ty=sp.my+(Math.random()-0.5)*0.14; } return; }
+    if(npc.state==='act'){ npc.timer-=dt; if(npc.timer<=0){ npc.state='walk'; const sp=Math.random()<0.5?sc.spots.plaza:sc.spots.well; npc.tx=sp.mx+(Math.random()-0.5)*0.18; npc.ty=sp.my+(Math.random()-0.5)*0.14; npc.bubble='💬'; npc.bubbleT=1200; } return; }
     if(_moveTo(npc,dt,npc.tx,npc.ty,0.7) > 0.02){ npc.state='walk'; return; }
     npc.state='act'; npc.timer=1800+Math.random()*3000; if(Math.random()<0.6){ npc.bubble=_pickBubble(npc, ctx); npc.bubbleT=2600; }
     return;
@@ -3987,7 +4014,7 @@ function updateNpc(npc, dt, ctx){
   // 🌅 ROTINA DA MANHÃ: ao acordar, passa no poço pra se lavar antes de ir trabalhar
   if(phase==='work' && ctx.hr<npc.sched.wake+1 && !npc._washed && !npc.child){
     const wl=sc.spots.well;
-    if(_moveTo(npc,dt, wl.mx+0.04, wl.my+0.05, 1) < 0.04){ npc.state='act'; if(npc.bubbleT<=0){ npc.bubble=['💦','🧼','Bom dia!','Que sono...','*boceja*'][Math.random()*5|0]; npc.bubbleT=1600; } if(Math.random()<0.04) sc.sparks.push({mx:wl.mx,my:wl.my,vx:(Math.random()-0.5)*0.3,vy:-0.2,t:400,col:'#a0d8ff'}); npc._washCd=(npc._washCd==null?1600:npc._washCd)-dt; if(npc._washCd<=0){ npc._washed=true; npc._washCd=null; } } else npc.state='walk';
+    if(_moveTo(npc,dt, wl.mx+0.04, wl.my+0.05, 1) < 0.04){ npc.state='act'; if(npc.bubbleT<=0){ npc.bubble=['💦','🧼','☀️','😪','🥱'][Math.random()*5|0]; npc.bubbleT=1600; } if(Math.random()<0.04) sc.sparks.push({mx:wl.mx,my:wl.my,vx:(Math.random()-0.5)*0.3,vy:-0.2,t:400,col:'#a0d8ff'}); npc._washCd=(npc._washCd==null?1600:npc._washCd)-dt; if(npc._washCd<=0){ npc._washed=true; npc._washCd=null; } } else npc.state='walk';
     return;
   }
   // 🪓 LENHADOR: vai na árvore → corta → carrega a tora até o canteiro
@@ -4011,7 +4038,7 @@ function updateNpc(npc, dt, ctx){
   // rotina normal
   if(npc.state==='act'){ npc.timer-=dt; if(npc.timer<=0){ npc.state='walk'; pickTarget(npc,sc); } return; }
   if(_moveTo(npc,dt,npc.tx,npc.ty,1) > 0.012){ npc.state='walk'; return; }
-  npc.state='act'; npc.timer=1400+Math.random()*3200;
+  npc.state='act'; npc.timer=3200+Math.random()*5200;   // fica mais tempo "trabalhando" antes de sair de novo
   if(npc._emote){ npc.bubble=npc._emote; npc.bubbleT=2200; npc._emote=''; }
   else if(Math.random()<0.55){ npc.bubble=_pickBubble(npc, ctx); npc.bubbleT=2600; }
 }
@@ -4057,7 +4084,11 @@ function drawNpcTD(x, sx, sy, S, npc, ts){
     const kneeY = hipY + legH*0.5 - lift*S*0.06;
     x.beginPath(); x.moveTo(cx,hipY); x.quadraticCurveTo(kneeX,kneeY, footX,footY); x.stroke();
     x.fillStyle=_wmix(npc.pants,'#000',0.32); x.beginPath(); x.ellipse(footX+dir*S*0.025, footY, S*0.075, S*0.035, 0,0,6.28); x.fill();
+    // 👟💨 poeirinha quando o pé toca o chão andando (melhora a sensação de movimento)
+    if(moving && lift<0.04 && Math.random()<0.05){ npc._dust={x:footX, y:footY, ts}; }
   }
+  // 💨 desenha a poeirinha do passo (some rapidinho)
+  if(npc._dust){ const age=ts-npc._dust.ts; if(age<380){ const a=1-age/380; x.globalAlpha=a*0.32; x.fillStyle='#cbb892'; x.beginPath(); x.ellipse(npc._dust.x, npc._dust.y, S*0.07*(1+age/380*0.6), S*0.03*(1+age/380*0.6), 0,0,6.28); x.fill(); x.globalAlpha=1; } else npc._dust=null; }
   // ===== BRAÇO DE TRÁS (atrás do torso) =====
   const shY=shoulderY+torsoH*0.16;
   const aB = moving ? Math.sin(p) : (dancing? 1 : (working? 0 : breath*0.4));
@@ -4366,7 +4397,7 @@ function drawVillage(ts){
   const perfectDay = !demonOn && act.allDone && !act.nodata;        // 🎆 fechou todas as missões de hoje
   const party = !demonOn && (v>=0.8 || festival || perfectDay) && !night;
   if(party){ ents.push([MY(0.56)+50000, ()=> drawBonfireTD(x, MX(0.42), MY(0.56), SC(0.56)*W*0.026, ts)]); if(Math.random()<0.09) sc.sparks.push({mx:0.42+(Math.random()-0.5)*0.12, my:0.5, vx:(Math.random()-0.5)*0.25, vy:-0.5, t:1100, col:'#ffe49a'}); }
-  if(festival && !sc._festShown){ sc._festShown=true; WORLD._evt={text:'🎉 FESTIVAL! '+(data.streak)+' dias de sequência!', ts:Date.now(), done:false}; }
+  if(festival && !sc._festShown){ sc._festShown=true; WORLD._evt={emoji:'🎆', ts:Date.now(), done:false}; }
   // 🎉 PACOTE 1: comemoração imediata ao concluir missão (efeito ao vivo na vila)
   if(WORLD._cheer){
     if(data.me && Date.now()-WORLD._cheer.ts < 4000){
@@ -4384,32 +4415,39 @@ function drawVillage(ts){
     const e=sc.evil; e.cd-=dt; e.fcd-=dt; e.ph+=dt*0.02;
     let near=null,nb=9; sc.npcs.forEach((np,i)=>{ if(i>=active||np.state==='home'||np.dead)return; const dd=Math.hypot(np.mx-e.mx,np.my-e.my); if(dd<nb){nb=dd;near=np;} });
     if(near){ const dx=near.mx-e.mx, dy=near.my-e.my, n=Math.hypot(dx,dy)||1; e.mx+=dx/n*0.00055*dt; e.my+=dy/n*0.00055*dt; e.face=dx>=0?1:-1; if(nb<0.05 && e.cd<=0){ near.hurt=420; near.hp=Math.max(0,(near.hp||1)-0.5); near.bubble='😭'; near.bubbleT=1200; near.mx+=dx/n*0.06; near.my+=dy/n*0.06; _clampNpc(near); e.cd=900; sc.sparks.push({mx:near.mx,my:near.my-0.02,vx:(Math.random()-0.5)*0.5,vy:-0.3,t:400,col:'#ff5a5a'});
-      if(near.hp<=0 && !near.dead){ near.dead=true; near.deadT=5000; near.state='dead'; near.bubble='💀'; near.bubbleT=2200; WORLD._evt={text:'☠️ O demônio matou um aldeão!', ts:Date.now(), done:false}; for(let k=0;k<7;k++) sc.sparks.push({mx:near.mx,my:near.my-0.02,vx:(Math.random()-0.5)*0.7,vy:-0.4-Math.random()*0.3,t:650,col:'#8a1020'}); } } }
+      if(near.hp<=0 && !near.dead){ near.dead=true; near.deadT=5000; near.state='dead'; near.bubble='💀'; near.bubbleT=2200; WORLD._evt={emoji:'☠️', ts:Date.now(), done:false}; for(let k=0;k<7;k++) sc.sparks.push({mx:near.mx,my:near.my-0.02,vx:(Math.random()-0.5)*0.7,vy:-0.4-Math.random()*0.3,t:650,col:'#8a1020'}); } } }
     e.mx=Math.max(0.06,Math.min(0.94,e.mx)); e.my=Math.max(0.13,Math.min(0.9,e.my));
     if(e.fcd<=0 && sc.buildings.length){ const bi=Math.random()*sc.buildings.length|0; if(!sc.fires.find(f=>f.i===bi)) sc.fires.push({i:bi,t:0}); e.fcd=4000+Math.random()*3000; }
     ents.push([MY(e.my)+99998, ()=> drawEvilNpcTD(x, MX(e.mx), MY(e.my), SC(e.my)*H*0.085, e, ts)]);
   } else { sc.evil=null; if(sc.fires.length) sc.fires.length=0;
     // ✨ com a paz de volta, os aldeões caídos se recuperam aos poucos
-    const dead=sc.npcs.find(n=>n.dead); if(dead){ sc.reviveCd=(sc.reviveCd||0)-dt; if(sc.reviveCd<=0){ dead.dead=false; dead.hp=1; dead.hurt=0; dead.state='walk'; dead.bubble='✨'; dead.bubbleT=2000; WORLD._evt={text:'✨ Um aldeão se recuperou!', ts:Date.now(), done:false}; for(let k=0;k<6;k++) sc.sparks.push({mx:dead.mx,my:dead.my-0.03,vx:(Math.random()-0.5)*0.4,vy:-0.35,t:600,col:'#a0e0ff'}); sc.reviveCd=5000; } } }
+    const dead=sc.npcs.find(n=>n.dead); if(dead){ sc.reviveCd=(sc.reviveCd||0)-dt; if(sc.reviveCd<=0){ dead.dead=false; dead.hp=1; dead.hurt=0; dead.state='walk'; dead.bubble='✨'; dead.bubbleT=2000; WORLD._evt={emoji:'✨', ts:Date.now(), done:false}; for(let k=0;k<6;k++) sc.sparks.push({mx:dead.mx,my:dead.my-0.03,vx:(Math.random()-0.5)*0.4,vy:-0.35,t:600,col:'#a0e0ff'}); sc.reviveCd=5000; } } }
   // 🔥 fogo nas casas
   for(let fi=sc.fires.length-1;fi>=0;fi--){ const f=sc.fires[fi]; const b=sc.buildings[f.i]; if(!b){ sc.fires.splice(fi,1); continue; } f.t+=dt; if(f.t>11000){ b.ruin=true; sc.fires.splice(fi,1); continue; } const bw=b.w*W*SC(b.my); ents.push([MY(b.my)+99990, ()=> drawFireTD(x, MX(b.mx), MY(b.my)-bw*0.5, bw*0.5, ts)]); }
-  if(!demonOn){ sc.rebuildCd=(sc.rebuildCd||0)-dt; if(sc.rebuildCd<=0){ const ru=sc.buildings.find(b=>b.ruin); if(ru){ ru.ruin=false; WORLD._evt={text:'🔨 Reconstruíram uma casa!', ts:Date.now(), done:false}; for(let k=0;k<6;k++) sc.sparks.push({mx:ru.mx, my:ru.my-0.03, vx:(Math.random()-0.5)*0.4, vy:-0.3, t:500, col:'#e8c27a'}); } sc.rebuildCd=4500; } }
-  if(WORLD._evt && Date.now()-WORLD._evt.ts<4000 && !WORLD._evt.done){ const n0=sc.npcs[0]; if(n0){ n0.bubble=WORLD._evt.text; n0.bubbleT=3500; } WORLD._evt.done=true; }
+  if(!demonOn){ sc.rebuildCd=(sc.rebuildCd||0)-dt; if(sc.rebuildCd<=0){ const ru=sc.buildings.find(b=>b.ruin); if(ru){ ru.ruin=false; WORLD._evt={emoji:'🔨', ts:Date.now(), done:false}; for(let k=0;k<6;k++) sc.sparks.push({mx:ru.mx, my:ru.my-0.03, vx:(Math.random()-0.5)*0.4, vy:-0.3, t:500, col:'#e8c27a'}); } sc.rebuildCd=4500; } }
+  if(WORLD._evt && Date.now()-WORLD._evt.ts<4000 && !WORLD._evt.done){ const n0=sc.npcs[0]; if(n0){ n0.bubble=WORLD._evt.emoji; n0.bubbleT=3500; } WORLD._evt.done=true; }
   sc.lunchOn=false;   // ligado pelos NPCs que estão comendo neste frame
   sc._zzz={};         // casas com alguém dormindo neste frame (→ 💤)
-  const ctx={night,hr,v,sc,mood,demon:demonMap,wealth,party};
-  sc.npcs.forEach((npc,i)=>{ if(i>=active) return; updateNpc(npc, dt, ctx);
-    if(npc.icd>0) npc.icd-=dt;
-    if(!demonMap && npc.state==='act' && (npc.icd||0)<=0){ for(let j=i+1;j<active;j++){ const o=sc.npcs[j]; if(o.state!=='act'||(o.icd||0)>0) continue; if(Math.abs(o.mx-npc.mx)<0.055 && Math.abs(o.my-npc.my)<0.045){ if(Math.random()<0.5*(npc.social||1)*(o.social||1)){ const c=_CHAT[Math.random()*_CHAT.length|0]; npc.bubble=c[0]; npc.bubbleT=2200; o.bubble=c[1]; o.bubbleT=2500; npc.face=o.mx>=npc.mx?1:-1; o.face=npc.mx>=o.mx?1:-1; npc.icd=o.icd=6000; if(c[0].indexOf('Troca')>=0||c[1].indexOf('❤️')>=0){ for(let k=0;k<3;k++) sc.sparks.push({mx:(npc.mx+o.mx)/2+(Math.random()-0.5)*0.02, my:Math.min(npc.my,o.my)-0.03, vx:(Math.random()-0.5)*0.2, vy:-0.4, t:700, col:'#ff6a9a'}); } } break; } } }
-    if(npc.state==='home'){ if(npc.home>=0) sc._zzz[npc.home]=1; return; } ents.push([MY(npc.my), ()=> drawNpcTD(x, MX(npc.mx), MY(npc.my), SC(npc.my)*H*0.075*npc.sc, npc, ts)]); });
+  // 🌙 VILA DORMINDO: a partir das 22h, todo mundo já tá em casa — só volta quando o herói "Acorda"
+  const asleep = !demonOn && villageAsleep(data);
+  if(asleep){
+    sc.buildings.forEach((b,bi)=>{ if(!b.ruin) sc._zzz[bi]=1; });   // todas as casas com 💤
+  } else {
+    const ctx={night,hr,v,sc,mood,demon:demonMap,wealth,party};
+    sc.npcs.forEach((npc,i)=>{ if(i>=active) return; updateNpc(npc, dt, ctx);
+      if(npc.icd>0) npc.icd-=dt;
+      if(!demonMap && npc.state==='act' && (npc.icd||0)<=0){ for(let j=i+1;j<active;j++){ const o=sc.npcs[j]; if(o.state!=='act'||(o.icd||0)>0) continue; if(Math.abs(o.mx-npc.mx)<0.055 && Math.abs(o.my-npc.my)<0.045){ if(Math.random()<0.5*(npc.social||1)*(o.social||1)){ const c=_CHAT[Math.random()*_CHAT.length|0]; npc.bubble=c[0]; npc.bubbleT=2200; o.bubble=c[1]; o.bubbleT=2500; npc.face=o.mx>=npc.mx?1:-1; o.face=npc.mx>=o.mx?1:-1; npc.icd=o.icd=6000; if(c[0]==='🍞'||c[1]==='❤️'){ for(let k=0;k<3;k++) sc.sparks.push({mx:(npc.mx+o.mx)/2+(Math.random()-0.5)*0.02, my:Math.min(npc.my,o.my)-0.03, vx:(Math.random()-0.5)*0.2, vy:-0.4, t:700, col:'#ff6a9a'}); } } break; } } }
+      if(npc.state==='home'){ if(npc.home>=0) sc._zzz[npc.home]=1; return; } ents.push([MY(npc.my), ()=> drawNpcTD(x, MX(npc.mx), MY(npc.my), SC(npc.my)*H*0.075*npc.sc, npc, ts)]); });
+  }
   // 🍞 mesa do almoço aparece só quando há gente comendo perto do mercado
   if(sc.lunchOn){ const mk=sc.spots.market, my=mk.my+0.07; ents.push([MY(my)-1, ()=> drawFoodTableTD(x, MX(mk.mx-0.02), MY(my), SC(my)*W*0.03, night)]); }
   ents.sort((a,b)=>a[0]-b[0]); ents.forEach(e=>e[1]());
   // 💤 quem foi dormir solta um "Zzz" subindo da casa
   for(const bi in sc._zzz){ const b=sc.buildings[bi]; if(!b||b.ruin) continue; const bx=MX(b.mx), by=MY(b.my)-b.w*W*SC(b.my)*0.9; for(let z=0;z<2;z++){ const t=((ts*0.0004)+z*0.5)%1; x.globalAlpha=(1-t)*0.7; x.fillStyle='#cfe0ff'; x.font='600 '+Math.round(SC(b.my)*W*0.022*(0.8+z*0.5))+'px sans-serif'; x.fillText('z', bx+t*SC(b.my)*W*0.03, by-t*SC(b.my)*W*0.06); } x.globalAlpha=1; }
   for(let i=sc.sparks.length-1;i>=0;i--){ const p=sc.sparks[i]; p.t-=dt; if(p.t<=0){ sc.sparks.splice(i,1); continue; } p.mx+=p.vx*dt*0.0002; p.my+=(p.vy+0.5*(1-p.t/500))*dt*0.0002; x.globalAlpha=Math.max(0,p.t/500); x.fillStyle=p.col; x.beginPath(); x.arc(MX(p.mx),MY(p.my),Math.max(1,SC(p.my)*2.2),0,6.28); x.fill(); x.globalAlpha=1; }
-  // 🔔 PACOTE 4: sino na praça quando falta pouco pra uma missão agendada (só na sua vila)
-  if(data.me && !demonOn){ const mn=minsToNextMission(); if(mn!=null && mn<=15){ const swing=Math.sin(ts*0.012)*0.18; const bx=MX(0.5), by=MY(0.5)-W*0.085; x.save(); x.translate(bx,by); x.rotate(swing); x.font=Math.round(W*0.05)+'px sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('🔔', 0, 0); x.restore(); x.fillStyle='#ffe49a'; x.font='bold '+Math.round(W*0.024)+'px sans-serif'; x.textAlign='center'; x.fillText(mn<=0?'missão agora!':'missão em '+mn+'min', bx, by-W*0.045); x.textAlign='left'; x.textBaseline='alphabetic'; if(Math.random()<0.04) sc.sparks.push({mx:0.5+(Math.random()-0.5)*0.06,my:0.45,vx:(Math.random()-0.5)*0.2,vy:-0.3,t:700,col:'#ffe49a'}); } }
+  // 🔔 PACOTE 4: sino na praça quando falta pouco pra uma missão agendada (só na sua vila, e só acordada)
+  if(data.me && !demonOn && !asleep){ const mn=minsToNextMission(); if(mn!=null && mn<=15){ const swing=Math.sin(ts*0.012)*0.18; const bx=MX(0.5), by=MY(0.5)-W*0.085; x.save(); x.translate(bx,by); x.rotate(swing); x.font=Math.round(W*0.05)+'px sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('🔔', 0, 0); x.restore(); x.fillStyle='#ffe49a'; x.font='bold '+Math.round(W*0.024)+'px sans-serif'; x.textAlign='center'; x.fillText(mn<=0?'missão agora!':'missão em '+mn+'min', bx, by-W*0.045); x.textAlign='left'; x.textBaseline='alphabetic'; if(Math.random()<0.04) sc.sparks.push({mx:0.5+(Math.random()-0.5)*0.06,my:0.45,vx:(Math.random()-0.5)*0.2,vy:-0.3,t:700,col:'#ffe49a'}); } }
+  if(asleep) x.fillStyle='rgba(5,8,22,.22)', x.fillRect(0,0,W,H);   // 😴 tom mais quieto/escuro com a vila toda dormindo
   if(demonOn) x.fillStyle='rgba(60,0,15,'+(0.16+0.05*Math.sin(ts*0.004)).toFixed(3)+')', x.fillRect(0,0,W,H);
   if(!demonOn && !unknown && wealth<0.3){ x.fillStyle='rgba(92,86,72,'+(0.2*(1-wealth/0.3)).toFixed(2)+')'; x.fillRect(0,0,W,H); }
   // chuva quando baixo
@@ -4772,7 +4810,7 @@ function addMission() {
   ['mission-when'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value='active'; });
   document.querySelectorAll('#mission-days-row .day-btn.day-on').forEach(b=>b.classList.remove('day-on')); toggleMissionDays();
   resetMissionIcon();
-  { ensureWorld(); G.world.seeds=(G.world.seeds||0)+1; WORLD._evt={text:'🌱 Novo plano plantado!', ts:Date.now(), done:false}; }
+  { ensureWorld(); G.world.seeds=(G.world.seeds||0)+1; WORLD._evt={emoji:'🌱', ts:Date.now(), done:false}; }
   renderMissions(); save();
   showToast(future ? "🔮 Missão guardada nas Futuras!" : "Nova missão criada!", "info");
 }
@@ -4929,7 +4967,7 @@ function completeMission(i) {
   logActivityTime(m);   // ⏱ item 4: registra o tempo gasto por categoria hoje
   bumpWorld(2);         // 🏘️ a vila verdeja um pouco a cada missão
   { ensureWorld(); G.world.built=(G.world.built||0)+1; if((G.world.decay||0)>0 && Math.random()<0.5) G.world.decay--;   // fazer o bem limpa um pouco da podridão
-    const cheers=['🎉 Mais uma conquista!','💪 A vila tá orgulhosa!','✨ Boa! Continua!','🏗️ Construindo o futuro!']; WORLD._evt={text:cheers[Math.random()*cheers.length|0], ts:Date.now(), done:false}; WORLD._cheer={cat:m.cat, ts:Date.now()}; }
+    const cheers=['🎉','💪','✨','🏗️']; WORLD._evt={emoji:cheers[Math.random()*cheers.length|0], ts:Date.now(), done:false}; WORLD._cheer={cat:m.cat, ts:Date.now()}; }
   ensureSeason(); G.seasonMissions = (G.seasonMissions||0) + 1;   // temporada (v4 #14)
   ensureWeek(); G.weekMissions = (G.weekMissions||0) + 1;         // destaque semanal (v4.1)
 
@@ -5817,6 +5855,7 @@ function syncOnline() {
     activeMinWeek: activeMinWeek(),     // ⏱️ tempo de atividade (min) na semana
     freeMinToday: freeMinToday(),       // 🌴 tempo livre (min) = 24h − sono − todas as missões
     vitality: worldVitality(),   // 🏘️ estado da vila p/ os manos verem
+    wokeUpDate: G.wokeUpDate||'',   // 🌙 p/ os manos saberem se a vila dele já "acordou" hoje
     // missões de hoje (feitas/não feitas + horário) p/ os amigos acompanharem e cobrarem
     todayMissions: (function(){
       const t = todayStr();
@@ -7752,7 +7791,7 @@ function doHabit(id){
   if(h.coins){ G.coins = Math.max(0, G.coins - h.coins); addLedger('out', h.coins, 'Punição: '+h.name); }
   if(h.xp){ loseXP(h.xp); }
   G.streak = 0;
-  { ensureWorld(); G.world.decay=Math.min(40,(G.world.decay||0)+1); bumpWorld(-3); WORLD._evt={text:'😟 A vila sentiu isso...', ts:Date.now(), done:false}; }
+  { ensureWorld(); G.world.decay=Math.min(40,(G.world.decay||0)+1); bumpWorld(-3); WORLD._evt={emoji:'😟', ts:Date.now(), done:false}; }
   G.history.unshift({t:Date.now(), type:'habit', name:h.name, cat:h.emoji, diff:'-'});
   if(G.history.length>300) G.history.pop();
   G.lastPunishments = G.lastPunishments || [];
@@ -8575,7 +8614,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.27 • v82';
+  window.APP_VERSION = '2026.06.28 • v83';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
