@@ -217,6 +217,8 @@
     border: 2px solid var(--border);
     display: flex;
     flex-direction: column;
+    min-width: 0;       /* deixa o painel encolher dentro do grid (evita estourar a tela no celular) */
+    max-width: 100%;
   }
   .tab-bar {
     display: flex;
@@ -276,7 +278,7 @@
   .ws-fill { height:100%; border-radius:6px; transition:width .5s ease; }
   .ws-meta { font-size:12px; color:var(--muted); margin-top:6px; }
 
-  .tab-content { padding: 8px; flex: 1; overflow-y: auto; max-height: 440px; }
+  .tab-content { padding: 8px; flex: 1; overflow-y: auto; max-height: 440px; min-width: 0; }
 
   /* ===== MISSIONS TAB ===== */
   .add-mission-form {
@@ -1791,6 +1793,7 @@
         <button class="tab-btn" onclick="switchTab('shop',this)">🛒 LOJA</button>
         <button class="tab-btn" onclick="switchTab('rewards',this)">🎁 PRÊMIOS</button>
         <button class="tab-btn" onclick="switchTab('ranking',this)">🏆 RANK</button>
+        <button class="tab-btn" onclick="switchTab('hall',this)">📸 HALL</button>
         <button class="tab-btn" onclick="switchTab('history',this)">📜 LOG</button>
         <button class="tab-btn" onclick="switchTab('stats',this)">📊 STATS</button>
         <button class="tab-btn" onclick="switchTab('time',this)">⏱ TEMPO</button>
@@ -1984,6 +1987,66 @@
         <div class="section-title">🤝 BANCO DO GRUPO (empréstimos dos 3)</div>
         <div id="group-bank" class="hist-box"></div>
         <div id="group-debts" class="hist-box" style="margin-top:5px"></div>
+      </div>
+
+      <!-- BROXISSE HALL TAB (mural de fotos motivacional) -->
+      <style id="hall-style">
+        #tab-hall .hall-intro{ font-size:12px; color:var(--muted); margin-bottom:8px; line-height:1.5; }
+        .hall-poster{ border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:12px; background:rgba(255,255,255,0.02); }
+        .hall-poster .hall-cap-in{ width:100%; box-sizing:border-box; background:rgba(0,0,0,0.35); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:8px; font-size:13px; font-family:inherit; resize:none; }
+        .hall-btn-row{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+        .hall-preview-wrap{ position:relative; margin-top:8px; display:none; }
+        .hall-preview-wrap img{ width:100%; max-height:280px; object-fit:contain; border-radius:8px; border:1px solid var(--border); background:#000; display:block; }
+        .hall-preview-clear{ position:absolute; top:6px; right:6px; background:rgba(0,0,0,0.7); border:1px solid var(--border); color:var(--text); border-radius:50%; width:26px; height:26px; cursor:pointer; font-size:13px; line-height:1; }
+        .hall-tag{ font-size:11px; color:var(--gold); margin-top:6px; display:none; }
+        .hall-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
+        .hall-card{ border:1px solid var(--border); border-radius:8px; overflow:hidden; background:rgba(0,0,0,0.25); display:flex; flex-direction:column; }
+        .hall-card .hall-photo{ width:100%; aspect-ratio:1/1; object-fit:cover; background:#000; cursor:pointer; display:block; }
+        .hall-card .hall-meta{ padding:7px 8px 8px; }
+        .hall-who{ font-size:12px; font-weight:bold; display:flex; align-items:center; gap:5px; }
+        .hall-who .hall-dot{ width:9px; height:9px; border-radius:50%; flex:0 0 auto; box-shadow:0 0 4px rgba(0,0,0,0.6); }
+        .hall-mcap{ font-size:11px; color:var(--text); margin-top:3px; line-height:1.35; word-break:break-word; }
+        .hall-mmission{ font-size:10px; color:var(--gold); margin-top:3px; }
+        .hall-foot{ display:flex; align-items:center; gap:8px; margin-top:6px; }
+        .hall-time{ font-size:10px; color:var(--muted); }
+        .hall-react{ background:none; border:none; cursor:pointer; font-size:13px; color:var(--text); padding:0; display:flex; align-items:center; gap:3px; }
+        .hall-react.on{ color:var(--gold); }
+        .hall-del{ background:none; border:none; cursor:pointer; font-size:12px; color:var(--red); padding:0; margin-left:auto; }
+        .hall-empty{ text-align:center; color:var(--muted); font-size:12px; padding:24px 10px; }
+        .hall-lightbox{ position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:9999; display:none; align-items:center; justify-content:center; padding:16px; }
+        .hall-lightbox img{ max-width:100%; max-height:90vh; border-radius:8px; }
+        .hall-prompt{ position:fixed; left:50%; bottom:16px; transform:translateX(-50%); z-index:9998; background:var(--panel); border:1px solid var(--gold); border-radius:10px; padding:12px 14px; max-width:340px; width:calc(100% - 28px); box-shadow:0 6px 30px rgba(0,0,0,0.6); display:none; }
+        .hall-prompt .hp-txt{ font-size:12px; color:var(--text); margin-bottom:9px; line-height:1.45; }
+        .hall-prompt .hp-row{ display:flex; gap:6px; }
+      </style>
+      <div class="tab-content" id="tab-hall" style="display:none">
+        <div class="section-title">📸 BROXISSE HALL</div>
+        <div class="hall-intro">O mural da firma. Postem fotos pra se motivar a evoluir — o "antes", o treino, o prato saudável, o estudo rolando. Todo mundo do grupo vê em tempo real. 💪</div>
+        <div class="hall-poster">
+          <textarea class="hall-cap-in" id="hall-caption" rows="2" maxlength="140" placeholder="Escreva uma legenda (opcional)…"></textarea>
+          <div class="hall-tag" id="hall-mission-tag"></div>
+          <div class="hall-preview-wrap" id="hall-preview-wrap">
+            <img id="hall-preview-img" alt="prévia">
+            <button class="hall-preview-clear" onclick="hallClearPreview()" title="Remover">✕</button>
+          </div>
+          <input type="file" id="hall-file-cam" accept="image/*" capture="environment" style="display:none" onchange="hallPickFile(this)">
+          <input type="file" id="hall-file-gal" accept="image/*" style="display:none" onchange="hallPickFile(this)">
+          <div class="hall-btn-row">
+            <button class="pixel-btn btn-cyan btn-sm" onclick="document.getElementById('hall-file-cam').click()">📷 TIRAR FOTO</button>
+            <button class="pixel-btn btn-sm" onclick="document.getElementById('hall-file-gal').click()">🖼️ GALERIA</button>
+            <button class="pixel-btn btn-gold btn-sm" id="hall-post-btn" onclick="hallPost()" style="margin-left:auto">✦ POSTAR</button>
+          </div>
+        </div>
+        <div class="section-title">MURAL DO GRUPO</div>
+        <div class="hall-grid" id="hall-grid"></div>
+      </div>
+      <div class="hall-lightbox" id="hall-lightbox" onclick="this.style.display='none'"><img id="hall-lightbox-img" alt=""></div>
+      <div class="hall-prompt" id="hall-prompt">
+        <div class="hp-txt" id="hall-prompt-txt">📸 Registra esse momento no <b>BROXISSE HALL</b> pra firma ver?</div>
+        <div class="hp-row">
+          <button class="pixel-btn btn-cyan btn-sm" onclick="hallPromptYes()">📷 FOTO</button>
+          <button class="pixel-btn btn-sm" onclick="document.getElementById('hall-prompt').style.display='none'" style="margin-left:auto">Agora não</button>
+        </div>
       </div>
 
       <!-- HISTORY TAB -->
@@ -4973,6 +5036,7 @@ function startMission(i){
   try{ renderLateBanner(); }catch(e){}
   try{ syncOnline(); }catch(e){}
   showToast('▶ Missão iniciada — saiu do atraso! Conclua quando terminar.', 'info');
+  try{ offerHallPhoto(m.name); }catch(e){}
 }
 function completeMission(i) {
   const m = G.missions[i];
@@ -5680,6 +5744,11 @@ const CHAR_PRESETS = {
 let db = null;
 let onlineData = {};
 let fbListener = null;
+// ===== 📸 BROXISSE HALL (mural de fotos compartilhado) =====
+let hallData = {};            // { pushId: {by,color,caption,img,mission,ts,reacts} }
+let hallListener = null;
+const HALL = { pendingImg:null, pendingMission:'' };
+const HALL_MAX = 80;          // mantém no máximo N posts no DB (poda os mais antigos)
 // ===== CATÁLOGO COMPARTILHADO DE MISSÕES (consistência de XP/LC entre os manos) =====
 let catalogData = {};
 let catalogListener = null;
@@ -5871,6 +5940,196 @@ function listenRivals() {
   listenPrices();
   listenScreenTime();
   listenDayFails();
+  listenHall();
+}
+
+// ===== 📸 BROXISSE HALL — funções =====
+function listenHall(){
+  if(!db) return;
+  if(hallListener) hallListener.off();
+  hallListener = db.ref('forge_broxisse');
+  hallListener.on('value', snap=>{
+    hallData = snap.val() || {};
+    const tab = document.getElementById('tab-hall');
+    if(tab && tab.style.display !== 'none') renderHall();
+  }, err=>{ /* ignora erro de leitura */ });
+}
+// Comprime/redimensiona a imagem antes de salvar (RTDB é compartilhado e leve)
+function hallCompress(file, maxDim, quality){
+  return new Promise((resolve, reject)=>{
+    if(!file){ reject(new Error('sem arquivo')); return; }
+    const reader = new FileReader();
+    reader.onload = e=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let {width:w, height:h} = img;
+        if(w > h && w > maxDim){ h = Math.round(h*maxDim/w); w = maxDim; }
+        else if(h >= w && h > maxDim){ w = Math.round(w*maxDim/h); h = maxDim; }
+        const cv = document.createElement('canvas'); cv.width=w; cv.height=h;
+        const ctx = cv.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
+        resolve(cv.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = ()=>reject(new Error('imagem inválida'));
+      img.src = e.target.result;
+    };
+    reader.onerror = ()=>reject(new Error('falha ao ler'));
+    reader.readAsDataURL(file);
+  });
+}
+function hallPickFile(input){
+  const file = input.files && input.files[0];
+  input.value = '';   // permite re-selecionar o mesmo arquivo depois
+  if(!file) return;
+  showToast('🖼️ Preparando a foto…','info');
+  hallCompress(file, 720, 0.55).then(dataUrl=>{
+    HALL.pendingImg = dataUrl;
+    const wrap = document.getElementById('hall-preview-wrap');
+    const im = document.getElementById('hall-preview-img');
+    if(im) im.src = dataUrl;
+    if(wrap) wrap.style.display = 'block';
+  }).catch(err=>{ showToast('Não consegui usar essa foto 😕','dmg'); });
+}
+function hallClearPreview(){
+  HALL.pendingImg = null;
+  const wrap = document.getElementById('hall-preview-wrap');
+  if(wrap) wrap.style.display = 'none';
+}
+function hallSetMissionTag(name){
+  HALL.pendingMission = name || '';
+  const tag = document.getElementById('hall-mission-tag');
+  if(tag){
+    if(name){ tag.textContent = '▶ Vinculado à missão: ' + name; tag.style.display='block'; }
+    else { tag.textContent=''; tag.style.display='none'; }
+  }
+}
+function hallPost(){
+  if(!db){ showToast('Conecte-se online primeiro (aba 🏆 RANK)','dmg'); return; }
+  if(!HALL.pendingImg){ showToast('Tire ou escolha uma foto primeiro 📷','dmg'); return; }
+  const myName = G.profile?.name || 'Anônimo';
+  const cap = (document.getElementById('hall-caption')?.value || '').trim().slice(0,140);
+  const btn = document.getElementById('hall-post-btn');
+  if(btn){ btn.disabled = true; btn.textContent = '…'; }
+  const entry = {
+    by: myName,
+    color: G.profile?.armor || '#888',
+    caption: cap,
+    img: HALL.pendingImg,
+    mission: HALL.pendingMission || '',
+    ts: Date.now(),
+    reacts: {}
+  };
+  db.ref('forge_broxisse').push(entry).then(()=>{
+    showToast('📸 Postado no BROXISSE HALL!','heal');
+    // limpa o compositor
+    hallClearPreview();
+    const ci = document.getElementById('hall-caption'); if(ci) ci.value='';
+    hallSetMissionTag('');
+    hallPrune();
+  }).catch(e=>{ showToast('Falha ao postar 😕','dmg'); })
+    .finally(()=>{ if(btn){ btn.disabled=false; btn.textContent='✦ POSTAR'; } });
+}
+// poda os posts mais antigos pra não inflar o DB compartilhado
+function hallPrune(){
+  if(!db) return;
+  const ids = Object.keys(hallData||{});
+  if(ids.length <= HALL_MAX) return;
+  const sorted = ids.map(id=>({id, ts:(hallData[id]&&hallData[id].ts)||0})).sort((a,b)=>a.ts-b.ts);
+  const remove = sorted.slice(0, sorted.length - HALL_MAX);
+  remove.forEach(r=>{ try{ db.ref('forge_broxisse/'+r.id).remove(); }catch(e){} });
+}
+function hallReact(id){
+  if(!db || !hallData[id]) return;
+  const myName = G.profile?.name || 'Anônimo';
+  const reacts = hallData[id].reacts || {};
+  const ref = db.ref('forge_broxisse/'+id+'/reacts/'+myName.replace(/[.#$\[\]\/]/g,'_'));
+  if(reacts[myName.replace(/[.#$\[\]\/]/g,'_')]) ref.remove();
+  else ref.set(true);
+}
+function hallDelete(id){
+  if(!db || !hallData[id]) return;
+  const myName = G.profile?.name || '';
+  const mine = hallData[id].by === myName;
+  if(!mine && !window.__hallAdmin){ showToast('Só dá pra apagar suas próprias fotos','dmg'); return; }
+  if(!confirm('Apagar essa foto do mural?')) return;
+  db.ref('forge_broxisse/'+id).remove().then(()=>showToast('Foto removida','info'));
+}
+function hallOpenLightbox(src){
+  const lb = document.getElementById('hall-lightbox');
+  const im = document.getElementById('hall-lightbox-img');
+  if(im) im.src = src;
+  if(lb) lb.style.display = 'flex';
+}
+function hallTimeAgo(ts){
+  const s = Math.floor((Date.now()-ts)/1000);
+  if(s < 60) return 'agora';
+  const m = Math.floor(s/60); if(m < 60) return m+'min';
+  const h = Math.floor(m/60); if(h < 24) return h+'h';
+  const d = Math.floor(h/24); if(d < 7) return d+'d';
+  return Math.floor(d/7)+'sem';
+}
+function hallEsc(str){
+  return String(str==null?'':str).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function renderHall(){
+  const grid = document.getElementById('hall-grid');
+  if(!grid) return;
+  const myName = G.profile?.name || '';
+  const keyOf = n => String(n).replace(/[.#$\[\]\/]/g,'_');
+  const posts = Object.keys(hallData||{})
+    .map(id=>Object.assign({id}, hallData[id]))
+    .filter(p=>p && p.img)
+    .sort((a,b)=>(b.ts||0)-(a.ts||0));
+  if(!posts.length){
+    grid.innerHTML = `<div class="hall-empty">Mural vazio. Seja o primeiro a postar uma foto da evolução! 📸</div>`;
+    return;
+  }
+  grid.innerHTML = posts.map(p=>{
+    const reacts = p.reacts || {};
+    const n = Object.keys(reacts).length;
+    const iReacted = !!reacts[keyOf(myName)];
+    const canDel = (p.by === myName) || window.__hallAdmin;
+    return `<div class="hall-card">
+      <img class="hall-photo" src="${p.img}" alt="" onclick="hallOpenLightboxById('${p.id}')">
+      <div class="hall-meta">
+        <div class="hall-who"><span class="hall-dot" style="background:${hallEsc(p.color||'#888')}"></span>${hallEsc(p.by||'?')}</div>
+        ${p.caption?`<div class="hall-mcap">${hallEsc(p.caption)}</div>`:''}
+        ${p.mission?`<div class="hall-mmission">▶ ${hallEsc(p.mission)}</div>`:''}
+        <div class="hall-foot">
+          <button class="hall-react${iReacted?' on':''}" onclick="hallReact('${p.id}')">${iReacted?'🔥':'🤍'} ${n||''}</button>
+          <span class="hall-time">${hallTimeAgo(p.ts||Date.now())}</span>
+          ${canDel?`<button class="hall-del" onclick="hallDelete('${p.id}')">🗑</button>`:''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function hallOpenLightboxById(id){
+  const p = hallData[id]; if(p && p.img) hallOpenLightbox(p.img);
+}
+// Chamado ao iniciar uma missão: oferece registrar o momento no mural
+function offerHallPhoto(missionName){
+  if(!db) return;                       // só faz sentido online
+  const myName = G.profile?.name || '';
+  if(!ONLINE_PLAYERS.includes(myName)) return;
+  HALL.pendingMission = missionName || '';
+  const txt = document.getElementById('hall-prompt-txt');
+  if(txt) txt.innerHTML = `📸 Começou <b>${hallEsc(missionName||'a missão')}</b> — registra no <b>BROXISSE HALL</b> pra firma ver?`;
+  const box = document.getElementById('hall-prompt');
+  if(box){
+    box.style.display = 'block';
+    clearTimeout(HALL._promptTimer);
+    HALL._promptTimer = setTimeout(()=>{ box.style.display='none'; }, 9000);
+  }
+}
+function hallPromptYes(){
+  const box = document.getElementById('hall-prompt'); if(box) box.style.display='none';
+  // vai pro Hall, pré-preenche legenda + missão e abre a câmera
+  const btn = document.querySelector('.tab-btn[onclick*="hall"]');
+  if(btn) switchTab('hall', btn);
+  hallSetMissionTag(HALL.pendingMission||'');
+  const ci = document.getElementById('hall-caption');
+  if(ci && !ci.value && HALL.pendingMission) ci.value = '▶ Começando: ' + HALL.pendingMission;
+  setTimeout(()=>{ const f=document.getElementById('hall-file-cam'); if(f) f.click(); }, 250);
 }
 
 function syncOnline() {
@@ -7065,7 +7324,7 @@ function checkNextMissionReminder(){
 function switchTab(name, btn) {
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  const tabs = ['missions','dungeons','world','shop','rewards','ranking','history','inventory','stats','screen','future','time'];
+  const tabs = ['missions','dungeons','world','shop','rewards','ranking','hall','history','inventory','stats','screen','future','time'];
   tabs.forEach(t=>{
     const el = document.getElementById('tab-'+t);
     if(el){
@@ -7079,6 +7338,7 @@ function switchTab(name, btn) {
   else if(name==='shop') renderShop();
   else if(name==='rewards') renderRewards();
   else if(name==='ranking'){ renderHighlights(); renderTeamMissions(); renderFeed(); renderRanking(); renderRaid(); renderSeason(); renderArena(); }
+  else if(name==='hall') renderHall();
   else if(name==='history') renderHistory();
   else if(name==='inventory') renderInventory();
   else if(name==='missions'){ renderMissions(); renderPresets(); }
@@ -8651,7 +8911,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.28 • v84';
+  window.APP_VERSION = '2026.06.28 • v85';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
@@ -8756,6 +9016,7 @@ init();
       });
     }
     admRefreshInfo();
+    window.__hallAdmin = true;   // 🛠️ ADM pode apagar qualquer foto do BROXISSE HALL
     document.getElementById('adm-modal').classList.add('show');
   };
   window.admClose = function(){ document.getElementById('adm-modal').classList.remove('show'); };
