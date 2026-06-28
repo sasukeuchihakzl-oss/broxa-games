@@ -3596,7 +3596,7 @@ function mentorApplySpot(el, spot, off){
 // 👋 aparece deslizando (em um lugar diferente a cada vez), fala, e some sozinho depois de um tempo
 function mentorPeek(){
   if(_mentorDismissed || !(G.profile && G.profile.name)) return;
-  if(G.profile.name === 'Craudo') return;   // no Craudo só a mentora dele (mentor2) aparece
+  if(mentor2IsAllowed()) return;   // quem vê a mentora exclusiva (mentor2) não vê o mentor bravo
   const el=document.getElementById('mentor'); if(!el) return;
   const wasShown = el.classList.contains('show');
   if(!wasShown){
@@ -3627,7 +3627,7 @@ const MENTOR2_LINES = [
   'Faz a missão, meu amor.'
 ];
 let _mentor2Dismissed = false, _mentor2LastLine = '', _mentor2HideTimer = null, _mentor2LastSpotIdx = -1, _mentor2CurSpot = MENTOR_SPOTS[1];
-function mentor2IsAllowed(){ return !!(G.profile && G.profile.name === 'Craudo'); }
+function mentor2IsAllowed(){ return !!(G.profile && (G.profile.name === 'Craudo' || G.profile.name === 'Mizuki')); }   // Mizuki adicionada temporariamente
 function mentor2PickSpot(){
   let idx=_mentor2LastSpotIdx;
   for(let k=0;k<6;k++){ idx=Math.random()*MENTOR_SPOTS.length|0; if(idx!==_mentor2LastSpotIdx) break; }
@@ -8575,7 +8575,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.27 • v81';
+  window.APP_VERSION = '2026.06.27 • v82';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
