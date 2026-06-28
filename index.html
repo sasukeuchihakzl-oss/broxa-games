@@ -2327,6 +2327,12 @@
     </div>
     <div id="app-ver-hint" class="config-hint" style="margin-top:6px"></div>
 
+    <div class="section-title">🔐 BLOQUEIO POR BIOMETRIA</div>
+    <div class="sys-grid" style="grid-template-columns:1fr">
+      <button class="pixel-btn btn-cyan" id="bio-toggle-btn" onclick="toggleBio()">👆 ATIVAR BIOMETRIA</button>
+    </div>
+    <div id="bio-hint" class="config-hint" style="margin-top:6px"></div>
+
     <div class="section-title">💾 GERENCIAR SAVE</div>
     <div class="sys-grid">
       <button class="pixel-btn btn-green" onclick="manualSave()">💾 SALVAR<br>AGORA</button>
@@ -7653,6 +7659,7 @@ function openSystem(){
     <div class="hist-row"><span>🕐 Última gravação</span><span>${last}</span></div>
     <div class="hist-row"><span>💾 Tamanho do save</span><span>${kb} KB</span></div>
     <div class="hist-row"><span>🔁 Auto-save</span><span style="color:var(--green)">ativo (15s) ✓</span></div>`;
+  try{ renderBioToggle(); }catch(e){}
   document.getElementById('system-modal').classList.add('show');
 }
 function closeSystem(){ document.getElementById('system-modal').classList.remove('show'); }
@@ -8781,6 +8788,98 @@ function finishInit() {
   showToast("⚔ Bem-vindo de volta, " + (G.profile?.name||'') + "!");
 }
 
+// ===== 🔐 BIOMETRIA (WebAuthn — desbloqueio por digital / Face ID) =====
+// Gate de conveniência: usa a biometria do aparelho pra abrir o app. NÃO é
+// criptografia dos dados (eles seguem no localStorage/Firebase) — é uma tranca
+// de tela. A senha do perfil continua valendo como reserva, então ninguém fica
+// trancado pra fora se a biometria falhar ou o aparelho mudar.
+function bioStoreKey(name){ return 'broxa_bio_' + name; }
+function bioIsEnrolled(name){ try{ return !!localStorage.getItem(bioStoreKey(name)); }catch(e){ return false; } }
+function bioB64uFromBuf(buf){
+  let s=''; const b=new Uint8Array(buf);
+  for(let i=0;i<b.length;i++) s+=String.fromCharCode(b[i]);
+  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function bioBufFromB64u(str){
+  str = String(str).replace(/-/g,'+').replace(/_/g,'/'); while(str.length%4) str+='=';
+  const bin=atob(str); const b=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) b[i]=bin.charCodeAt(i);
+  return b.buffer;
+}
+async function bioSupported(){
+  try{
+    if(!window.isSecureContext) return false;
+    if(!window.PublicKeyCredential) return false;
+    if(!navigator.credentials || !navigator.credentials.create) return false;
+    return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+  }catch(e){ return false; }
+}
+async function bioEnroll(name){
+  if(!(await bioSupported())){ showToast('Sem biometria neste aparelho/navegador 😕','dmg'); return false; }
+  try{
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const userId = new TextEncoder().encode('broxa-' + name);
+    const cred = await navigator.credentials.create({ publicKey:{
+      challenge,
+      rp:{ name:'Forge of Life', id: location.hostname },
+      user:{ id: userId, name: name, displayName: name },
+      pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+      authenticatorSelection:{ authenticatorAttachment:'platform', userVerification:'required', residentKey:'preferred' },
+      timeout:60000, attestation:'none'
+    }});
+    if(!cred || !cred.rawId) return false;
+    localStorage.setItem(bioStoreKey(name), bioB64uFromBuf(cred.rawId));
+    showToast('🔐 Biometria ativada! Da próxima vez é só a digital/rosto.','heal');
+    return true;
+  }catch(e){
+    showToast('Não consegui ativar a biometria. Tente de novo.','dmg');
+    return false;
+  }
+}
+function bioDisable(name){ try{ localStorage.removeItem(bioStoreKey(name)); }catch(e){} showToast('Biometria desativada — volta a usar a senha.','info'); }
+async function bioUnlock(name){
+  const stored = (function(){ try{ return localStorage.getItem(bioStoreKey(name)); }catch(e){ return null; } })();
+  if(!stored) return false;
+  try{
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const assertion = await navigator.credentials.get({ publicKey:{
+      challenge,
+      allowCredentials:[{ type:'public-key', id: bioBufFromB64u(stored), transports:['internal'] }],
+      userVerification:'required', timeout:60000, rpId: location.hostname
+    }});
+    return !!assertion;   // gate local: assertion verificada pelo aparelho já basta
+  }catch(e){ return false; }
+}
+async function toggleBio(){
+  const name = (G.profile && G.profile.name) || '';
+  if(!name){ showToast('Entre com um perfil primeiro','dmg'); return; }
+  if(bioIsEnrolled(name)){
+    if(confirm('Desativar o desbloqueio por biometria? Você volta a usar só a senha.')){ bioDisable(name); renderBioToggle(); }
+    return;
+  }
+  const sup = await bioSupported();
+  if(!sup){
+    showToast('Sem biometria neste aparelho/navegador 😕','dmg');
+    const h=document.getElementById('bio-hint'); if(h) h.innerHTML='⚠ Este aparelho/navegador não oferece biometria. Precisa de celular com digital/Face ID e estar em <b>https</b> (o app online já é). No PC pode não aparecer.';
+    return;
+  }
+  const ok = await bioEnroll(name);
+  if(ok) renderBioToggle();
+}
+function renderBioToggle(){
+  const btn = document.getElementById('bio-toggle-btn');
+  const hint = document.getElementById('bio-hint');
+  if(!btn) return;
+  const name = (G.profile && G.profile.name) || '';
+  if(bioIsEnrolled(name)){
+    btn.textContent = '🔓 DESATIVAR BIOMETRIA'; btn.className = 'pixel-btn btn-red';
+    if(hint) hint.innerHTML = '✅ Ativada para <b>'+ (name||'?') +'</b>. Ao abrir o app, desbloqueie com a digital/rosto. A senha do perfil continua valendo como reserva.';
+  } else {
+    btn.textContent = '👆 ATIVAR BIOMETRIA'; btn.className = 'pixel-btn btn-cyan';
+    if(hint) hint.innerHTML = 'Use a digital / Face ID do celular pra abrir o app. A senha do perfil continua valendo como reserva — você nunca fica trancado pra fora.';
+  }
+}
+
 function askPasswordOnLoad(name, onSuccess, onFail){
   const pwd = PLAYER_PASSWORDS[name];
   if(!pwd){ onSuccess(); return; }
@@ -8792,6 +8891,7 @@ function askPasswordOnLoad(name, onSuccess, onFail){
     <div style="font-family:var(--pixel);font-size:14px;color:var(--gold);text-shadow:0 0 12px var(--gold);">🔐 SENHA DE ${name.toUpperCase()}</div>
     <input id="pwd-input" type="password" autofocus style="font-family:var(--vt);font-size:22px;padding:12px 18px;background:#15101e;border:2px solid var(--gold);color:var(--text);border-radius:6px;text-align:center;letter-spacing:4px;width:260px;outline:none;">
     <div id="pwd-err" style="color:#ff3344;font-size:14px;min-height:18px;"></div>
+    <button id="pwd-bio" style="display:none;font-family:var(--pixel);font-size:10px;padding:13px 26px;background:var(--cyan);color:#000;border:none;cursor:pointer;border-radius:6px;box-shadow:0 0 14px rgba(34,221,255,.5);">👆 DESBLOQUEAR COM BIOMETRIA</button>
     <div style="display:flex;gap:8px;">
       <button id="pwd-ok" style="font-family:var(--pixel);font-size:9px;padding:10px 18px;background:var(--gold);color:#000;border:none;cursor:pointer;border-radius:4px;">ENTRAR</button>
       <button id="pwd-back" style="font-family:var(--pixel);font-size:9px;padding:10px 18px;background:transparent;color:var(--muted);border:1px solid var(--muted);cursor:pointer;border-radius:4px;">TROCAR PERFIL</button>
@@ -8823,6 +8923,25 @@ function askPasswordOnLoad(name, onSuccess, onFail){
     overlay.remove();
     onFail();
   };
+  // 🔐 Biometria: se este perfil ativou, mostra o botão e já tenta desbloquear
+  const bioBtn = overlay.querySelector('#pwd-bio');
+  async function doBio(){
+    err.textContent = '';
+    bioBtn.disabled = true; bioBtn.textContent = '⌛ AGUARDE…';
+    const ok = await bioUnlock(name);
+    if(ok){ overlay.remove(); onSuccess(); return; }
+    bioBtn.disabled = false; bioBtn.textContent = '👆 DESBLOQUEAR COM BIOMETRIA';
+    err.textContent = 'Biometria não reconhecida — use a senha';
+    setTimeout(()=>inp.focus(), 50);
+  }
+  if(bioBtn && bioIsEnrolled(name)){
+    bioSupported().then(s=>{
+      if(!s) return;
+      bioBtn.style.display = 'block';
+      bioBtn.onclick = doBio;
+      setTimeout(doBio, 400);   // dispara o prompt do aparelho automaticamente
+    });
+  }
 }
 
 function init() {
@@ -8911,7 +9030,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.28 • v85';
+  window.APP_VERSION = '2026.06.28 • v86';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
