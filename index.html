@@ -5878,6 +5878,30 @@ function findCatalogMatch(name){
   });
   return best;
 }
+// ===== CONFIGURAÇÕES GLOBAIS DO ADM (valem pra TODOS os jogadores, não só quem ativou) =====
+let settingsListener = null;
+function listenSettings(){
+  if(!db) return;
+  if(settingsListener) settingsListener.off();
+  settingsListener = db.ref('forge_settings');
+  settingsListener.on('value', snap=>{
+    const v = snap.val() || {};
+    if(typeof v.allowDeleteMissions==='boolean' && v.allowDeleteMissions !== G.allowDeleteMissions){
+      G.allowDeleteMissions = v.allowDeleteMissions;
+      try{ renderMissions(); }catch(e){}
+      try{ renderFutureMissions(); }catch(e){}
+      try{
+        const btn = document.getElementById('adm-del-toggle');
+        if(btn){
+          btn.textContent = '🗑 Excluir missão: ' + (v.allowDeleteMissions ? 'LIGADO ✅' : 'desligado');
+          btn.classList.toggle('btn-red', v.allowDeleteMissions);
+          btn.classList.toggle('btn-green', !v.allowDeleteMissions);
+        }
+      }catch(e){}
+      save();
+    }
+  });
+}
 function registerCatalog(name, xp, lc){
   if(!db) return;
   const key = normName(name); if(!key) return;
@@ -6027,6 +6051,7 @@ function listenRivals() {
   listenVillageGift();
   listenReact();
   listenCatalog();
+  listenSettings();
   listenPrices();
   listenScreenTime();
   listenDayFails();
@@ -9214,7 +9239,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.29 • v89';
+  window.APP_VERSION = '2026.06.29 • v90';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
@@ -9343,12 +9368,15 @@ init();
     b.classList.toggle('btn-green', !on);
   }
   window.admToggleDelete = function(){
-    G.allowDeleteMissions = !G.allowDeleteMissions;
+    const on = !G.allowDeleteMissions;
+    G.allowDeleteMissions = on;
     save();
     try{ renderMissions(); }catch(e){}
     try{ renderFutureMissions(); }catch(e){}
     admUpdateDelToggle();
-    try{ showToast(G.allowDeleteMissions ? '🗑 Excluir missão LIGADO' : '🔒 Excluir missão desligado', G.allowDeleteMissions?'heal':'info'); }catch(e){}
+    try{ showToast(on ? '🗑 Excluir missão LIGADO (pra todo mundo)' : '🔒 Excluir missão desligado (pra todo mundo)', on?'heal':'info'); }catch(e){}
+    // 🌐 vale pra TODOS os jogadores, não só quem ativou — propaga via Firebase
+    if(typeof db!=='undefined' && db){ db.ref('forge_settings/allowDeleteMissions').set(on).catch(()=>{}); }
   };
 
   window.admFix100 = function(){
