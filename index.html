@@ -321,6 +321,41 @@
   .btn-cyan:hover { background: rgba(34,221,255,0.15); }
   .btn-sm { font-size: 6px; padding: 3px 6px; }
 
+  /* 🔔/⚙ botões de ícone do cabeçalho — quadrados, maiores e nítidos */
+  .hdr-icon-btn {
+    position: relative;
+    width: 40px; height: 40px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 21px; line-height: 1;
+    background: rgba(240,192,64,0.12);
+    border: 2px solid var(--gold);
+    border-radius: 10px;
+    color: var(--gold);
+    cursor: pointer;
+    transition: all 0.12s;
+    box-shadow: 0 0 8px rgba(240,192,64,0.25), inset 0 1px 0 rgba(255,255,255,0.10);
+  }
+  .hdr-icon-btn:hover { background: rgba(240,192,64,0.24); box-shadow: 0 0 14px rgba(240,192,64,0.5); }
+  .hdr-icon-btn:active { transform: translateY(1px); }
+  .hdr-badge {
+    position: absolute; top: -6px; right: -6px;
+    min-width: 17px; height: 17px; padding: 0 4px; box-sizing: border-box;
+    background: #ff3344; color: #fff;
+    font-family: var(--vt); font-size: 11px; font-weight: bold;
+    border-radius: 9px; display: flex; align-items: center; justify-content: center;
+    border: 1px solid #0a0814; box-shadow: 0 0 7px rgba(255,51,68,0.75);
+    animation: newsPulse 1.8s ease-in-out infinite;
+  }
+  @keyframes newsPulse { 0%,100%{ transform: scale(1); } 50%{ transform: scale(1.15); } }
+  /* itens da lista de novidades */
+  .news-item { border:1px solid var(--border); border-radius:8px; padding:9px 11px; margin-bottom:8px; background:rgba(255,255,255,0.02); }
+  .news-item.unread { border-color:var(--gold); background:rgba(240,192,64,0.06); }
+  .news-head { display:flex; align-items:center; gap:7px; }
+  .news-ic { font-size:18px; flex:0 0 auto; }
+  .news-title { font-family:var(--pixel); font-size:8px; color:var(--gold); flex:1; line-height:1.5; }
+  .news-ver { font-size:10px; color:var(--muted); flex:0 0 auto; }
+  .news-body { font-size:12px; color:var(--text); margin-top:5px; line-height:1.45; }
+
   .mission-list { display: flex; flex-direction: column; gap: 4px; }
   .mission-item {
     background: rgba(255,255,255,0.03);
@@ -1735,8 +1770,8 @@
       <div class="coin-display"><canvas id="ic-coin" width="22" height="22" class="ic-canvas" style="border-radius:50%"></canvas><span id="coins-display">150</span> <span style="font-family:var(--pixel);font-size:7px;color:var(--gold-dark)">LC</span></div>
       <div class="gem-display"><canvas id="ic-gem" width="20" height="20" class="ic-canvas"></canvas><span id="gems-display">5</span></div>
       <div class="day-display">Dia <span id="day-display">1</span></div>
-      <button class="pixel-btn btn-cyan btn-sm" title="Compartilhar progresso" onclick="openShare()">📤</button>
-      <button class="pixel-btn btn-gold btn-sm" title="Sistema & Save" onclick="openSystem()">⚙</button>
+      <button class="hdr-icon-btn" id="news-btn" title="Novidades do jogo" onclick="openNews()">🔔<span class="hdr-badge" id="news-badge" style="display:none"></span></button>
+      <button class="hdr-icon-btn" title="Configurações & Save" onclick="openSystem()">⚙️</button>
     </div>
     <div id="save-indicator">💾 Salvo</div>
   </div>
@@ -2309,6 +2344,17 @@
     <div class="modal-actions">
       <button class="pixel-btn btn-green" onclick="saveMissionEdit()">SALVAR</button>
       <button class="pixel-btn btn-red" onclick="closeMissionEdit()">CANCELAR</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: NOVIDADES (SINO) ===== -->
+<div id="news-modal" class="modal">
+  <div class="modal-box">
+    <div class="modal-title">🔔 NOVIDADES DO JOGO</div>
+    <div id="news-list" style="max-height:62vh;overflow-y:auto;margin-bottom:6px"></div>
+    <div class="modal-actions">
+      <button class="pixel-btn btn-gold" onclick="closeNews()" style="width:100%">FECHAR</button>
     </div>
   </div>
 </div>
@@ -5953,11 +5999,19 @@ function listenRivals() {
 function listenHall(){
   if(!db) return;
   if(hallListener) hallListener.off();
+  let lastPostCount = 0;   // evita re-render quando só reações mudam
   hallListener = db.ref('forge_broxisse');
   hallListener.on('value', snap=>{
-    hallData = snap.val() || {};
+    const newData = snap.val() || {};
+    const newCount = Object.keys(newData).length;
+    const countChanged = newCount !== lastPostCount;
+    const postsAdded = Object.keys(newData).some(id => !hallData[id]);   // novo post?
+    hallData = newData;
+    lastPostCount = newCount;
     const tab = document.getElementById('tab-hall');
-    if(tab && tab.style.display !== 'none') renderHall();
+    // renderiza só se: aba visível E (novo post OR contagem mudou)
+    // reações locais no mesmo post NÃO provocam re-render (ficam locais até Firebase confirmar)
+    if(tab && tab.style.display !== 'none' && (postsAdded || countChanged)) renderHall();
   }, err=>{ /* ignora erro de leitura */ });
 }
 // Comprime/redimensiona a imagem antes de salvar (RTDB é compartilhado e leve)
@@ -6047,9 +6101,19 @@ function hallReact(id){
   if(!db || !hallData[id]) return;
   const myName = G.profile?.name || 'Anônimo';
   const reacts = hallData[id].reacts || {};
-  const ref = db.ref('forge_broxisse/'+id+'/reacts/'+myName.replace(/[.#$\[\]\/]/g,'_'));
-  if(reacts[myName.replace(/[.#$\[\]\/]/g,'_')]) ref.remove();
+  const keyName = myName.replace(/[.#$\[\]\/]/g,'_');
+  const ref = db.ref('forge_broxisse/'+id+'/reacts/'+keyName);
+  const willRemove = !!reacts[keyName];
+  if(willRemove) ref.remove();
   else ref.set(true);
+  // otimização: atualiza o botão local SEM re-renderizar toda a aba (a mudança virá via listener)
+  // isso evita lag enquanto espera o round-trip do Firebase
+  const btn = document.querySelector('.hall-card [onclick*="hallReact(\''+id)
+  if(btn){
+    const n = Object.keys(reacts).length + (willRemove ? -1 : 1);
+    btn.textContent = (willRemove ? '🤍' : '🔥') + (n > 0 ? ' '+n : '');
+    btn.classList.toggle('on', !willRemove);
+  }
 }
 function hallDelete(id){
   if(!db || !hallData[id]) return;
@@ -8785,8 +8849,42 @@ function finishInit() {
     if(cfg.databaseURL) initFirebase(cfg);
   } catch(e) {}
   setInterval(syncOnline, 120000);
+  try{ renderNewsBadge(); }catch(e){}
   showToast("⚔ Bem-vindo de volta, " + (G.profile?.name||'') + "!");
 }
+
+// ===== 🔔 NOVIDADES DO JOGO (changelog no sino) =====
+// Itens mais novos primeiro. id crescente — o maior é o mais recente.
+const GAME_NEWS = [
+  { id:6, v:'v87', date:'28/06', icon:'👆', title:'Login mais rápido', body:'A biometria virou a opção principal na tela de entrada — a senha fica logo abaixo como alternativa.' },
+  { id:5, v:'v86', date:'28/06', icon:'🔐', title:'Desbloqueio por biometria', body:'Ative no ⚙ Configurações e abra o app com a digital ou Face ID do celular. A senha continua como reserva, então você nunca fica trancado pra fora.' },
+  { id:4, v:'v85', date:'28/06', icon:'📸', title:'BROXISSE HALL', body:'Novo mural de fotos! Poste fotos pra motivar a firma a evoluir — tire na hora pela câmera ou escolha da galeria. Tudo aparece na aba 📸 HALL pra todo mundo ver.' },
+  { id:3, v:'v85', date:'28/06', icon:'📱', title:'Tela das missões ajustada', body:'Corrigido o layout da aba de missões no celular — agora encaixa certinho sem precisar diminuir o zoom.' },
+];
+function newsMaxId(){ return GAME_NEWS.reduce((m,n)=>Math.max(m,n.id),0); }
+function newsLastSeen(){ try{ return parseInt(localStorage.getItem('broxa_news_seen')||'0',10)||0; }catch(e){ return 0; } }
+function newsUnreadCount(){ const s=newsLastSeen(); return GAME_NEWS.filter(n=>n.id>s).length; }
+function renderNewsBadge(){
+  const b=document.getElementById('news-badge'); if(!b) return;
+  const c=newsUnreadCount();
+  if(c>0){ b.textContent = c>9?'9+':String(c); b.style.display='flex'; }
+  else b.style.display='none';
+}
+function openNews(){
+  const list=document.getElementById('news-list'); if(!list) return;
+  const seen=newsLastSeen();
+  list.innerHTML = GAME_NEWS.map(n=>{
+    const unread = n.id>seen;
+    return `<div class="news-item${unread?' unread':''}">
+      <div class="news-head"><span class="news-ic">${n.icon}</span><span class="news-title">${n.title}</span><span class="news-ver">${n.v} · ${n.date}</span></div>
+      <div class="news-body">${n.body}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('news-modal').classList.add('show');
+  try{ localStorage.setItem('broxa_news_seen', String(newsMaxId())); }catch(e){}
+  renderNewsBadge();
+}
+function closeNews(){ const m=document.getElementById('news-modal'); if(m) m.classList.remove('show'); }
 
 // ===== 🔐 BIOMETRIA (WebAuthn — desbloqueio por digital / Face ID) =====
 // Gate de conveniência: usa a biometria do aparelho pra abrir o app. NÃO é
@@ -9034,7 +9132,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.28 • v87';
+  window.APP_VERSION = '2026.06.28 • v88';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
