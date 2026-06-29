@@ -4986,17 +4986,37 @@ function baseNameOf(name){
 }
 function duplicateMission(i){
   const src = G.missions[i]; if(!src) return;
-  const { base } = baseNameOf(src.name);
-  let max = 1;
-  G.missions.forEach(m=>{ const bn = baseNameOf(m.name); if(bn.base===base) max = Math.max(max, bn.n); });
-  const newName = base+' '+(max+1);
-  const copy = JSON.parse(JSON.stringify(src));
-  copy.name = newName; copy.id = Date.now(); copy.done = false; copy.started = false;
-  copy.stats = {done:0,failed:0}; copy.createdAt = Date.now(); delete copy._failed;
-  G.missions.unshift(copy);
-  registerCatalog(newName, effVals(copy.diff, copy.aiXp, copy.aiValue).xp, effVals(copy.diff, copy.aiXp, copy.aiValue).lc);
-  renderMissions(); save();
-  showToast('➕ "'+newName+'" adicionada!','heal');
+  const origDur = missionDurMin(src);
+  const origVals = effVals(src.diff, src.aiXp, src.aiValue);
+  gameAsk({
+    title: '➕ Missão auxiliar',
+    label: src.name+'\nOriginal: '+fmtHM(origDur)+' · '+origVals.lc+' LC · +'+origVals.xp+' XP\n\nQuanto tempo vai durar a auxiliar? (minutos)',
+    type: 'number',
+    value: String(origDur),
+    okText: 'CRIAR',
+    onOk: (v)=>{
+      const newDur = parseInt(v);
+      if(isNaN(newDur) || newDur<=0){ showToast('Digite um tempo válido (minutos)!','dmg'); return; }
+      const ratio = newDur / origDur;
+      const newXp = Math.max(1, Math.round(origVals.xp * ratio));
+      const newLc = Math.max(1, Math.round(origVals.lc * ratio));
+      const newPen = (src.penXp!=null) ? Math.max(1, Math.round(src.penXp * ratio)) : null;
+
+      const { base } = baseNameOf(src.name);
+      let max = 1;
+      G.missions.forEach(m=>{ const bn = baseNameOf(m.name); if(bn.base===base) max = Math.max(max, bn.n); });
+      const newName = base+' '+(max+1);
+
+      const copy = JSON.parse(JSON.stringify(src));
+      copy.name = newName; copy.id = Date.now(); copy.done = false; copy.started = false;
+      copy.stats = {done:0,failed:0}; copy.createdAt = Date.now(); delete copy._failed;
+      copy.durMin = newDur; copy.aiXp = newXp; copy.aiValue = newLc; copy.penXp = newPen;
+      G.missions.unshift(copy);
+      registerCatalog(newName, newXp, newLc);
+      renderMissions(); save();
+      showToast(`➕ "${newName}" criada! ${fmtHM(newDur)} · ${newLc} LC · +${newXp} XP`,'heal');
+    }
+  });
 }
 
 // salva a missão que está no formulário como "pronta" (template do usuário)
@@ -6486,11 +6506,13 @@ function renderLateBanner(){
     const d=onlineData[n]; if(!d || d.dayDate!==today) return;
     (d.todayMissions||[]).forEach(m=>{ if(rivalMissionLate(m)) lates.push(n); });
   });
-  if(!lates.length){ el.style.display='none'; return; }
+  if(!lates.length){ el.style.display='none'; document.body.style.paddingTop=''; return; }
   const names=[...new Set(lates)];
   el.style.display='flex';
   el.innerHTML = `<span class="lb-txt">⚠️ <b>${names.join(', ')}</b> está atrasado (${lates.length} missão${lates.length>1?'s':''}) — cobra! Se não cumprir, <b>todos perdem</b>.</span>`+
     `<button class="lb-btn" onclick="switchTab('ranking', document.querySelector('.tab-btn[onclick*=ranking]'))">VER</button>`;
+  // empurra o conteúdo (e os ícones do cabeçalho) pra baixo do banner, em vez de ficar por cima
+  requestAnimationFrame(()=>{ try{ document.body.style.paddingTop = 'calc(env(safe-area-inset-top) + '+el.offsetHeight+'px)'; }catch(e){} });
 }
 
 // ===== RAID CO-OP SEMANAL (os 3 juntos) =====
@@ -9239,7 +9261,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.29 • v90';
+  window.APP_VERSION = '2026.06.29 • v91';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
