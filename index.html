@@ -8888,10 +8888,11 @@ function askPasswordOnLoad(name, onSuccess, onFail){
   overlay.id = 'pwd-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:#0a0814;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;font-family:var(--vt);';
   overlay.innerHTML = `
-    <div style="font-family:var(--pixel);font-size:14px;color:var(--gold);text-shadow:0 0 12px var(--gold);">🔐 SENHA DE ${name.toUpperCase()}</div>
-    <input id="pwd-input" type="password" autofocus style="font-family:var(--vt);font-size:22px;padding:12px 18px;background:#15101e;border:2px solid var(--gold);color:var(--text);border-radius:6px;text-align:center;letter-spacing:4px;width:260px;outline:none;">
+    <div id="pwd-title" style="font-family:var(--pixel);font-size:14px;color:var(--gold);text-shadow:0 0 12px var(--gold);">🔐 ENTRAR · ${name.toUpperCase()}</div>
+    <button id="pwd-bio" style="display:none;font-family:var(--pixel);font-size:11px;padding:15px 28px;background:var(--cyan);color:#000;border:none;cursor:pointer;border-radius:8px;box-shadow:0 0 16px rgba(34,221,255,.55);">👆 ENTRAR COM BIOMETRIA</button>
+    <div id="pwd-or" style="display:none;color:var(--muted);font-size:12px;letter-spacing:1px;">— ou use a senha —</div>
+    <input id="pwd-input" type="password" style="font-family:var(--vt);font-size:22px;padding:12px 18px;background:#15101e;border:2px solid var(--gold);color:var(--text);border-radius:6px;text-align:center;letter-spacing:4px;width:260px;outline:none;">
     <div id="pwd-err" style="color:#ff3344;font-size:14px;min-height:18px;"></div>
-    <button id="pwd-bio" style="display:none;font-family:var(--pixel);font-size:10px;padding:13px 26px;background:var(--cyan);color:#000;border:none;cursor:pointer;border-radius:6px;box-shadow:0 0 14px rgba(34,221,255,.5);">👆 DESBLOQUEAR COM BIOMETRIA</button>
     <div style="display:flex;gap:8px;">
       <button id="pwd-ok" style="font-family:var(--pixel);font-size:9px;padding:10px 18px;background:var(--gold);color:#000;border:none;cursor:pointer;border-radius:4px;">ENTRAR</button>
       <button id="pwd-back" style="font-family:var(--pixel);font-size:9px;padding:10px 18px;background:transparent;color:var(--muted);border:1px solid var(--muted);cursor:pointer;border-radius:4px;">TROCAR PERFIL</button>
@@ -8903,7 +8904,8 @@ function askPasswordOnLoad(name, onSuccess, onFail){
   const err = overlay.querySelector('#pwd-err');
   const okBtn = overlay.querySelector('#pwd-ok');
   const backBtn = overlay.querySelector('#pwd-back');
-  setTimeout(()=>inp.focus(), 100);
+  // Só foca a senha (abrindo o teclado) se NÃO houver biometria — senão a digital é a preferida
+  if(!bioIsEnrolled(name)) setTimeout(()=>inp.focus(), 100);
   let tries = 0;
   function tryLogin(){
     if(inp.value === pwd){
@@ -8930,14 +8932,16 @@ function askPasswordOnLoad(name, onSuccess, onFail){
     bioBtn.disabled = true; bioBtn.textContent = '⌛ AGUARDE…';
     const ok = await bioUnlock(name);
     if(ok){ overlay.remove(); onSuccess(); return; }
-    bioBtn.disabled = false; bioBtn.textContent = '👆 DESBLOQUEAR COM BIOMETRIA';
+    bioBtn.disabled = false; bioBtn.textContent = '👆 ENTRAR COM BIOMETRIA';
     err.textContent = 'Biometria não reconhecida — use a senha';
     setTimeout(()=>inp.focus(), 50);
   }
   if(bioBtn && bioIsEnrolled(name)){
     bioSupported().then(s=>{
       if(!s) return;
+      // biometria é a opção principal (mais rápida): mostra no topo + separador da senha
       bioBtn.style.display = 'block';
+      const orEl = overlay.querySelector('#pwd-or'); if(orEl) orEl.style.display = 'block';
       bioBtn.onclick = doBio;
       setTimeout(doBio, 400);   // dispara o prompt do aparelho automaticamente
     });
@@ -9030,7 +9034,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.28 • v86';
+  window.APP_VERSION = '2026.06.28 • v87';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
