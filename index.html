@@ -324,9 +324,9 @@
   /* 🔔/⚙ botões de ícone do cabeçalho — quadrados, maiores e nítidos */
   .hdr-icon-btn {
     position: relative;
-    width: 40px; height: 40px;
+    width: 32px; height: 32px;
     display: inline-flex; align-items: center; justify-content: center;
-    font-size: 21px; line-height: 1;
+    font-size: 16px; line-height: 1;
     background: rgba(240,192,64,0.12);
     border: 2px solid var(--gold);
     border-radius: 10px;
@@ -676,6 +676,14 @@
     background:linear-gradient(180deg, rgba(36,26,58,.97), rgba(13,10,24,.98));
     box-shadow: inset 0 1px 0 rgba(255,255,255,.08), inset 0 -10px 24px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.45);
     padding:8px 14px;
+    padding-right:80px;
+  }
+  .hdr-icons-corner{
+    position:absolute;
+    top:6px; right:6px;
+    display:flex;
+    gap:5px;
+    z-index:5;
   }
   .game-title{
     font-size:10px; color:var(--gold);
@@ -1770,6 +1778,8 @@
       <div class="coin-display"><canvas id="ic-coin" width="22" height="22" class="ic-canvas" style="border-radius:50%"></canvas><span id="coins-display">150</span> <span style="font-family:var(--pixel);font-size:7px;color:var(--gold-dark)">LC</span></div>
       <div class="gem-display"><canvas id="ic-gem" width="20" height="20" class="ic-canvas"></canvas><span id="gems-display">5</span></div>
       <div class="day-display">Dia <span id="day-display">1</span></div>
+    </div>
+    <div class="hdr-icons-corner">
       <button class="hdr-icon-btn" id="news-btn" title="Novidades do jogo" onclick="openNews()">🔔<span class="hdr-badge" id="news-badge" style="display:none"></span></button>
       <button class="hdr-icon-btn" title="Configurações & Save" onclick="openSystem()">⚙️</button>
     </div>
@@ -2578,7 +2588,7 @@ const REAL_REWARDS = [
   {id:'maconha',   emoji:'🌿', name:'Fumar Maconha',         cost:300, desc:'Relaxar'},
   {id:'punheta',   emoji:'✊', name:'Punheta',               cost:360, desc:'Alívio rápido (sai caro)'},
   // caras
-  {id:'atoa',      emoji:'😴', name:'Dia à Toa',             cost:800, desc:'Um dia sem cobranças'},
+  {id:'atoa',      emoji:'😴', name:'Broxa Day',             cost:1200, desc:'Um dia sem cobranças'},
   // variáveis (conforme o gasto real)
   {id:'snack',     emoji:'🍔', name:'Um Lanche',             variable:'price', desc:'Custo conforme o preço (R$)'},
   {id:'manos',     emoji:'🍻', name:'Saída com os Manos',    variable:'outing', desc:'Estimado por tempo + gasto'},
@@ -3403,6 +3413,7 @@ function renderMissions() {
       <span class="diff-badge ${d.class}">${d.label}</span>
       <div class="mission-actions">
         <button class="pixel-btn btn-sm" title="Editar tempo da missão" onclick="editMissionDuration(${i})">⏱</button>
+        <button class="pixel-btn btn-sm" title="Adicionar auxiliar (ex: ${m.name} 2)" onclick="duplicateMission(${i})">➕</button>
         ${m.done
           ? '<span style="color:var(--green);font-size:14px">✓</span>'
           : (m.started
@@ -4627,7 +4638,7 @@ function renderWorldStatus(){
   const st = worldStateLabel(v==null?50:v);
   const barCol = v==null ? '#888' : (v>=80?'#46c46a':v>=55?'#8fc23a':v>=30?'#d99a3a':'#d24a4a');
   el.innerHTML = `
-    <div class="ws-head"><b>${d.name}</b>${d.me?' <span style="color:var(--muted)">(você)</span>':''}${(!d.me&&d.offline)?'<span class="ws-off">⚠ sem sinal recente</span>':''}</div>
+    <div class="ws-head"><b>${d.name}</b>${d.me?' <span style="color:var(--muted)">(você)</span>':''}${(!d.me&&d.offline)?'<span class="ws-off">⚠ sem sinal recente</span>':''}${!d.me?`<button class="pixel-btn btn-gold btn-sm" style="margin-left:8px" title="Mandar presente que ajuda a vila dele(a) a crescer" onclick="sendVillageGift('${d.name}')">🎁 Presente (${VILLAGE_GIFT_COST} LC)</button>`:''}</div>
     <div class="ws-state">${st.emoji} ${st.label}${v==null?' — o mano ainda não sincronizou':` · vitalidade ${Math.round(v)}/100`}</div>
     <div class="ws-bar"><div class="ws-fill" style="width:${v==null?50:v}%;background:${barCol}"></div></div>
     <div class="ws-meta">🏘️ ${d.missions} missões ergueram esta vila${(d.streak||0)>=2?` · 🔥 ${d.streak} dias`:''}</div>
@@ -4965,6 +4976,27 @@ function addMission() {
   { ensureWorld(); G.world.seeds=(G.world.seeds||0)+1; WORLD._evt={emoji:'🌱', ts:Date.now(), done:false}; }
   renderMissions(); save();
   showToast(future ? "🔮 Missão guardada nas Futuras!" : "Nova missão criada!", "info");
+}
+
+// ➕ cria uma cópia auxiliar da missão (ex: "Leitura" -> "Leitura 2" -> "Leitura 3"...)
+function baseNameOf(name){
+  const p = name.trim().split(/\s+/);
+  const lastIsNum = p.length>1 && /^\d+$/.test(p[p.length-1]);
+  return { base: lastIsNum ? p.slice(0,-1).join(' ') : name.trim(), n: lastIsNum ? parseInt(p[p.length-1]) : 1 };
+}
+function duplicateMission(i){
+  const src = G.missions[i]; if(!src) return;
+  const { base } = baseNameOf(src.name);
+  let max = 1;
+  G.missions.forEach(m=>{ const bn = baseNameOf(m.name); if(bn.base===base) max = Math.max(max, bn.n); });
+  const newName = base+' '+(max+1);
+  const copy = JSON.parse(JSON.stringify(src));
+  copy.name = newName; copy.id = Date.now(); copy.done = false; copy.started = false;
+  copy.stats = {done:0,failed:0}; copy.createdAt = Date.now(); delete copy._failed;
+  G.missions.unshift(copy);
+  registerCatalog(newName, effVals(copy.diff, copy.aiXp, copy.aiValue).xp, effVals(copy.diff, copy.aiXp, copy.aiValue).lc);
+  renderMissions(); save();
+  showToast('➕ "'+newName+'" adicionada!','heal');
 }
 
 // salva a missão que está no formulário como "pronta" (template do usuário)
@@ -5352,9 +5384,14 @@ function healPlayer(amount) {
 
 function buyItem(i) {
   const item = SHOP_ITEMS[i];
-  if(G.coins < item.price){ showToast("LulaCoins insuficientes!", "dmg"); return; }
-  G.coins -= item.price;
-  addLedger('out', item.price, 'Loja: '+item.name);
+  const atoaFree = G.atoaDate === todayStr();
+  if(!atoaFree && G.coins < item.price){ showToast("LulaCoins insuficientes!", "dmg"); return; }
+  if(!atoaFree){
+    G.coins -= item.price;
+    addLedger('out', item.price, 'Loja: '+item.name);
+  } else {
+    addLedger('out', 0, 'Loja (😴 Dia à Toa, de graça): '+item.name);
+  }
   G.lastPurchases = G.lastPurchases || [];
   G.lastPurchases.unshift({t:Date.now(), emoji:item.emoji, name:item.name, cost:item.price, type:'shop'});
   if(G.lastPurchases.length > 20) G.lastPurchases.pop();
@@ -5987,6 +6024,7 @@ function listenRivals() {
   listenDuels();
   listenNudges();
   listenGift();
+  listenVillageGift();
   listenReact();
   listenCatalog();
   listenPrices();
@@ -6955,6 +6993,42 @@ function sendGift(name, xp, reason){
     .catch(()=>showToast('Falha ao enviar XP','dmg'));
 }
 
+// ===== 🎁 PRESENTE PRA VILA DO MANO (visita → ajuda a vila dele a crescer) =====
+const VILLAGE_GIFT_COST = 60;   // LulaCoins
+const VILLAGE_GIFT_BUILT = 4;   // quanto soma em G.world.built do destinatário
+let villageGiftListener = null;
+function listenVillageGift(){
+  if(!db) return; const myName=G.profile?.name||''; if(!ONLINE_PLAYERS.includes(myName)) return;
+  if(villageGiftListener) villageGiftListener.off();
+  villageGiftListener = db.ref('forge_villagegift/'+myName);
+  villageGiftListener.on('value', snap=>{ const v=snap.val(); if(v) applyVillageGift(v); });
+}
+function applyVillageGift(v){
+  if(!v || !v.at) return;
+  if((G.villageGiftSeen||0) >= v.at) return;
+  G.villageGiftSeen = v.at;
+  ensureWorld();
+  G.world.built = (G.world.built||0) + (v.amount||VILLAGE_GIFT_BUILT);
+  if((G.world.decay||0)>0) G.world.decay = Math.max(0, G.world.decay-2);
+  showToast(`🎁 ${v.from} visitou e ajudou sua vila a crescer!`,'heal');
+  gameNotify('🎁 Presente na sua vila!', `${v.from} mandou ajuda — sua vila cresceu um pouco.`, {tag:'villagegift', renotify:true});
+  if(db) db.ref('forge_villagegift/'+(G.profile?.name||'')).remove().catch(()=>{});
+  WORLD.scene = null;
+  updateUI(); save();
+}
+function sendVillageGift(name){
+  if(!db){ showToast('Conecte o Firebase pra mandar presente!','dmg'); return; }
+  const myName = G.profile?.name||'';
+  if(name===myName){ showToast('Não dá pra mandar presente pra sua própria vila 😅','dmg'); return; }
+  if(G.coins < VILLAGE_GIFT_COST){ showToast(`Faltam ${VILLAGE_GIFT_COST-G.coins} LulaCoins!`,'dmg'); return; }
+  G.coins -= VILLAGE_GIFT_COST;
+  addLedger('out', VILLAGE_GIFT_COST, 'Presente pra vila de '+name);
+  db.ref('forge_villagegift/'+name).set({ from:myName, amount:VILLAGE_GIFT_BUILT, at:Date.now() })
+    .then(()=>showToast(`🎁 Presente enviado pra vila de ${name}!`,'heal'))
+    .catch(()=>{ G.coins += VILLAGE_GIFT_COST; showToast('Falha ao enviar presente','dmg'); });
+  updateUI(); save();
+}
+
 // ===== 📱 TEMPO DE TELA (DESATIVADO por enquanto — pronto p/ reativar) =====
 // Pra reativar: SCREEN_TIME_ENABLED=true E descomentar o botão "📱 TELA" no HTML.
 const SCREEN_TIME_ENABLED = false;
@@ -7854,12 +7928,13 @@ function checkDailyReset(){
   }
   // 🏘️ A Vila reage ao dia que terminou: cumpriu → cresce; furou/sumiu → definha
   ensureWorld();
-  const _inGrace = (G.graceDate && G.lastResetDate < G.graceDate);
+  const _atoaToday = (G.atoaDate === G.lastResetDate);   // 😴 Dia à Toa cobria o dia que fechou
+  const _inGrace = (G.graceDate && G.lastResetDate < G.graceDate) || _atoaToday;
   let _wd;
   if(dueCount>0){ const ratio = doneCount/dueCount; _wd = ratio>=1 ? 12 : ratio>=0.5 ? 4 : -10; }
   else { _wd = G.didToday ? 4 : -6; }      // sem missões devidas: fez algo avulso sobe pouco; nada decai leve
   if((G.streak||0) >= 3 && _wd>0) _wd += 3;
-  if(_inGrace && _wd<0) _wd = 0;            // carência não derruba a vila
+  if(_inGrace && _wd<0) _wd = 0;            // carência/dia à toa não derruba a vila
   G.world.vitality = Math.max(0, Math.min(100, (G.world.vitality||60) + _wd));
   if(!_inGrace && failures>0) G.world.decay = Math.min(40, (G.world.decay||0) + Math.min(failures,4));  // 🥀 falhas apodrecem a vila
   if(_wd>=12) G.world.decay = Math.max(0, (G.world.decay||0) - 2);                                       // dia perfeito limpa
@@ -7877,9 +7952,10 @@ function checkDailyReset(){
   G.skillCooldowns = {}; // cooldowns resetam a cada dia
   G.didToday = false;
   // carência: penalidades só valem a partir de graceDate (o jogo "começa a valer amanhã")
-  const inGrace = G.graceDate && G.lastResetDate < G.graceDate;
+  const inGrace = (G.graceDate && G.lastResetDate < G.graceDate) || _atoaToday;
   if(inGrace){
-    if(failures>0) showToast(`🕊️ Dia de preparação — sem punição hoje. As cobranças começam a valer amanhã!`, 'info');
+    if(failures>0 && _atoaToday) showToast(`😴 Broxa Day cobriu ontem — sem punição de missão/XP!`, 'info');
+    else if(failures>0) showToast(`🕊️ Dia de preparação — sem punição hoje. As cobranças começam a valer amanhã!`, 'info');
   } else {
   // Não cumpriu TODAS as missões devidas do dia?
   const missed = dueCount - doneCount;
@@ -8141,7 +8217,12 @@ function finalizeReward(r, cost, label){
   G.lastPurchases.unshift({t:Date.now(), emoji:r.emoji, name:label, cost, type:'reward'});
   if(G.lastPurchases.length > 20) G.lastPurchases.pop();
   if(G.rewardsLog.length>200) G.rewardsLog.pop();
-  showToast(`${r.emoji} Liberado: ${r.name}! Aproveite 🎉`,'heal');
+  if(r.id==='atoa'){
+    G.atoaDate = todayStr();
+    showToast(`😴 Broxa Day ativado! Hoje: sem cobrança de XP (missão/acordar) e loja de graça.`,'heal');
+  } else {
+    showToast(`${r.emoji} Liberado: ${r.name}! Aproveite 🎉`,'heal');
+  }
   updateUI(); renderRewards(); save();
 }
 
@@ -8213,6 +8294,7 @@ function checkWakeNerf(){
   if(h < WAKE_DEADLINE_H) return;                  // ainda não deu 9h → só lembra
   if(G.wakeNerfDate === today) return;             // já levou o nerf hoje
   if(G.graceDate && today < G.graceDate){ renderWakeButton(); return; }  // dia de preparação, sem punição
+  if(G.atoaDate === today){ renderWakeButton(); return; }  // 😴 Dia à Toa: sem cobrança hoje
   G.wakeNerfDate = today;
   loseXP(100);
   showToast('😴 Não apertou "Acordei" até as 9h! -100 XP','dmg');
@@ -9132,7 +9214,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.28 • v88';
+  window.APP_VERSION = '2026.06.29 • v89';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
