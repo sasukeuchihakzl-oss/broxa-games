@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
@@ -3777,7 +3777,7 @@ const MENTOR2_LINES = [
   'Faz a missão, meu amor.'
 ];
 let _mentor2Dismissed = false, _mentor2LastLine = '', _mentor2HideTimer = null, _mentor2LastSpotIdx = -1, _mentor2CurSpot = MENTOR_SPOTS[1];
-function mentor2IsAllowed(){ return !!(G.profile && (G.profile.name === 'Craudo' || G.profile.name === 'Mizuki')); }   // Mizuki adicionada temporariamente
+function mentor2IsAllowed(){ return !!(G.profile && G.profile.name === 'Craudo'); }
 function mentor2PickSpot(){
   let idx=_mentor2LastSpotIdx;
   for(let k=0;k<6;k++){ idx=Math.random()*MENTOR_SPOTS.length|0; if(idx!==_mentor2LastSpotIdx) break; }
@@ -6334,6 +6334,7 @@ function syncOnline() {
     lastPunishments: (G.lastPunishments || []).slice(0, 15),
     // feed: últimas missões concluídas (p/ a timeline do grupo)
     feed: (G.history||[]).filter(h=>h.type==='done').slice(0,10).map(h=>({n:h.name, c:h.cat, ic:h.icon||'', t:h.t, lc:h.lc||0, xp:h.xp||0})),
+    atoaDate: G.atoaDate || '',   // 😴 Broxa Day — pra os manos não marcarem como atrasado
     updatedAt: Date.now()
   };
   try {
@@ -6459,7 +6460,8 @@ function renderTeamMissions(){
       html += tm.map(m=>{
         if(m.d) return `<div class="tm-miss done"><span>✅ ${m.c||''} ${m.n}</span><span class="tm-time">${(m.lc||m.xp)?`+${m.lc||0} LC · +${m.xp||0} XP`:'feita'}</span></div>`;
         const inProg = !!m.s;                  // já começou = em andamento
-        const late=rivalMissionLate(m);
+        const atoa = d.atoaDate === todayStr();
+        const late = !atoa && rivalMissionLate(m);
         const icon = inProg ? '▶️' : (late?'⚠️':'⬜');
         const time = inProg ? ('▶️ em andamento'+(m.t?' · '+m.t:''))
                             : (m.t?(late?'⏰ atrasou '+m.t:'⏰ '+m.t):'');
@@ -6471,7 +6473,7 @@ function renderTeamMissions(){
       // feitas que o app dele (desatualizado) não detalhou, mas contou no todayCount
       const hidden = doneAuth - doneListed;
       if(hidden>0) html += `<div class="tm-miss done"><span>✅ +${hidden} concluída${hidden>1?'s':''} hoje</span><span class="tm-time" title="app dele desatualizado — não detalha os nomes">app desatu.</span></div>`;
-      const lateCount = pend.filter(rivalMissionLate).length;
+      const lateCount = d.atoaDate===todayStr() ? 0 : pend.filter(rivalMissionLate).length;
       if(pend.length){
         html += `<button class="tm-nudge${lateCount?' urgent':''}" onclick="sendNudge('${n}')">👊 Cobrar ${n}${lateCount?' ('+lateCount+' atrasada'+(lateCount>1?'s':'')+')':''}</button>`;
       } else if(doneAuth>0){
@@ -6489,6 +6491,7 @@ function checkRivalOverdue(){
   const myName=G.profile?.name||''; const today=todayStr();
   ONLINE_PLAYERS.filter(n=>n!==myName).forEach(n=>{
     const d=onlineData[n]; if(!d || d.dayDate!==today) return;
+    if(d.atoaDate===today) return;   // 😴 Broxa Day: sem notificação de atraso
     (d.todayMissions||[]).forEach(m=>{
       if(!rivalMissionLate(m)) return;
       const key=n+'|'+m.n+'|'+today;
@@ -6504,6 +6507,7 @@ function renderLateBanner(){
   const lates=[];
   ONLINE_PLAYERS.filter(n=>n!==myName).forEach(n=>{
     const d=onlineData[n]; if(!d || d.dayDate!==today) return;
+    if(d.atoaDate===today) return;   // 😴 Broxa Day ativo: não cobra
     (d.todayMissions||[]).forEach(m=>{ if(rivalMissionLate(m)) lates.push(n); });
   });
   if(!lates.length){ el.style.display='none'; document.body.style.paddingTop=''; return; }
@@ -9261,7 +9265,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.29 • v92';
+  window.APP_VERSION = '2026.06.29 • v93';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
