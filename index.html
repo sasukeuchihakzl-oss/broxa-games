@@ -3656,10 +3656,10 @@ function renderMonthCats(elId){
   const myName=G.profile?.name||'';
   // Meus totais mensais + trend semanal
   const myCats={}, thisWk={}, prevWk={};
-  Object.entries(G.timeLog||{}).forEach(([date,cats])=>{
+  Object.entries(G.timeLogName||{}).forEach(([date,names])=>{
     if(!date.startsWith(mp)) return;
     const dAgo=Math.round((now-new Date(date))/86400000);
-    Object.entries(cats).forEach(([c,m])=>{
+    Object.entries(names).forEach(([c,m])=>{
       myCats[c]=(myCats[c]||0)+m;
       if(dAgo<7) thisWk[c]=(thisWk[c]||0)+m;
       else if(dAgo<14) prevWk[c]=(prevWk[c]||0)+m;
@@ -3669,7 +3669,7 @@ function renderMonthCats(elId){
   const allP=[{name:myName,cats:myCats,color:G.profile?.armor||'#888',me:true}];
   ONLINE_PLAYERS.filter(n=>n!==myName).forEach(n=>{
     const d=onlineData[n];
-    if(d&&d.catMonthly&&Object.keys(d.catMonthly).length) allP.push({name:n,cats:d.catMonthly,color:d.profileColor||CHAR_PRESETS[n]?.armor||'#888',me:false});
+    if(d&&d.nameMonthly&&Object.keys(d.nameMonthly).length) allP.push({name:n,cats:d.nameMonthly,color:d.profileColor||CHAR_PRESETS[n]?.armor||'#888',me:false});
   });
   // Todas as categorias
   const allCats=new Set();
@@ -3689,7 +3689,7 @@ function renderMonthCats(elId){
     if(!rows.some(r=>r.min>0)) return;
     const maxMin=Math.max(1,...rows.map(r=>r.min));
     html+=`<div style="margin:10px 0;padding:10px 12px;background:rgba(255,255,255,.04);border-radius:10px;border:1px solid var(--border)">
-      <div style="font-size:15px;font-weight:700;margin-bottom:8px;cursor:pointer" title="Editar emoji" onclick="editCatEmoji('${cat}')">${catEmoji(cat)} <span style="font-size:11px;color:var(--muted)">✏️</span></div>`;
+      <div style="font-size:15px;font-weight:700;margin-bottom:8px">${(''+cat).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`;
     rows.forEach(r=>{
       const bw=Math.round(r.min/maxMin*100);
       const ahead=bw>mPct, behind=bw<mPct*0.7;
@@ -5504,10 +5504,29 @@ const DUR_BY_DIFF = {easy:15, medium:30, hard:60, legendary:120};
 function missionDurMin(m){ return (m.durMin && m.durMin>0) ? m.durMin : (DUR_BY_DIFF[m.diff]||30); }
 function logActivityTime(m){
   const t = todayStr();
+  const dur = missionDurMin(m);
   if(!G.timeLog || typeof G.timeLog!=='object') G.timeLog = {};
   if(!G.timeLog[t]) G.timeLog[t] = {};
   const cat = m.cat || '✅';
-  G.timeLog[t][cat] = (G.timeLog[t][cat]||0) + missionDurMin(m);
+  G.timeLog[t][cat] = (G.timeLog[t][cat]||0) + dur;
+  // ⏱️ também por NOME da atividade (base da seção "Tempo Mensal por Atividade")
+  if(!G.timeLogName || typeof G.timeLogName!=='object') G.timeLogName = {};
+  if(!G.timeLogName[t]) G.timeLogName[t] = {};
+  const nm = ((m.name||'Atividade')+'').trim() || 'Atividade';
+  G.timeLogName[t][nm] = (G.timeLogName[t][nm]||0) + dur;
+}
+// 🔄 preenche o log por NOME a partir do histórico (missões antigas) — roda UMA vez
+function backfillTimeLogName(){
+  if(G.timeLogNameMigrated) return;
+  if(!G.timeLogName || typeof G.timeLogName!=='object') G.timeLogName = {};
+  (G.history||[]).forEach(h=>{
+    if(h.type!=='done' || !h.name) return;
+    const d=todayStr(new Date(h.t)); if(!d) return;
+    const dur = DUR_BY_DIFF[h.diff] || 30;
+    if(!G.timeLogName[d]) G.timeLogName[d] = {};
+    G.timeLogName[d][h.name] = (G.timeLogName[d][h.name]||0) + dur;
+  });
+  G.timeLogNameMigrated = 1;
 }
 // ⏱️ tempo total de ATIVIDADE (minutos) gasto em missões — hoje e na semana
 function activeMinToday(){ const lg=(G.timeLog||{})[todayStr()]||{}; return Object.values(lg).reduce((s,v)=>s+(v||0),0); }
@@ -6542,6 +6561,7 @@ function syncOnline() {
     atoaDate: G.atoaDate || '',   // 😴 Broxa Day — pra os manos não marcarem como atrasado
     xpToday: (function(){ const t=todayStr(); return (G.history||[]).filter(h=>h.type==='done'&&todayStr(new Date(h.t))===t).reduce((s,h)=>s+(h.xp||0),0); })(),
     catMonthly: (function(){ const mp=new Date().toISOString().slice(0,7),r={}; Object.entries(G.timeLog||{}).forEach(([d,cats])=>{ if(!d.startsWith(mp)) return; Object.entries(cats).forEach(([c,m])=>{r[c]=(r[c]||0)+m;}); }); return r; })(),
+    nameMonthly: (function(){ const mp=new Date().toISOString().slice(0,7),r={}; Object.entries(G.timeLogName||{}).forEach(([d,names])=>{ if(!d.startsWith(mp)) return; Object.entries(names).forEach(([n,m])=>{r[n]=(r[n]||0)+m;}); }); return r; })(),
     updatedAt: Date.now()
   };
   try {
@@ -7902,7 +7922,7 @@ function save(){
       migratedDefaults:G.migratedDefaults, nextReminderLast:G.nextReminderLast,
       wokeUpDate:G.wokeUpDate, wakeNerfDate:G.wakeNerfDate, wakeRemindDate:G.wakeRemindDate, wakeStartDate:G.wakeStartDate,
       xpCurveV2:G.xpCurveV2, xpCurveV3:G.xpCurveV3,
-      doubleXpUntil:G.doubleXpUntil, xpDay:G.xpDay, xpRecord:G.xpRecord, timeLog:G.timeLog, sleepGoalH:G.sleepGoalH,
+      doubleXpUntil:G.doubleXpUntil, xpDay:G.xpDay, xpRecord:G.xpRecord, timeLog:G.timeLog, timeLogName:G.timeLogName||{}, timeLogNameMigrated:G.timeLogNameMigrated||0, sleepGoalH:G.sleepGoalH,
       dailyRankBonusDate:G.dailyRankBonusDate||'',
       catRemap:G.catRemap||{},
       world:G.world
@@ -7977,6 +7997,8 @@ function load(){
     G.doubleXpUntil = G.doubleXpUntil || 0;
     G.xpRecord = G.xpRecord || 0;
     G.timeLog = (G.timeLog && typeof G.timeLog==='object') ? G.timeLog : {};
+    G.timeLogName = (G.timeLogName && typeof G.timeLogName==='object') ? G.timeLogName : {};
+    try{ backfillTimeLogName(); }catch(e){}
     G.sleepGoalH = G.sleepGoalH || 8;
     G.world = (G.world && typeof G.world==='object') ? G.world : null;
     G.dayFailSeen = G.dayFailSeen || {};
@@ -9529,7 +9551,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.30 • v98';
+  window.APP_VERSION = '2026.07.01 • v99';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
