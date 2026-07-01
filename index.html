@@ -2548,6 +2548,18 @@ const CATEGORIES = {
 };
 function catAttrs(c){ return (CATEGORIES[c] && CATEGORIES[c].attrs) || []; }
 function catColor(c){ return (CATEGORIES[c] && CATEGORIES[c].color) || 'var(--gold)'; }
+function catEmoji(c){ return (G.catRemap && G.catRemap[c]) || c; }
+function editCatEmoji(orig){
+  const catName=(CATEGORIES[orig]&&CATEGORIES[orig].name)||orig;
+  gameAsk({title:'✏️ Emoji da categoria',label:`Categoria: ${catName}\nEmoji atual: ${catEmoji(orig)}\n\nDigite o novo emoji:`,type:'text',value:catEmoji(orig),okText:'SALVAR',
+    onOk:(v)=>{
+      const nv=v.trim(); if(!nv){showToast('Emoji inválido!','dmg');return;}
+      if(!G.catRemap) G.catRemap={};
+      if(nv===orig) delete G.catRemap[orig]; else G.catRemap[orig]=nv;
+      save(); try{renderTimeTab();}catch(e){} showToast(`✏️ ${catName}: ${catEmoji(orig)}`,'info');
+    }
+  });
+}
 
 // ===== TÍTULOS por nível =====
 const TITLES = [
@@ -3220,7 +3232,7 @@ function editMission(i){
   const m = G.missions[i]; if(!m) return;
   _editIdx = i;
   const catSel = document.getElementById('edit-m-cat');
-  catSel.innerHTML = Object.entries(CATEGORIES).map(([e,c])=>`<option value="${e}">${e} ${c.name}</option>`).join('');
+  catSel.innerHTML = Object.entries(CATEGORIES).map(([e,c])=>`<option value="${e}">${catEmoji(e)} ${c.name}</option>`).join('');
   document.getElementById('edit-m-name').value = m.name;
   catSel.value = m.cat;
   document.getElementById('edit-m-diff').value = m.diff;
@@ -3236,7 +3248,7 @@ function editCustomTemplate(i){
   const t = (G.customTemplates||[])[i]; if(!t) return;
   _editTemplateIdx = i; _editIdx = -1;
   const catSel = document.getElementById('edit-m-cat');
-  catSel.innerHTML = Object.entries(CATEGORIES).map(([e,c])=>`<option value="${e}">${e} ${c.name}</option>`).join('');
+  catSel.innerHTML = Object.entries(CATEGORIES).map(([e,c])=>`<option value="${e}">${catEmoji(e)} ${c.name}</option>`).join('');
   document.getElementById('edit-m-name').value = t.name;
   catSel.value = t.cat;
   document.getElementById('edit-m-diff').value = t.diff;
@@ -3408,7 +3420,7 @@ function renderMissions() {
       dateBadge = `<span class="date-badge ${future?'future':''}">📅 ${dd}/${mo}${future?' (agendada)':''}</span>`;
     }
     return `<div class="mission-item ${m.done?'mission-done':''} ${folga?'mission-rest':''} ${urgency}" style="border-left:3px solid ${col}">
-      <span class="mission-cat-icon">${m.icon||m.cat}</span>
+      <span class="mission-cat-icon">${m.icon||catEmoji(m.cat)}</span>
       <div class="mission-info">
         <div class="mission-name">${m.name} ${recBadge}${dateBadge}${folgaBadge}${timeBadge}${startedBadge}</div>
         <div class="mission-meta">${icImg('lulacoin',11)} ${m.aiValue!=null?(m.aiValue+' LC · +'+m.aiXp+' XP'):(d.coins[0]+'-'+d.coins[1]+' LC · +'+d.xp+' XP')} · <span class="dur-badge" title="${m.durMin!=null?'tempo informado':'estimado pela dificuldade'}" style="color:#8fc7ff">⏱ ${fmtHM(missionDurMin(m))}${m.durMin==null?' ~':''}</span> · <span style="color:var(--green)">✅${st.done}</span> <span style="color:var(--danger)">❌${st.failed}</span>${m.penXp!=null?` · <span style="color:var(--danger)" title="XP perdido se falhar">⚠ -${m.penXp} XP</span>`:''}</div>
@@ -3467,7 +3479,7 @@ function renderFutureMissions(){
       sealBadge = `<span class="seal-badge">🔒 abre em ${txt}</span>`;
     }
     return `<div class="mission-item sealed" ${ready?`style="cursor:pointer" onclick="activateMission(${i})" title="Tocar pra ativar"`:''}>
-      <span class="mission-cat-icon">${m.icon||m.cat}</span>
+      <span class="mission-cat-icon">${m.icon||catEmoji(m.cat)}</span>
       <div class="mission-info">
         <div class="mission-name">${m.name} ${sealBadge}</div>
         <div class="mission-meta">${icImg('lulacoin',11)} ${m.aiValue!=null?(m.aiValue+' LC · +'+m.aiXp+' XP'):(d.coins[0]+'-'+d.coins[1]+' LC · +'+d.xp+' XP')} · <span style="color:#8fc7ff">⏱ ${fmtHM(missionDurMin(m))}${m.durMin==null?' ~':''}</span> · <span style="color:var(--gold)">🔮 +50% XP</span></div>
@@ -3558,7 +3570,7 @@ function renderTimeTab(){
   const maxCat = cats.length ? cats[0][1] : 1;
   const catRows = cats.length ? cats.map(([c,mn])=>`
     <div style="display:flex;align-items:center;gap:8px;margin:5px 0">
-      <span style="font-size:17px;width:22px;text-align:center">${c}</span>
+      <span style="font-size:17px;width:22px;text-align:center;cursor:pointer" title="Editar emoji" onclick="editCatEmoji('${c}')">${catEmoji(c)}</span>
       <div style="flex:1;height:15px;background:rgba(255,255,255,.06);border-radius:7px;overflow:hidden">
         <div style="height:100%;width:${(mn/maxCat*100)}%;background:${catColor(c)};border-radius:7px"></div>
       </div>
@@ -3674,7 +3686,7 @@ function renderMonthCats(){
     if(!rows.some(r=>r.min>0)) return;
     const maxMin=Math.max(1,...rows.map(r=>r.min));
     html+=`<div style="margin:10px 0;padding:10px 12px;background:rgba(255,255,255,.04);border-radius:10px;border:1px solid var(--border)">
-      <div style="font-size:15px;font-weight:700;margin-bottom:8px">${cat}</div>`;
+      <div style="font-size:15px;font-weight:700;margin-bottom:8px;cursor:pointer" title="Editar emoji" onclick="editCatEmoji('${cat}')">${catEmoji(cat)} <span style="font-size:11px;color:var(--muted)">✏️</span></div>`;
     rows.forEach(r=>{
       const bw=Math.round(r.min/maxMin*100);
       const ahead=bw>mPct, behind=bw<mPct*0.7;
@@ -7772,6 +7784,7 @@ function save(){
       xpCurveV2:G.xpCurveV2, xpCurveV3:G.xpCurveV3,
       doubleXpUntil:G.doubleXpUntil, xpDay:G.xpDay, xpRecord:G.xpRecord, timeLog:G.timeLog, sleepGoalH:G.sleepGoalH,
       dailyRankBonusDate:G.dailyRankBonusDate||'',
+      catRemap:G.catRemap||{},
       world:G.world
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -7840,6 +7853,7 @@ function load(){
     G.weekMark = G.weekMark || '';
     G.xpEarned = G.xpEarned || 0;
     G.dailyRankBonusDate = G.dailyRankBonusDate || '';
+    G.catRemap = G.catRemap || {};
     G.doubleXpUntil = G.doubleXpUntil || 0;
     G.xpRecord = G.xpRecord || 0;
     G.timeLog = (G.timeLog && typeof G.timeLog==='object') ? G.timeLog : {};
@@ -8509,7 +8523,7 @@ function renderHistory(){
 // ===== SELECT DE CATEGORIA =====
 function buildCatSelect(){
   const sel = document.getElementById('mission-cat'); if(!sel) return;
-  sel.innerHTML = Object.entries(CATEGORIES).map(([e,c])=>`<option value="${e}">${e} ${c.name}</option>`).join('');
+  sel.innerHTML = Object.entries(CATEGORIES).map(([e,c])=>`<option value="${e}">${catEmoji(e)} ${c.name}</option>`).join('');
 }
 
 // ===== PERSONALIZAÇÃO DE PERSONAGEM =====
@@ -9394,7 +9408,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.29 • v95';
+  window.APP_VERSION = '2026.06.29 • v96';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
