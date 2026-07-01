@@ -4064,9 +4064,14 @@ function buildVillageScene(name, missions, built, decay, seeds){
   const stumps=[];   // árvores cortadas (tocos temporários)
   const fires=[];     // casas pegando fogo (índices) quando o mal ataca
   const sparks=[];    // partículas (faíscas mina/fogo)
+  // 🐔🐕 bichos da vila — vida própria (galinhas ciscando, cachorro passeando)
+  const animals=[];
+  const nHens=Math.min(5, Math.floor((built||0)/4));
+  for(let i=0;i<nHens;i++){ const p=nextPt(); animals.push({kind:'hen', mx:p.mx, my:Math.max(0.2,Math.min(0.86,p.my)), tx:p.mx, ty:p.my, st:'peck', t:800+rng()*1500, ph:rng()*6.28, face:1, col:(rng()<0.5?'#efefef':'#d8b088'), sp:0.5+rng()*0.4}); }
+  if((built||0)>=6){ animals.push({kind:'dog', mx:0.42, my:0.6, tx:0.42, ty:0.6, st:'idle', t:1500, ph:rng()*6.28, face:1, sp:0.9+rng()*0.4, col:rng()<0.5?'#8a6038':'#4a4a4a'}); }
   return {name, missions:mi, builtN:built||0, decayN:decay||0, seedsN:seeds||0, trait, key:name+'|'+total, popN, kidsN,
     buildings, trees, forest, lamps, npcs, spots, props, sprouts:sproutsPts, blights, demon, landmark, site, stumps, fires, sparks, evil:null,
-    stars, rain, clouds, patches, fieldUnlocked};
+    stars, rain, clouds, patches, fieldUnlocked, animals, birds:[], butterflies:[]};
 }
 
 function sizeWorldCanvas(){
@@ -4568,6 +4573,102 @@ function drawLevelMonumentTD(x, sx, sy, s, tier, night, ts){
   for(let k=0;k<4;k++){ const a=ts*0.0012+k*1.5708; x.beginPath(); x.moveTo(sx,topY-starR); x.lineTo(sx+Math.cos(a)*starR*1.4, topY-starR+Math.sin(a)*starR*1.4); x.stroke(); }
   if(night){ x.fillStyle='rgba(255,224,150,.5)'; x.beginPath(); x.arc(sx, topY-starR, starR*1.5, 0, 6.28); x.fill(); }
 }
+// ☀️🌙 SOL E LUA percorrem o céu conforme a HORA REAL — a rotina do dia fica visível de relance
+function _skyTopCol(mins, v){
+  const stops=[[0,'#141a3a'],[240,'#182050'],[320,'#39365f'],[380,'#c8663f'],[430,'#7fb0e0'],[600,'#8ecdff'],[1000,'#9ad2ff'],[1050,'#7fb0e0'],[1110,'#df8342'],[1170,'#39365f'],[1260,'#182050'],[1440,'#141a3a']];
+  let a=stops[0],b=stops[stops.length-1];
+  for(let i=0;i<stops.length-1;i++){ if(mins>=stops[i][0] && mins<stops[i+1][0]){ a=stops[i]; b=stops[i+1]; break; } }
+  const t=(mins-a[0])/((b[0]-a[0])||1);
+  return _wmix(_wmix(a[1],b[1],t), '#6a6a5a', (1-v)*0.35);
+}
+function _dayPhaseLabel(mins){
+  if(mins<300) return {e:'🌙',t:'madrugada'};
+  if(mins<420) return {e:'🌅',t:'amanhecer'};
+  if(mins<720) return {e:'🌤',t:'manhã'};
+  if(mins<1020) return {e:'☀️',t:'tarde'};
+  if(mins<1200) return {e:'🌇',t:'entardecer'};
+  return {e:'🌙',t:'noite'};
+}
+function drawCelestial(x, W, H, mins){
+  const horizonY=H*0.2;
+  let cx,cy,isSun,rad=Math.max(9,W*0.026);
+  if(mins>=360 && mins<1080){ const p=(mins-360)/720; cx=W*(0.1+0.8*p); cy=horizonY-Math.sin(p*Math.PI)*(horizonY*0.82); isSun=true; }
+  else { const nm=mins>=1080?(mins-1080):(mins+360); const p=nm/720; cx=W*(0.1+0.8*p); cy=horizonY-Math.sin(p*Math.PI)*(horizonY*0.72); isSun=false; }
+  if(isSun){
+    const low=Math.min(1, (horizonY-cy)/(horizonY*0.6));
+    const body=_wmix('#ffb54a','#fff6d0',low*0.6);
+    const g=x.createRadialGradient(cx,cy,1,cx,cy,rad*4.6); g.addColorStop(0,'rgba(255,238,180,0.55)'); g.addColorStop(1,'rgba(255,238,180,0)'); x.fillStyle=g; x.beginPath(); x.arc(cx,cy,rad*4.6,0,6.28); x.fill();
+    x.fillStyle=body; x.beginPath(); x.arc(cx,cy,rad,0,6.28); x.fill();
+  } else {
+    const g=x.createRadialGradient(cx,cy,1,cx,cy,rad*3.8); g.addColorStop(0,'rgba(200,215,255,0.42)'); g.addColorStop(1,'rgba(200,215,255,0)'); x.fillStyle=g; x.beginPath(); x.arc(cx,cy,rad*3.8,0,6.28); x.fill();
+    x.fillStyle='#eef2ff'; x.beginPath(); x.arc(cx,cy,rad*0.82,0,6.28); x.fill();
+    x.fillStyle='rgba(178,190,222,0.55)'; x.beginPath(); x.arc(cx-rad*0.28,cy-rad*0.18,rad*0.16,0,6.28); x.arc(cx+rad*0.24,cy+rad*0.16,rad*0.12,0,6.28); x.arc(cx+rad*0.08,cy-rad*0.3,rad*0.08,0,6.28); x.fill();
+  }
+}
+// 🐔 galinha ciscando perto das casas
+function drawHenTD(x, sx, sy, s, a, night, ts){
+  _softSh(x, sx, sy, s*0.5, s*0.15, 0.2);
+  const bob=a.st==='walk'?Math.abs(Math.sin(a.ph))*s*0.1:0, yy=sy-bob;
+  const body=_nt(a.col,night), dir=a.face;
+  x.fillStyle=_nt(_wmix(a.col,'#000',0.22),night); x.beginPath(); x.moveTo(sx-dir*s*0.28,yy-s*0.34); x.lineTo(sx-dir*s*0.5,yy-s*0.52); x.lineTo(sx-dir*s*0.26,yy-s*0.18); x.closePath(); x.fill();
+  x.fillStyle=body; x.beginPath(); x.ellipse(sx, yy-s*0.28, s*0.34, s*0.28, 0,0,6.28); x.fill();
+  const hx=sx+dir*s*0.28, peck=a.st==='peck'?Math.max(0,Math.sin(ts*0.012+a.ph))*s*0.14:0, hy=yy-s*0.5+peck;
+  x.fillStyle=body; x.beginPath(); x.arc(hx, hy, s*0.16,0,6.28); x.fill();
+  x.fillStyle='#d23a3a'; x.beginPath(); x.arc(hx, hy-s*0.15, s*0.06,0,6.28); x.fill();
+  x.fillStyle='#e8a02a'; x.beginPath(); x.moveTo(hx+dir*s*0.14, hy); x.lineTo(hx+dir*s*0.28, hy+s*0.03); x.lineTo(hx+dir*s*0.14, hy+s*0.06); x.closePath(); x.fill();
+  x.fillStyle='#201810'; x.beginPath(); x.arc(hx+dir*s*0.05, hy-s*0.02, s*0.03,0,6.28); x.fill();
+  x.strokeStyle='#e8a02a'; x.lineWidth=Math.max(1,s*0.05); x.beginPath(); x.moveTo(sx-s*0.06,yy-s*0.02); x.lineTo(sx-s*0.06,sy); x.moveTo(sx+s*0.08,yy-s*0.02); x.lineTo(sx+s*0.08,sy); x.stroke();
+}
+// 🐕 cachorro passeando pela vila
+function drawDogTD(x, sx, sy, s, a, night, ts){
+  _softSh(x, sx, sy, s*0.55, s*0.15, 0.22);
+  const run=a.st==='walk', p=a.ph, bob=run?Math.abs(Math.sin(p))*s*0.05:0, yy=sy-bob;
+  const col=_nt(a.col,night), dir=a.face;
+  x.strokeStyle=_wmix(col,'#000',0.3); x.lineWidth=Math.max(1.2,s*0.08); x.lineCap='round';
+  for(let i=0;i<2;i++){ const sw=run?Math.sin(p+i*Math.PI)*s*0.12:0; x.beginPath(); x.moveTo(sx-s*0.16+i*s*0.34, yy-s*0.24); x.lineTo(sx-s*0.16+i*s*0.34+sw, sy); x.stroke(); }
+  const wag=Math.sin(ts*0.02)*s*0.22; x.strokeStyle=col; x.lineWidth=Math.max(1.4,s*0.09); x.beginPath(); x.moveTo(sx-dir*s*0.32, yy-s*0.4); x.lineTo(sx-dir*s*0.5, yy-s*0.56+wag); x.stroke();
+  x.fillStyle=col; _rr(x, sx-s*0.32, yy-s*0.46, s*0.64, s*0.28, s*0.12); x.fill();
+  const hx=sx+dir*s*0.34, hy=yy-s*0.5;
+  x.beginPath(); x.arc(hx, hy, s*0.2,0,6.28); x.fill();
+  x.fillStyle=_wmix(col,'#000',0.32); x.beginPath(); x.ellipse(hx-dir*s*0.06, hy-s*0.16, s*0.07, s*0.13, dir*0.4,0,6.28); x.fill();
+  x.fillStyle=_wmix(col,'#000',0.25); x.beginPath(); x.ellipse(hx+dir*s*0.15, hy+s*0.02, s*0.1, s*0.08,0,0,6.28); x.fill();
+  x.fillStyle='#1a1410'; x.beginPath(); x.arc(hx+dir*s*0.06, hy-s*0.02, s*0.03,0,6.28); x.fill();
+}
+// 🐦 pássaro no céu (silhueta batendo asa)
+function drawBirdTD(x, px, py, s, ph, ts){
+  const flap=Math.sin(ts*0.02+ph); x.strokeStyle='rgba(28,28,40,0.7)'; x.lineWidth=Math.max(1,s*0.14); x.lineCap='round';
+  x.beginPath(); x.moveTo(px-s, py+flap*s*0.5); x.quadraticCurveTo(px, py-s*0.25, px, py); x.quadraticCurveTo(px, py-s*0.25, px+s, py+flap*s*0.5); x.stroke();
+}
+// 🦋 borboleta nos dias ensolarados
+function drawButterflyTD(x, px, py, s, ph, ts, col){
+  const flap=0.35+0.65*Math.abs(Math.sin(ts*0.02+ph));
+  x.save(); x.translate(px,py); x.fillStyle=col;
+  x.beginPath(); x.ellipse(-s*0.4*flap,-s*0.18, s*0.4*flap, s*0.5, 0.4,0,6.28); x.fill();
+  x.beginPath(); x.ellipse( s*0.4*flap,-s*0.18, s*0.4*flap, s*0.5,-0.4,0,6.28); x.fill();
+  x.beginPath(); x.ellipse(-s*0.3*flap, s*0.26, s*0.3*flap, s*0.32,-0.3,0,6.28); x.fill();
+  x.beginPath(); x.ellipse( s*0.3*flap, s*0.26, s*0.3*flap, s*0.32, 0.3,0,6.28); x.fill();
+  x.strokeStyle='#201810'; x.lineWidth=Math.max(0.6,s*0.1); x.beginPath(); x.moveTo(0,-s*0.4); x.lineTo(0,s*0.42); x.stroke();
+  x.restore();
+}
+// 🐔🐕 anima os bichos (galinha cisca/anda; cachorro passeia e às vezes segue um aldeão)
+function updateAnimals(sc, dt, ctx){
+  sc.animals.forEach(a=>{
+    if(ctx.night){ a.st='sleep'; return; }
+    if(a.st==='sleep') a.st='idle';
+    a.t-=dt;
+    if(a.kind==='hen'){
+      if(a.st==='peck'){ a.ph+=dt*0.01; if(a.t<=0){ a.st='walk'; a.tx=Math.max(0.08,Math.min(0.92,a.mx+(Math.random()-0.5)*0.18)); a.ty=Math.max(0.2,Math.min(0.86,a.my+(Math.random()-0.5)*0.14)); a.t=1200+Math.random()*2200; } return; }
+      const dx=a.tx-a.mx, dy=a.ty-a.my, d=Math.hypot(dx,dy);
+      if(d<0.01){ a.st='peck'; a.t=1400+Math.random()*2600; return; }
+      const st=a.sp*dt*0.00004; a.mx+=dx/d*st; a.my+=dy/d*st; a.face=dx>=0?1:-1; a.ph+=dt*0.02;
+    } else {
+      if(a.t<=0){ a.t=2200+Math.random()*3200; if(Math.random()<0.55 && sc.npcs.length){ const n=sc.npcs[Math.random()*Math.min(sc.npcs.length,6)|0]; a.tx=Math.max(0.1,Math.min(0.9,n.mx+(Math.random()-0.5)*0.1)); a.ty=Math.max(0.2,Math.min(0.88,n.my+0.04)); } else { a.tx=Math.max(0.1,Math.min(0.9,a.mx+(Math.random()-0.5)*0.32)); a.ty=Math.max(0.2,Math.min(0.88,a.my+(Math.random()-0.5)*0.24)); } }
+      const dx=a.tx-a.mx, dy=a.ty-a.my, d=Math.hypot(dx,dy);
+      if(d<0.02){ a.st='idle'; return; }
+      a.st='walk'; const st=a.sp*dt*0.00006; a.mx+=dx/d*st; a.my+=dy/d*st; a.face=dx>=0?1:-1; a.ph+=dt*0.02;
+    }
+  });
+}
 function drawVillage(ts){
   const cv = document.getElementById('world-canvas'); if(!cv) return;
   const W = cv.width, H = cv.height; if(!W || !H) return;
@@ -4579,6 +4680,7 @@ function drawVillage(ts){
   const unknown = (data.vitality==null);
   const v = unknown ? 0.5 : Math.max(0,Math.min(1, data.vitality/100));
   const hr = new Date().getHours(); const night = hr<6 || hr>=19;
+  const mins = hr*60 + new Date().getMinutes();
   const baseY = H*0.72;
   x.save(); x.globalAlpha=1; x.globalCompositeOperation='source-over'; x.setTransform(1,0,0,1,0,0); x.textAlign='left'; x.lineWidth=1;
 
@@ -4590,10 +4692,15 @@ function drawVillage(ts){
   const gBot = night ? _wmix(_wmix('#2c5230','#3a3226',1-v),'#1f2740',0.4) : _wmix('#4d9240','#5a4a32',1-v);
   x.fillStyle=_vg(x,0,0,0,H,gTop,gBot); x.fillRect(0,0,W,H);
   // faixa de horizonte no topo
-  const sky=x.createLinearGradient(0,0,0,H*0.2); sky.addColorStop(0, night?_wmix('#1b2452','#241c22',1-v):_wmix('#9ad2ff','#8a8a7e',1-v)); sky.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle=sky; x.fillRect(0,0,W,H*0.2);
+  const sky=x.createLinearGradient(0,0,0,H*0.2); sky.addColorStop(0, _skyTopCol(mins, v)); sky.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle=sky; x.fillRect(0,0,W,H*0.2);
+  // ☀️🌙 sol/lua arcando pelo céu conforme a hora real
+  drawCelestial(x, W, H, mins);
   // estrelas / nuvens
   if(night){ x.fillStyle='rgba(255,255,255,.8)'; sc.stars.forEach(s=>{ const tw=0.5+0.5*Math.sin(ts*0.002+s.x*30); x.globalAlpha=tw*0.8; x.beginPath(); x.arc(s.x*W, s.y*H, s.r,0,6.28); x.fill(); }); x.globalAlpha=1; }
   else sc.clouds.forEach(c=>{ c.x+=c.sp*dt*0.00002; if(c.x>1.15)c.x=-0.15; _wcloud(x, c.x*W, c.y*H+H*0.04, c.s*(W/520), 'rgba(255,255,255,'+(0.4+v*0.4).toFixed(2)+')'); });
+  // 🐦 pássaros cruzando o céu (mais no amanhecer/entardecer)
+  if(!night){ sc._birdCd=(sc._birdCd||0)-dt; if(sc._birdCd<=0 && sc.birds.length<3){ const dawn=(mins>=300&&mins<540)||(mins>=1020&&mins<1200); sc._birdCd=(dawn?3500:8000)+Math.random()*5000; const dir=Math.random()<0.5?1:-1, y=0.03+Math.random()*0.1, n=2+(Math.random()*3|0), flock=[]; for(let k=0;k<n;k++) flock.push({dx:(Math.random()-0.5)*0.06, dy:(Math.random()-0.5)*0.04, ph:Math.random()*6.28}); sc.birds.push({x:dir<0?1.12:-0.12, y, dir, sp:0.06+Math.random()*0.05, flock}); } }
+  for(let i=sc.birds.length-1;i>=0;i--){ const b=sc.birds[i]; b.x+=b.dir*b.sp*dt*0.0004; if(b.x<-0.18||b.x>1.18){ sc.birds.splice(i,1); continue; } b.flock.forEach(f=> drawBirdTD(x, (b.x+f.dx)*W, (b.y+f.dy)*H, Math.max(4,W*0.012), f.ph, ts)); }
   // textura de grama
   sc.patches.forEach(p=>{ const sx=MX(p.mx),sy=MY(p.my),sz=SC(p.my)*p.s*W*0.012; x.fillStyle = v>0.45?'rgba(40,110,40,0.13)':'rgba(110,90,40,0.13)'; x.beginPath(); x.ellipse(sx,sy,sz*2.2,sz,0,0,6.28); x.fill(); if(v>0.7 && p.k<0.22 && !night){ x.fillStyle=['#ff6a8a','#ffd24a','#ffffff','#9a6aff'][(p.k*40|0)%4]; x.beginPath(); x.arc(sx, sy-sz*0.5, Math.max(1,sz*0.8),0,6.28); x.fill(); x.fillStyle='#ffe24a'; x.beginPath(); x.arc(sx, sy-sz*0.5, Math.max(0.5,sz*0.3),0,6.28); x.fill(); } });
   // estradas em cruz + praça central
@@ -4689,6 +4796,12 @@ function drawVillage(ts){
       if(npc.icd>0) npc.icd-=dt;
       if(!demonMap && npc.state==='act' && (npc.icd||0)<=0){ for(let j=i+1;j<active;j++){ const o=sc.npcs[j]; if(o.state!=='act'||(o.icd||0)>0) continue; if(Math.abs(o.mx-npc.mx)<0.055 && Math.abs(o.my-npc.my)<0.045){ if(Math.random()<0.5*(npc.social||1)*(o.social||1)){ const c=_CHAT[Math.random()*_CHAT.length|0]; npc.bubble=c[0]; npc.bubbleT=2200; o.bubble=c[1]; o.bubbleT=2500; npc.face=o.mx>=npc.mx?1:-1; o.face=npc.mx>=o.mx?1:-1; npc.icd=o.icd=6000; if(c[0]==='🍞'||c[1]==='❤️'){ for(let k=0;k<3;k++) sc.sparks.push({mx:(npc.mx+o.mx)/2+(Math.random()-0.5)*0.02, my:Math.min(npc.my,o.my)-0.03, vx:(Math.random()-0.5)*0.2, vy:-0.4, t:700, col:'#ff6a9a'}); } } break; } } }
       if(npc.state==='home'){ if(npc.home>=0) sc._zzz[npc.home]=1; return; } ents.push([MY(npc.my), ()=> drawNpcTD(x, MX(npc.mx), MY(npc.my), SC(npc.my)*H*0.075*npc.sc, npc, ts)]); });
+    // 🐔🐕 bichos circulando (com profundidade, entre as entidades)
+    updateAnimals(sc, dt, ctx);
+    sc.animals.forEach(a=>{ if(a.st==='sleep') return; const isDog=a.kind==='dog'; ents.push([MY(a.my), ()=> (isDog?drawDogTD:drawHenTD)(x, MX(a.mx), MY(a.my), (isDog?W*0.03:W*0.021)*SC(a.my), a, night, ts)]); });
+    // 🦋 borboletas nos dias ensolarados de vila próspera
+    if(!night && v>0.58){ sc._flCd=(sc._flCd||0)-dt; if(sc._flCd<=0 && sc.butterflies.length<4){ sc._flCd=2500+Math.random()*4000; sc.butterflies.push({mx:0.15+Math.random()*0.7, my:0.42+Math.random()*0.4, ph:Math.random()*6.28, t:6000+Math.random()*5000, col:['#ffd24a','#ff8ac0','#8ab0ff','#ff6a6a'][Math.random()*4|0]}); } }
+    for(let i=sc.butterflies.length-1;i>=0;i--){ const bf=sc.butterflies[i]; bf.t-=dt; if(bf.t<=0){ sc.butterflies.splice(i,1); continue; } bf.ph+=dt*0.003; bf.mx+=Math.cos(bf.ph)*dt*0.00002; bf.my+=Math.sin(bf.ph*1.4)*dt*0.000012; _clampNpc(bf); ents.push([MY(bf.my)+40000, ()=> drawButterflyTD(x, MX(bf.mx), MY(bf.my), Math.max(4,W*0.011), bf.ph, ts, bf.col)]); }
   }
   // 🍞 mesa do almoço aparece só quando há gente comendo perto do mercado
   if(sc.lunchOn){ const mk=sc.spots.market, my=mk.my+0.07; ents.push([MY(my)-1, ()=> drawFoodTableTD(x, MX(mk.mx-0.02), MY(my), SC(my)*W*0.03, night)]); }
@@ -4698,6 +4811,10 @@ function drawVillage(ts){
   for(let i=sc.sparks.length-1;i>=0;i--){ const p=sc.sparks[i]; p.t-=dt; if(p.t<=0){ sc.sparks.splice(i,1); continue; } p.mx+=p.vx*dt*0.0002; p.my+=(p.vy+0.5*(1-p.t/500))*dt*0.0002; x.globalAlpha=Math.max(0,p.t/500); x.fillStyle=p.col; x.beginPath(); x.arc(MX(p.mx),MY(p.my),Math.max(1,SC(p.my)*2.2),0,6.28); x.fill(); x.globalAlpha=1; }
   // 🔔 PACOTE 4: sino na praça quando falta pouco pra uma missão agendada (só na sua vila, e só acordada)
   if(data.me && !demonOn && !asleep){ const mn=minsToNextMission(); if(mn!=null && mn<=15){ const swing=Math.sin(ts*0.012)*0.18; const bx=MX(0.5), by=MY(0.5)-W*0.085; x.save(); x.translate(bx,by); x.rotate(swing); x.font=Math.round(W*0.05)+'px sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('🔔', 0, 0); x.restore(); x.fillStyle='#ffe49a'; x.font='bold '+Math.round(W*0.024)+'px sans-serif'; x.textAlign='center'; x.fillText(mn<=0?'missão agora!':'missão em '+mn+'min', bx, by-W*0.045); x.textAlign='left'; x.textBaseline='alphabetic'; if(Math.random()<0.04) sc.sparks.push({mx:0.5+(Math.random()-0.5)*0.06,my:0.45,vx:(Math.random()-0.5)*0.2,vy:-0.3,t:700,col:'#ffe49a'}); } }
+  // 🌟 vaga-lumes à noite — a vila continua viva mesmo dormindo (pontos que brilham e vagam baixo pelo gramado)
+  if(night && !demonOn){ if(!sc.fireflies){ sc.fireflies=[]; for(let i=0;i<10;i++) sc.fireflies.push({mx:0.1+Math.random()*0.8, my:0.35+Math.random()*0.5, ph:Math.random()*6.28}); }
+    sc.fireflies.forEach(f=>{ f.ph+=dt*0.0016; f.mx+=Math.cos(f.ph)*dt*0.00003; f.my+=Math.sin(f.ph*1.3)*dt*0.00002; f.mx=Math.max(0.06,Math.min(0.94,f.mx)); f.my=Math.max(0.3,Math.min(0.9,f.my)); const glow=0.35+0.65*Math.abs(Math.sin(f.ph*2)), px=MX(f.mx), py=MY(f.my), gr=W*0.014; const g=x.createRadialGradient(px,py,0,px,py,gr); g.addColorStop(0,'rgba(198,255,140,'+(0.65*glow).toFixed(2)+')'); g.addColorStop(1,'rgba(198,255,140,0)'); x.fillStyle=g; x.beginPath(); x.arc(px,py,gr,0,6.28); x.fill(); x.fillStyle='rgba(232,255,175,'+glow.toFixed(2)+')'; x.beginPath(); x.arc(px,py,Math.max(1,W*0.003),0,6.28); x.fill(); }); }
+  else if(sc.fireflies) sc.fireflies=null;
   if(asleep) x.fillStyle='rgba(5,8,22,.22)', x.fillRect(0,0,W,H);   // 😴 tom mais quieto/escuro com a vila toda dormindo
   if(demonOn) x.fillStyle='rgba(60,0,15,'+(0.16+0.05*Math.sin(ts*0.004)).toFixed(3)+')', x.fillRect(0,0,W,H);
   if(!demonOn && !unknown && wealth<0.3){ x.fillStyle='rgba(92,86,72,'+(0.2*(1-wealth/0.3)).toFixed(2)+')'; x.fillRect(0,0,W,H); }
@@ -4708,7 +4825,6 @@ function drawVillage(ts){
   // atmosfera (luz quente de dia / azulada de noite vinda do alto)
   x.fillStyle=_vg(x,0,0,0,H*0.55, night?'rgba(60,80,150,0.08)':'rgba(255,242,205,0.09)','rgba(0,0,0,0)'); x.fillRect(0,0,W,H);
   // 🌅 amanhecer dourado / 🌇 pôr-do-sol alaranjado conforme a hora real
-  const mins=hr*60+new Date().getMinutes();
   let warm=0, wcol='255,170,90';
   if(mins>=300 && mins<480){ warm=(1-Math.abs(mins-390)/90)*0.5; wcol='255,190,120'; }   // 5h-8h pico 6h30
   else if(mins>=1020 && mins<1200){ warm=(1-Math.abs(mins-1110)/90)*0.55; wcol='255,130,60'; } // 17h-20h pico 18h30
@@ -4728,6 +4844,7 @@ function renderWorldStatus(){
   el.innerHTML = `
     <div class="ws-head"><b>${d.name}</b>${d.me?' <span style="color:var(--muted)">(você)</span>':''}${(!d.me&&d.offline)?'<span class="ws-off">⚠ sem sinal recente</span>':''}${!d.me?`<button class="pixel-btn btn-gold btn-sm" style="margin-left:8px" title="Mandar presente que ajuda a vila dele(a) a crescer" onclick="sendVillageGift('${d.name}')">🎁 Presente (${VILLAGE_GIFT_COST} LC)</button>`:''}</div>
     <div class="ws-state">${st.emoji} ${st.label}${v==null?' — o mano ainda não sincronizou':` · vitalidade ${Math.round(v)}/100`}</div>
+    <div class="ws-meta" style="opacity:.85">${(function(){ const ph=_dayPhaseLabel(new Date().getHours()*60+new Date().getMinutes()); return ph.e+' '+ph.t+' na vila'; })()}</div>
     <div class="ws-bar"><div class="ws-fill" style="width:${v==null?50:v}%;background:${barCol}"></div></div>
     <div class="ws-meta">🏘️ ${d.missions} missões ergueram esta vila${(d.streak||0)>=2?` · 🔥 ${d.streak} dias`:''}</div>
     ${(function(){
@@ -9412,7 +9529,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.29 • v97';
+  window.APP_VERSION = '2026.06.30 • v98';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
