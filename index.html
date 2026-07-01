@@ -2035,6 +2035,9 @@
         <div class="sep"></div>
         <div class="section-title">🛋️ HALL DA PREGUIÇA (furos no mês)</div>
         <div id="shame-hall" class="rank-totals"></div>
+        <div class="sep"></div>
+        <div class="section-title">📅 TEMPO MENSAL POR ATIVIDADE</div>
+        <div id="rank-month-cats"></div>
       </div>
 
       <!-- BROXISSE HALL TAB (mural de fotos motivacional) -->
@@ -3644,8 +3647,8 @@ function renderTimeTab(){
     <div id="time-month-cats" style="display:none;margin-top:8px"></div>`;
 }
 
-function renderMonthCats(){
-  const el=document.getElementById('time-month-cats'); if(!el) return;
+function renderMonthCats(elId){
+  const el=document.getElementById(elId||'time-month-cats'); if(!el) return;
   const now=new Date();
   const dom=now.getDate(), dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
   const mp=now.toISOString().slice(0,7);
@@ -8290,6 +8293,7 @@ function renderRanking(){
   }
   renderGroupBank();
   try{ renderShameHall(); }catch(e){}
+  try{ renderMonthCats('rank-month-cats'); }catch(e){}
 }
 
 // ===== RECOMPENSAS DA VIDA REAL =====
@@ -9408,7 +9412,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.29 • v96';
+  window.APP_VERSION = '2026.06.29 • v97';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
