@@ -3623,7 +3623,75 @@ function renderTimeTab(){
     <div class="sep"></div>
     <div class="section-title" style="margin-bottom:4px">📈 ÚLTIMOS 7 DIAS (tempo de tarefas)</div>
     ${chart}
-    <div style="font-size:12.5px;color:var(--muted);margin-top:8px">📊 Média de tarefas/dia (dias com registro): <b style="color:var(--text)">${fmtHM(timeAvg7())}</b></div>`;
+    <div style="font-size:12.5px;color:var(--muted);margin-top:8px">📊 Média de tarefas/dia (dias com registro): <b style="color:var(--text)">${fmtHM(timeAvg7())}</b></div>
+    <div class="sep"></div>
+    <div style="display:flex;align-items:center;cursor:pointer;user-select:none;padding:2px 0" onclick="window._mcOpen=!window._mcOpen;document.getElementById('time-month-caret').textContent=window._mcOpen?'▲':'▼';const mc=document.getElementById('time-month-cats');mc.style.display=window._mcOpen?'block':'none';if(window._mcOpen)renderMonthCats();">
+      <span class="section-title" style="flex:1;margin:0">📅 TEMPO MENSAL POR ATIVIDADE</span>
+      <span id="time-month-caret" style="font-size:13px;color:var(--muted);padding:4px 10px">▼</span>
+    </div>
+    <div id="time-month-cats" style="display:none;margin-top:8px"></div>`;
+}
+
+function renderMonthCats(){
+  const el=document.getElementById('time-month-cats'); if(!el) return;
+  const now=new Date();
+  const dom=now.getDate(), dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+  const mp=now.toISOString().slice(0,7);
+  const mPct=Math.round(dom/dim*100);
+  const myName=G.profile?.name||'';
+  // Meus totais mensais + trend semanal
+  const myCats={}, thisWk={}, prevWk={};
+  Object.entries(G.timeLog||{}).forEach(([date,cats])=>{
+    if(!date.startsWith(mp)) return;
+    const dAgo=Math.round((now-new Date(date))/86400000);
+    Object.entries(cats).forEach(([c,m])=>{
+      myCats[c]=(myCats[c]||0)+m;
+      if(dAgo<7) thisWk[c]=(thisWk[c]||0)+m;
+      else if(dAgo<14) prevWk[c]=(prevWk[c]||0)+m;
+    });
+  });
+  // Jogadores
+  const allP=[{name:myName,cats:myCats,color:G.profile?.armor||'#888',me:true}];
+  ONLINE_PLAYERS.filter(n=>n!==myName).forEach(n=>{
+    const d=onlineData[n];
+    if(d&&d.catMonthly&&Object.keys(d.catMonthly).length) allP.push({name:n,cats:d.catMonthly,color:d.profileColor||CHAR_PRESETS[n]?.armor||'#888',me:false});
+  });
+  // Todas as categorias
+  const allCats=new Set();
+  allP.forEach(p=>Object.keys(p.cats).forEach(c=>allCats.add(c)));
+  if(!allCats.size){ el.innerHTML='<div style="color:var(--muted);font-size:13px">Nenhuma atividade registrada este mês.</div>'; return; }
+  const sortedCats=[...allCats].sort((a,b)=>(myCats[b]||0)-(myCats[a]||0));
+  let html=`<div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">Dia <b>${dom}/${dim}</b> · <b>${mPct}% do mês</b> · barras comparativas entre jogadores · linha = proporção esperada no mês</div>`;
+  sortedCats.forEach(cat=>{
+    const rows=allP.map(p=>{
+      const min=p.cats[cat]||0; if(!min&&!p.me) return null;
+      const proj=dom>0?Math.round(min/dom*dim):0;
+      let trend='';
+      if(p.me){ const tw=thisWk[cat]||0,pw=prevWk[cat]||0;
+        if(tw>0||pw>0) trend=tw>=pw*1.15?'📈':tw<=pw*0.85?'📉':'➡️'; }
+      return {name:p.name,min,proj,trend,color:p.color,me:p.me};
+    }).filter(Boolean).sort((a,b)=>b.min-a.min);
+    if(!rows.some(r=>r.min>0)) return;
+    const maxMin=Math.max(1,...rows.map(r=>r.min));
+    html+=`<div style="margin:10px 0;padding:10px 12px;background:rgba(255,255,255,.04);border-radius:10px;border:1px solid var(--border)">
+      <div style="font-size:15px;font-weight:700;margin-bottom:8px">${cat}</div>`;
+    rows.forEach(r=>{
+      const bw=Math.round(r.min/maxMin*100);
+      const ahead=bw>mPct, behind=bw<mPct*0.7;
+      html+=`<div style="margin:6px 0">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;flex-wrap:wrap;gap:2px">
+          <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${r.color};margin-right:5px;vertical-align:middle"></span>${r.me?'Você':r.name}${r.trend?' <span style="font-size:11px">'+r.trend+'</span>':''}</span>
+          <span><b style="color:var(--text)">${fmtHM(r.min)}</b> <span style="color:var(--muted);font-size:10.5px">→ ~${fmtHM(r.proj)}/mês</span> ${ahead?'<span style="color:#46c46a;font-size:10px">▲ líder</span>':behind?'<span style="color:var(--danger);font-size:10px">▼</span>':''}</span>
+        </div>
+        <div style="position:relative;height:13px;background:rgba(255,255,255,.06);border-radius:6px;overflow:hidden">
+          <div style="height:100%;width:${bw}%;background:${r.color};border-radius:6px;opacity:.85"></div>
+          <div style="position:absolute;top:0;left:${mPct}%;width:2px;height:100%;background:rgba(255,255,255,.38)"></div>
+        </div>
+      </div>`;
+    });
+    html+=`</div>`;
+  });
+  el.innerHTML=html;
 }
 
 function renderDungeons() {
@@ -6341,6 +6409,7 @@ function syncOnline() {
     feed: (G.history||[]).filter(h=>h.type==='done').slice(0,10).map(h=>({n:h.name, c:h.cat, ic:h.icon||'', t:h.t, lc:h.lc||0, xp:h.xp||0})),
     atoaDate: G.atoaDate || '',   // 😴 Broxa Day — pra os manos não marcarem como atrasado
     xpToday: (function(){ const t=todayStr(); return (G.history||[]).filter(h=>h.type==='done'&&todayStr(new Date(h.t))===t).reduce((s,h)=>s+(h.xp||0),0); })(),
+    catMonthly: (function(){ const mp=new Date().toISOString().slice(0,7),r={}; Object.entries(G.timeLog||{}).forEach(([d,cats])=>{ if(!d.startsWith(mp)) return; Object.entries(cats).forEach(([c,m])=>{r[c]=(r[c]||0)+m;}); }); return r; })(),
     updatedAt: Date.now()
   };
   try {
@@ -9325,7 +9394,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.29 • v94';
+  window.APP_VERSION = '2026.06.29 • v95';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
