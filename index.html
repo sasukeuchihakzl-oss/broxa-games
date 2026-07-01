@@ -2032,6 +2032,9 @@
         <div class="section-title">🤝 BANCO DO GRUPO (empréstimos dos 3)</div>
         <div id="group-bank" class="hist-box"></div>
         <div id="group-debts" class="hist-box" style="margin-top:5px"></div>
+        <div class="sep"></div>
+        <div class="section-title">🛋️ HALL DA PREGUIÇA (furos no mês)</div>
+        <div id="shame-hall" class="rank-totals"></div>
       </div>
 
       <!-- BROXISSE HALL TAB (mural de fotos motivacional) -->
@@ -3722,7 +3725,9 @@ function mentorState(){
   }catch(e){}
   return 'calm';
 }
+let _mentorForceLine = null;
 function mentorPickLine(){
+  if(_mentorForceLine){ const l=_mentorForceLine; _mentorForceLine=null; _mentorLastLine=l; return l; }
   const arr = MENTOR_ANGRY_LINES;
   let l=arr[0]; for(let k=0;k<6;k++){ l=arr[Math.random()*arr.length|0]; if(l!==_mentorLastLine) break; }
   _mentorLastLine=l; return l;
@@ -6335,6 +6340,7 @@ function syncOnline() {
     // feed: últimas missões concluídas (p/ a timeline do grupo)
     feed: (G.history||[]).filter(h=>h.type==='done').slice(0,10).map(h=>({n:h.name, c:h.cat, ic:h.icon||'', t:h.t, lc:h.lc||0, xp:h.xp||0})),
     atoaDate: G.atoaDate || '',   // 😴 Broxa Day — pra os manos não marcarem como atrasado
+    xpToday: (function(){ const t=todayStr(); return (G.history||[]).filter(h=>h.type==='done'&&todayStr(new Date(h.t))===t).reduce((s,h)=>s+(h.xp||0),0); })(),
     updatedAt: Date.now()
   };
   try {
@@ -7307,12 +7313,14 @@ function restoreCloud(){
 
 // ===== NERF COLETIVO: amigo furou o dia → todos sofrem (v6 #11) =====
 let dayFailListener = null;
+let dayFailRawData = {};
 function listenDayFails(){
   if(!db) return; const myName=G.profile?.name||''; if(!ONLINE_PLAYERS.includes(myName)) return;
   if(dayFailListener) dayFailListener.off();
   dayFailListener = db.ref('forge_dayfail');
   dayFailListener.on('value', snap=>{
     const data = snap.val() || {};
+    dayFailRawData = data;
     if(!G.dayFailSeen) G.dayFailSeen = {};
     Object.entries(data).forEach(([date, players])=>{
       if(!players) return;
@@ -7694,6 +7702,7 @@ function save(){
       wokeUpDate:G.wokeUpDate, wakeNerfDate:G.wakeNerfDate, wakeRemindDate:G.wakeRemindDate, wakeStartDate:G.wakeStartDate,
       xpCurveV2:G.xpCurveV2, xpCurveV3:G.xpCurveV3,
       doubleXpUntil:G.doubleXpUntil, xpDay:G.xpDay, xpRecord:G.xpRecord, timeLog:G.timeLog, sleepGoalH:G.sleepGoalH,
+      dailyRankBonusDate:G.dailyRankBonusDate||'',
       world:G.world
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -7761,6 +7770,7 @@ function load(){
     G.weekMissions = G.weekMissions || 0;
     G.weekMark = G.weekMark || '';
     G.xpEarned = G.xpEarned || 0;
+    G.dailyRankBonusDate = G.dailyRankBonusDate || '';
     G.doubleXpUntil = G.doubleXpUntil || 0;
     G.xpRecord = G.xpRecord || 0;
     G.timeLog = (G.timeLog && typeof G.timeLog==='object') ? G.timeLog : {};
@@ -8034,6 +8044,26 @@ function checkDailyReset(){
     try{ spawnPanelSparks(); }catch(e){}
     gainXP(50);
   }
+  // 🏆 Bônus top XP diário: 1º +50 XP, 2º +25 XP
+  const _closedDate = G.lastResetDate;
+  if(db && ONLINE_PLAYERS.includes(G.profile?.name) && _closedDate && G.dailyRankBonusDate!==_closedDate){
+    G.dailyRankBonusDate = _closedDate;
+    const _myDayXp=(G.history||[]).filter(h=>h.type==='done'&&todayStr(new Date(h.t))===_closedDate).reduce((s,h)=>s+(h.xp||0),0);
+    if(_myDayXp>0){
+      db.ref('forge_dailyxp/'+_closedDate+'/'+G.profile.name).set(_myDayXp).then(()=>{
+        setTimeout(()=>{
+          db.ref('forge_dailyxp/'+_closedDate).once('value',snap2=>{
+            const d2=snap2.val()||{};
+            const scores=Object.entries(d2).map(([n,x])=>({name:n,xp:x||0})).sort((a,b)=>b.xp-a.xp);
+            const myRank=scores.findIndex(s=>s.name===G.profile.name);
+            if(myRank===0){gainXP(50);showToast('🏆 TOP XP DE ONTEM! +50 XP de bônus 🔥','heal');try{spawnPanelSparks();}catch(e){}}
+            else if(myRank===1&&scores.length>1){gainXP(25);showToast('🥈 2º em XP de ontem! +25 XP de bônus','heal');}
+            save();
+          });
+        },2500);
+      }).catch(()=>{});
+    }
+  }
   G.lastResetDate = today;
   G.day = computeDay();
   save();
@@ -8055,6 +8085,30 @@ function cleanupDoneUnique(){
 }
 
 // ===== COMPETIÇÃO (apenas jogadores reais via Firebase) =====
+function renderShameHall(){
+  const el=document.getElementById('shame-hall'); if(!el) return;
+  const monthPfx=new Date().toISOString().slice(0,7);
+  const failCounts={};
+  ONLINE_PLAYERS.forEach(n=>{failCounts[n]=0;});
+  Object.entries(dayFailRawData).forEach(([date,players])=>{
+    if(!date.startsWith(monthPfx)||!players) return;
+    Object.entries(players).forEach(([pname])=>{ if(ONLINE_PLAYERS.includes(pname)) failCounts[pname]=(failCounts[pname]||0)+1; });
+  });
+  function shameTitle(f){ return f===0?'🏆 Monge da Disciplina':f===1?'😅 Deslizou uma vez':f<=3?'🛋️ Aprendiz da Preguiça':f<=6?'😴 Mestre do Ócio':'👑 Rei da Cama'; }
+  const sorted=Object.entries(failCounts).sort((a,b)=>b[1]-a[1]);
+  const myName=G.profile?.name||'';
+  el.innerHTML=sorted.map(([name,fails],i)=>{
+    const color=(onlineData[name]?.profileColor)||(CHAR_PRESETS[name]?.armor||'#888');
+    const isMe=name===myName;
+    return `<div class="rank-tot-row${isMe?' me':''}">
+      <span class="rank-tot-pos">${['🥇','🥈','🥉'][i]||('#'+(i+1))}</span>
+      <span class="rank-dot" style="background:${color}"></span>
+      <span class="rank-tot-name">${isMe?'Você':name}</span>
+      <span class="rank-tot-val">${fails} furo${fails!==1?'s':''}</span>
+      <span style="font-size:11px;color:var(--muted);margin-left:6px">${shameTitle(fails)}</span>
+    </div>`;
+  }).join('')||'<div style="color:var(--muted);font-size:13px">Sem dados ainda.</div>';
+}
 function renderRanking(){
   const myName = G.profile?.name || 'Você';
   const pStrk = G.perfectStreak || 0;
@@ -8152,6 +8206,7 @@ function renderRanking(){
     ).join('') || '<div style="color:var(--muted);font-size:13px">Sem dados de gastos ainda.</div>';
   }
   renderGroupBank();
+  try{ renderShameHall(); }catch(e){}
 }
 
 // ===== RECOMPENSAS DA VIDA REAL =====
@@ -8271,6 +8326,11 @@ function finalizeReward(r, cost, label){
   if(r.id==='atoa'){
     G.atoaDate = todayStr();
     showToast(`😴 Broxa Day ativado! Hoje: sem cobrança de XP (missão/acordar) e loja de graça.`,'heal');
+    setTimeout(()=>{
+      const _bdLines=['Hoje você se rendeu à preguiça... Amanhã EU DOBRO A COBRANÇA! 😤','Broxa Day ativado. Inteligente. Mas eu não vou esquecer disso. 🔥','Dia de folga, é?! Aproveita, porque amanhã não tem descanso, verme! 😈'];
+      _mentorForceLine=_bdLines[Math.random()*_bdLines.length|0];
+      mentorPeek();
+    },700);
   } else {
     showToast(`${r.emoji} Liberado: ${r.name}! Aproveite 🎉`,'heal');
   }
@@ -9265,7 +9325,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.06.29 • v93';
+  window.APP_VERSION = '2026.06.29 • v94';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
