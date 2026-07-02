@@ -3668,63 +3668,104 @@ function renderTimeTab(){
     ${chart}
     <div style="font-size:12.5px;color:var(--muted);margin-top:8px">📊 Média de tarefas/dia (dias com registro): <b style="color:var(--text)">${fmtHM(timeAvg7())}</b></div>
     <div class="sep"></div>
-    <div style="display:flex;align-items:center;cursor:pointer;user-select:none;padding:2px 0" onclick="window._mcOpen=!window._mcOpen;document.getElementById('time-month-caret').textContent=window._mcOpen?'▲':'▼';const mc=document.getElementById('time-month-cats');mc.style.display=window._mcOpen?'block':'none';if(window._mcOpen)renderMonthCats();">
-      <span class="section-title" style="flex:1;margin:0">📅 TEMPO MENSAL POR ATIVIDADE</span>
+    <div style="display:flex;align-items:center;cursor:pointer;user-select:none;padding:2px 0" onclick="window._mcOpen=!window._mcOpen;document.getElementById('time-month-caret').textContent=window._mcOpen?'▲':'▼';const mc=document.getElementById('time-month-cats');mc.style.display=window._mcOpen?'block':'none';if(window._mcOpen)renderMonthMine();">
+      <span class="section-title" style="flex:1;margin:0">📅 MEU TEMPO MENSAL (por categoria)</span>
       <span id="time-month-caret" style="font-size:13px;color:var(--muted);padding:4px 10px">▼</span>
     </div>
     <div id="time-month-cats" style="display:none;margin-top:8px"></div>`;
 }
 
-function renderMonthCats(elId){
-  const el=document.getElementById(elId||'time-month-cats'); if(!el) return;
+// helpers do tempo mensal por CATEGORIA (v103)
+function _monthCatsOf(timeLog, mp){
+  const r={};
+  Object.entries(timeLog||{}).forEach(([date,cats])=>{
+    if(!date.startsWith(mp)) return;
+    Object.entries(cats).forEach(([c,m])=>{ r[c]=(r[c]||0)+m; });
+  });
+  return r;
+}
+function _catLabel(c){
+  const info=CATEGORIES[c];
+  return catEmoji(c)+(info&&info.name?' '+info.name:'');
+}
+// 📅 ABA TEMPO: SÓ O MEU tempo do mês, agrupado por categoria (Mente, Saúde, Físico, Trabalho...)
+function renderMonthMine(){
+  const el=document.getElementById('time-month-cats'); if(!el) return;
   const now=new Date();
   const dom=now.getDate(), dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
   const mp=now.toISOString().slice(0,7);
-  const mPct=Math.round(dom/dim*100);
-  const myName=G.profile?.name||'';
-  // Meus totais mensais + trend semanal
+  // totais do mês + trend semanal (esta semana vs anterior), por categoria
   const myCats={}, thisWk={}, prevWk={};
-  Object.entries(G.timeLogName||{}).forEach(([date,names])=>{
+  Object.entries(G.timeLog||{}).forEach(([date,cats])=>{
     if(!date.startsWith(mp)) return;
-    const dAgo=Math.round((now-new Date(date))/86400000);
-    Object.entries(names).forEach(([c,m])=>{
+    const dAgo=Math.round((now-new Date(date+'T12:00:00'))/86400000);
+    Object.entries(cats).forEach(([c,m])=>{
       myCats[c]=(myCats[c]||0)+m;
       if(dAgo<7) thisWk[c]=(thisWk[c]||0)+m;
       else if(dAgo<14) prevWk[c]=(prevWk[c]||0)+m;
     });
   });
-  // Jogadores
+  const cats=Object.entries(myCats).sort((a,b)=>b[1]-a[1]);
+  if(!cats.length){ el.innerHTML='<div style="color:var(--muted);font-size:13px">Nenhuma atividade registrada este mês.</div>'; return; }
+  const total=cats.reduce((s,e)=>s+e[1],0), maxMin=cats[0][1];
+  let html=`<div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">Dia <b>${dom}/${dim}</b> · total no mês: <b style="color:var(--text)">${fmtHM(total)}</b> · projeção: <b>~${fmtHM(dom>0?Math.round(total/dom*dim):0)}/mês</b></div>`;
+  cats.forEach(([c,min])=>{
+    const proj=dom>0?Math.round(min/dom*dim):0;
+    const tw=thisWk[c]||0, pw=prevWk[c]||0;
+    const trend=(tw>0||pw>0)?(tw>=pw*1.15?'📈':tw<=pw*0.85?'📉':'➡️'):'';
+    const pctT=Math.round(min/total*100);
+    html+=`<div style="margin:8px 0">
+      <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:3px;flex-wrap:wrap;gap:2px">
+        <span><b>${_catLabel(c)}</b> ${trend}</span>
+        <span><b style="color:var(--text)">${fmtHM(min)}</b> <span style="color:var(--muted);font-size:10.5px">(${pctT}%) → ~${fmtHM(proj)}/mês</span></span>
+      </div>
+      <div style="height:14px;background:rgba(255,255,255,.06);border-radius:7px;overflow:hidden">
+        <div style="height:100%;width:${Math.round(min/maxMin*100)}%;background:${catColor(c)};border-radius:7px;opacity:.9"></div>
+      </div>
+    </div>`;
+  });
+  el.innerHTML=html;
+}
+// 🏆 ABA RANK: disputa mensal ENTRE TODOS os competidores, agrupada por categoria (👑 = líder)
+function renderMonthCats(elId){
+  const el=document.getElementById(elId||'rank-month-cats'); if(!el) return;
+  const now=new Date();
+  const dom=now.getDate(), dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+  const mp=now.toISOString().slice(0,7);
+  const mPct=Math.round(dom/dim*100);
+  const myName=G.profile?.name||'';
+  const myCats=_monthCatsOf(G.timeLog, mp);
   const allP=[{name:myName,cats:myCats,color:G.profile?.armor||'#888',me:true}];
   ONLINE_PLAYERS.filter(n=>n!==myName).forEach(n=>{
     const d=onlineData[n];
-    if(d&&d.nameMonthly&&Object.keys(d.nameMonthly).length) allP.push({name:n,cats:d.nameMonthly,color:d.profileColor||CHAR_PRESETS[n]?.armor||'#888',me:false});
+    if(d&&d.catMonthly&&Object.keys(d.catMonthly).length) allP.push({name:n,cats:d.catMonthly,color:d.profileColor||CHAR_PRESETS[n]?.armor||'#888',me:false});
   });
-  // Todas as categorias
   const allCats=new Set();
   allP.forEach(p=>Object.keys(p.cats).forEach(c=>allCats.add(c)));
   if(!allCats.size){ el.innerHTML='<div style="color:var(--muted);font-size:13px">Nenhuma atividade registrada este mês.</div>'; return; }
-  const sortedCats=[...allCats].sort((a,b)=>(myCats[b]||0)-(myCats[a]||0));
-  let html=`<div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">Dia <b>${dom}/${dim}</b> · <b>${mPct}% do mês</b> · barras comparativas entre jogadores · linha = proporção esperada no mês</div>`;
+  // categorias mais disputadas primeiro (soma de todos os jogadores)
+  const totalOf=c=>allP.reduce((s,p)=>s+(p.cats[c]||0),0);
+  const sortedCats=[...allCats].sort((a,b)=>totalOf(b)-totalOf(a));
+  let html=`<div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">Dia <b>${dom}/${dim}</b> · <b>${mPct}% do mês</b> · disputa por categoria · 👑 líder · linha = ritmo esperado do mês</div>`;
   sortedCats.forEach(cat=>{
     const rows=allP.map(p=>{
       const min=p.cats[cat]||0; if(!min&&!p.me) return null;
-      const proj=dom>0?Math.round(min/dom*dim):0;
-      let trend='';
-      if(p.me){ const tw=thisWk[cat]||0,pw=prevWk[cat]||0;
-        if(tw>0||pw>0) trend=tw>=pw*1.15?'📈':tw<=pw*0.85?'📉':'➡️'; }
-      return {name:p.name,min,proj,trend,color:p.color,me:p.me};
+      return {name:p.name,min,proj:dom>0?Math.round(min/dom*dim):0,color:p.color,me:p.me};
     }).filter(Boolean).sort((a,b)=>b.min-a.min);
     if(!rows.some(r=>r.min>0)) return;
     const maxMin=Math.max(1,...rows.map(r=>r.min));
     html+=`<div style="margin:10px 0;padding:10px 12px;background:rgba(255,255,255,.04);border-radius:10px;border:1px solid var(--border)">
-      <div style="font-size:15px;font-weight:700;margin-bottom:8px">${(''+cat).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`;
-    rows.forEach(r=>{
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:6px">
+        <span style="font-size:15px;font-weight:700">${_catLabel(cat)}</span>
+        <span style="font-size:10.5px;color:var(--muted)">${fmtHM(totalOf(cat))} somados</span>
+      </div>`;
+    rows.forEach((r,ri)=>{
       const bw=Math.round(r.min/maxMin*100);
-      const ahead=bw>mPct, behind=bw<mPct*0.7;
+      const lead=ri===0&&r.min>0&&rows.length>1;
       html+=`<div style="margin:6px 0">
         <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;flex-wrap:wrap;gap:2px">
-          <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${r.color};margin-right:5px;vertical-align:middle"></span>${r.me?'Você':r.name}${r.trend?' <span style="font-size:11px">'+r.trend+'</span>':''}</span>
-          <span><b style="color:var(--text)">${fmtHM(r.min)}</b> <span style="color:var(--muted);font-size:10.5px">→ ~${fmtHM(r.proj)}/mês</span> ${ahead?'<span style="color:#46c46a;font-size:10px">▲ líder</span>':behind?'<span style="color:var(--danger);font-size:10px">▼</span>':''}</span>
+          <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${r.color};margin-right:5px;vertical-align:middle"></span>${lead?'👑 ':''}${r.me?'<b>Você</b>':r.name}</span>
+          <span><b style="color:var(--text)">${fmtHM(r.min)}</b> <span style="color:var(--muted);font-size:10.5px">→ ~${fmtHM(r.proj)}/mês</span></span>
         </div>
         <div style="position:relative;height:13px;background:rgba(255,255,255,.06);border-radius:6px;overflow:hidden">
           <div style="height:100%;width:${bw}%;background:${r.color};border-radius:6px;opacity:.85"></div>
@@ -9687,7 +9728,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.07.02 • v102';
+  window.APP_VERSION = '2026.07.02 • v103';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
