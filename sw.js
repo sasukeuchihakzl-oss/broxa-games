@@ -5,7 +5,18 @@
    - Mesma origem (GET): cache-first com atualização em segundo plano (stale-while-revalidate).
    - Firebase / fontes (cross-origin): passa direto pela rede (não cacheia dados ao vivo).
    Pra forçar atualização do app, suba o número da versão abaixo. */
-const VERSION = 'fol-v100';
+const VERSION = 'fol-v101';
+
+// 🔔 clique na notificação de missão → foca o app (ou abre se fechado)
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const c of list) { if ('focus' in c) return c.focus(); }
+      return clients.openWindow('./');
+    })
+  );
+});
 const SHELL = [
   './',
   './index.html',
