@@ -1883,7 +1883,7 @@
         <div class="add-mission-form">
           <div class="section-title">+ NOVA MISSÃO</div>
           <div class="form-row">
-            <input type="text" id="mission-input" placeholder="Nome da missão..." maxlength="40" onkeydown="if(event.key==='Enter')addMission()">
+            <input type="text" id="mission-input" placeholder="Nome da missão..." maxlength="40" onkeydown="if(event.key==='Enter')addMission()" oninput="suggestMissionTime()">
           </div>
           <div class="form-row">
             <select id="mission-cat">
@@ -1909,6 +1909,7 @@
             <input type="date" id="mission-date" title="📅 Data da missão (calendário) — opcional">
             <input type="time" id="mission-time" title="Horário-limite (opcional)">
           </div>
+          <div id="mission-time-hint" style="display:none;font-size:11px;color:var(--muted);margin:-4px 0 4px 2px"></div>
           <div class="form-row">
             <select id="mission-rec" title="Repetição" onchange="toggleMissionDays()">
               <option value="">Sem repetir (única)</option>
@@ -2046,6 +2047,7 @@
         <div id="arena-box" class="arena-box"></div>
         <div class="sep"></div>
         <div class="section-title">🏆 RANKING ONLINE (por nível)</div>
+        <div id="rank-rival" style="margin-bottom:6px"></div>
         <div class="rank-list" id="ranking-list"></div>
         <div class="sep"></div>
         <div class="section-title">📊 RANKINGS TOTAIS</div>
@@ -2066,6 +2068,9 @@
         <div class="sep"></div>
         <div class="section-title">📅 TEMPO MENSAL POR ATIVIDADE</div>
         <div id="rank-month-cats"></div>
+        <div class="sep"></div>
+        <div class="section-title">🎯 PONTO FRACO DO GRUPO</div>
+        <div id="rank-weakspot"></div>
       </div>
 
       <!-- BROXISSE HALL TAB (mural de fotos motivacional) -->
@@ -3444,6 +3449,7 @@ function renderMissions() {
     const recBadge = r ? `<span class="rec-badge">${recurLabel(r, m)}${recBonus?` <span style="color:var(--gold)">${recBonus}</span>`:''}</span>` : '';
     const folga = r && !dueToday(m);
     const folgaBadge = folga ? `<span class="rec-badge" style="color:var(--muted)">💤 folga hoje</span>` : '';
+    const histDots = r ? missionHistoryDots(m) : '';
     let dateBadge = '';
     if(m.date){
       const future = todayStr() < m.date;
@@ -3455,6 +3461,7 @@ function renderMissions() {
       <div class="mission-info">
         <div class="mission-name">${m.name} ${recBadge}${dateBadge}${folgaBadge}${timeBadge}${startedBadge}</div>
         <div class="mission-meta">${icImg('lulacoin',11)} ${m.aiValue!=null?(m.aiValue+' LC · +'+m.aiXp+' XP'):(d.coins[0]+'-'+d.coins[1]+' LC · +'+d.xp+' XP')} · <span class="dur-badge" title="${m.durMin!=null?'tempo informado':'estimado pela dificuldade'}" style="color:#8fc7ff">⏱ ${fmtHM(missionDurMin(m))}${m.durMin==null?' ~':''}</span> · <span style="color:var(--green)">✅${st.done}</span> <span style="color:var(--danger)">❌${st.failed}</span>${m.penXp!=null?` · <span style="color:var(--danger)" title="XP perdido se falhar">⚠ -${m.penXp} XP</span>`:''}</div>
+        ${histDots}
       </div>
       <span class="diff-badge ${d.class}">${d.label}</span>
       <div class="mission-actions">
@@ -3481,6 +3488,34 @@ function renderMissions() {
     html += upcomingArr.map(o=>itemHTML(o.m,o.i)).join('');
   }
   list.innerHTML = html;
+}
+
+// 📊 mini-histórico da missão: status dos últimos N dias (ok/late/fail/none), lido de G.history
+function missionRecentDots(m, days){
+  days = days || 14;
+  const byDay = {};
+  (G.history||[]).forEach(e=>{
+    if(e.name !== m.name) return;
+    if(e.type!=='done' && e.type!=='failed') return;
+    const ds = todayStr(e.t);
+    if(!byDay[ds]) byDay[ds] = e;   // primeira entrada do dia (mais recente, pois history é unshift)
+  });
+  const out = [];
+  const now = Date.now();
+  for(let i=days-1;i>=0;i--){
+    const ds = todayStr(now - i*86400000);
+    const e = byDay[ds];
+    if(!e) out.push('none');
+    else if(e.type==='failed') out.push('fail');
+    else out.push(e.late ? 'late' : 'ok');
+  }
+  return out;
+}
+function missionHistoryDots(m){
+  const dots = missionRecentDots(m, 14);
+  if(dots.filter(s=>s!=='none').length < 2) return '';
+  const colorOf = s => s==='ok' ? 'var(--green)' : s==='late' ? '#e0a030' : s==='fail' ? 'var(--danger)' : 'rgba(255,255,255,.14)';
+  return `<div style="margin-top:3px;line-height:0" title="Últimos 14 dias">${dots.map(s=>`<span style="display:inline-block;width:6px;height:6px;margin-right:2px;border-radius:1px;background:${colorOf(s)}"></span>`).join('')}</div>`;
 }
 
 // 🔮 PORTAL DO TEMPO — missões seladas por 7 dias. Ao abrir o selo, ativa e dá +50% XP ao concluir.
@@ -3776,6 +3811,40 @@ function renderMonthCats(elId){
     html+=`</div>`;
   });
   el.innerHTML=html;
+}
+
+// 🎯 PONTO FRACO DO GRUPO: por jogador, qual categoria está mais abaixo da média da firma esse mês
+function renderWeakSpot(elId){
+  const el=document.getElementById(elId||'rank-weakspot'); if(!el) return;
+  const mp=new Date().toISOString().slice(0,7);
+  const myName=G.profile?.name||'';
+  const myCats=_monthCatsOf(G.timeLog, mp);
+  const allP=[{name:myName,cats:myCats,color:G.profile?.armor||'#888',me:true}];
+  ONLINE_PLAYERS.filter(n=>n!==myName).forEach(n=>{
+    const d=onlineData[n];
+    if(d&&d.catMonthly&&Object.keys(d.catMonthly).length) allP.push({name:n,cats:d.catMonthly,color:d.profileColor||CHAR_PRESETS[n]?.armor||'#888',me:false});
+  });
+  if(allP.length<2){ el.innerHTML='<div style="color:var(--muted);font-size:12px">Precisa de pelo menos 2 jogadores com dados este mês.</div>'; return; }
+  const allCats=new Set(); allP.forEach(p=>Object.keys(p.cats).forEach(c=>allCats.add(c)));
+  if(!allCats.size){ el.innerHTML=''; return; }
+  const avgOf=c=>{ const vals=allP.map(p=>p.cats[c]||0); return vals.reduce((s,v)=>s+v,0)/allP.length; };
+  let html='';
+  allP.forEach(p=>{
+    let worst=null, worstDiff=0, worstAvg=0;
+    allCats.forEach(c=>{
+      const avg=avgOf(c); if(avg<=0) return;
+      const mine=p.cats[c]||0; const diff=avg-mine;
+      if(diff>worstDiff){ worstDiff=diff; worst=c; worstAvg=avg; }
+    });
+    if(!worst) return;
+    const pct=Math.round((worstDiff/worstAvg)*100);
+    if(pct<15) return;
+    html+=`<div style="margin:6px 0;padding:8px 10px;background:rgba(255,255,255,.04);border-radius:8px;border:1px solid var(--border);font-size:12px">
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:5px;vertical-align:middle"></span>
+      ${p.me?'<b>Você</b>':p.name} · ⚠️ <b>${_catLabel(worst)}</b> ${pct}% abaixo da média da firma
+    </div>`;
+  });
+  el.innerHTML = html || '<div style="color:var(--muted);font-size:12px">Sem diferenças notáveis este mês.</div>';
 }
 
 function renderDungeons() {
@@ -5291,6 +5360,26 @@ function resetMissionIcon(){ missionIconSel=''; const f=document.getElementById(
 function toggleMissionDays(){ const sel=document.getElementById('mission-rec'), row=document.getElementById('mission-days-row'); if(!sel||!row) return; row.style.display = sel.value==='custom' ? 'flex' : 'none'; updateDayBonusHint(); }
 function toggleDayBtn(b){ b.classList.toggle('day-on'); updateDayBonusHint(); }
 function updateDayBonusHint(){ const hint=document.getElementById('day-bonus-hint'); if(!hint) return; const n=document.querySelectorAll('#mission-days-row .day-btn.day-on').length; const mult=_RECUR_MULT[n]||1.0; hint.textContent = n ? ('+'+Math.round((mult-1)*100)+'% rotina · '+n+' dia'+(n>1?'s':'')+'/sem') : ''; }
+// 💡 dica de horário: média dos horários em que essa missão foi concluída SEM atraso
+function missionTimeHistory(name){
+  const norm = (name||'').trim().toLowerCase();
+  if(!norm) return [];
+  return (G.history||[]).filter(e=>e.type==='done' && !e.late && e.name && e.name.trim().toLowerCase()===norm);
+}
+function suggestMissionTime(){
+  const hint = document.getElementById('mission-time-hint');
+  if(!hint) return;
+  const name = (document.getElementById('mission-input')||{}).value || '';
+  const entries = missionTimeHistory(name);
+  if(entries.length < 3){ hint.style.display='none'; hint.textContent=''; return; }
+  let sum = 0;
+  entries.forEach(e=>{ const d=new Date(e.t); sum += d.getHours()*60+d.getMinutes(); });
+  const avg = Math.round(sum/entries.length);
+  const hh = String(Math.floor(avg/60)).padStart(2,'0');
+  const mm = String(avg%60).padStart(2,'0');
+  hint.textContent = `💡 você costuma concluir por volta de ${hh}:${mm} sem atraso`;
+  hint.style.display = 'block';
+}
 function addMission() {
   const input = document.getElementById('mission-input');
   const name = input.value.trim();
@@ -5351,6 +5440,7 @@ function addMission() {
   registerCatalog(name, finalVals.xp, finalVals.lc);
   input.value = '';
   ['mission-time','mission-date','mission-rec','mission-xp','mission-lc','mission-pen','mission-dur'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  { const h=document.getElementById('mission-time-hint'); if(h){ h.style.display='none'; h.textContent=''; } }
   ['mission-when'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value='active'; });
   document.querySelectorAll('#mission-days-row .day-btn.day-on').forEach(b=>b.classList.remove('day-on')); toggleMissionDays();
   resetMissionIcon();
@@ -5544,7 +5634,9 @@ function completeMission(i) {
   G.totalMissions++;
   G.streak++;
   G.didToday = true;
-  pushHistory('done', m, {coins, xp});
+  let _late = false;
+  if(m.time){ const _n=new Date(); const _hm=_n.getHours()*60+_n.getMinutes(); const [_hh,_mm]=m.time.split(':').map(Number); _late = _hm > (_hh*60+_mm); }
+  pushHistory('done', m, {coins, xp, late:_late});
   // contadores do dia (desafios + dashboard)
   ensureToday();
   G.todayCounters.missions++;
@@ -8340,7 +8432,7 @@ function updateClock(){
 // ===== HISTÓRICO / LEDGER =====
 function pushHistory(type, m, extra){
   const e = {t:Date.now(), type, name:m.name, cat:m.cat, icon:m.icon||'', diff:m.diff};
-  if(extra){ if(extra.coins!=null) e.lc=extra.coins; if(extra.xp!=null) e.xp=extra.xp; }
+  if(extra){ if(extra.coins!=null) e.lc=extra.coins; if(extra.xp!=null) e.xp=extra.xp; if(extra.late!=null) e.late=extra.late; }
   G.history.unshift(e);
   if(G.history.length>300) G.history.pop();
 }
@@ -8546,6 +8638,21 @@ function renderRanking(){
   const dayL = periodLeader('day');   // destaque de hoje (v4.1)
   const dayChampId = (!dayL.tie && dayL.count>0) ? dayL.top.name : null;
 
+  // 🎯 RIVAL DIRETO: quem está mais perto de você em XP total
+  const rivalEl = document.getElementById('rank-rival');
+  if(rivalEl){
+    const byXp = all.filter(p=>p.me || p.online || (p.xpEarned||0)>0).sort((a,b)=>(b.xpEarned||0)-(a.xpEarned||0));
+    const myXi = byXp.findIndex(p=>p.me);
+    if(myXi<0 || byXp.length<2){ rivalEl.innerHTML=''; }
+    else if(myXi===0){
+      const next=byXp[1], gap=(byXp[0].xpEarned||0)-(next.xpEarned||0);
+      rivalEl.innerHTML = gap>0 ? `<div style="padding:8px 10px;background:rgba(255,215,0,.08);border:1px solid var(--gold);border-radius:8px;font-size:12.5px">👑 Você lidera! <b>${gap}</b> XP de vantagem sobre ${next.name}</div>` : '';
+    } else {
+      const ahead=byXp[myXi-1], gap=(ahead.xpEarned||0)-(byXp[myXi].xpEarned||0);
+      rivalEl.innerHTML = `<div style="padding:8px 10px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;font-size:12.5px">🎯 Faltam <b>${gap}</b> XP pra ultrapassar <b>${ahead.name}</b></div>`;
+    }
+  }
+
   document.getElementById('ranking-list').innerHTML = all.map((p,i)=>`
     <div class="rank-row ${p.me?'me':''} ${p.id===dayChampId?'day-champ':''}">
       <span class="rank-pos">${medals[i]||('#'+(i+1))}</span>
@@ -8610,6 +8717,7 @@ function renderRanking(){
   renderGroupBank();
   try{ renderShameHall(); }catch(e){}
   try{ renderMonthCats('rank-month-cats'); }catch(e){}
+  try{ renderWeakSpot('rank-weakspot'); }catch(e){}
 }
 
 // ===== RECOMPENSAS DA VIDA REAL =====
@@ -9728,7 +9836,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.07.02 • v103';
+  window.APP_VERSION = '2026.07.03 • v104';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
