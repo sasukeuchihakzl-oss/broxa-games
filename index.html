@@ -3449,7 +3449,6 @@ function renderMissions() {
     const recBadge = r ? `<span class="rec-badge">${recurLabel(r, m)}${recBonus?` <span style="color:var(--gold)">${recBonus}</span>`:''}</span>` : '';
     const folga = r && !dueToday(m);
     const folgaBadge = folga ? `<span class="rec-badge" style="color:var(--muted)">💤 folga hoje</span>` : '';
-    const histDots = r ? missionHistoryDots(m) : '';
     let dateBadge = '';
     if(m.date){
       const future = todayStr() < m.date;
@@ -3461,7 +3460,6 @@ function renderMissions() {
       <div class="mission-info">
         <div class="mission-name">${m.name} ${recBadge}${dateBadge}${folgaBadge}${timeBadge}${startedBadge}</div>
         <div class="mission-meta">${icImg('lulacoin',11)} ${m.aiValue!=null?(m.aiValue+' LC · +'+m.aiXp+' XP'):(d.coins[0]+'-'+d.coins[1]+' LC · +'+d.xp+' XP')} · <span class="dur-badge" title="${m.durMin!=null?'tempo informado':'estimado pela dificuldade'}" style="color:#8fc7ff">⏱ ${fmtHM(missionDurMin(m))}${m.durMin==null?' ~':''}</span> · <span style="color:var(--green)">✅${st.done}</span> <span style="color:var(--danger)">❌${st.failed}</span>${m.penXp!=null?` · <span style="color:var(--danger)" title="XP perdido se falhar">⚠ -${m.penXp} XP</span>`:''}</div>
-        ${histDots}
       </div>
       <span class="diff-badge ${d.class}">${d.label}</span>
       <div class="mission-actions">
@@ -3488,34 +3486,6 @@ function renderMissions() {
     html += upcomingArr.map(o=>itemHTML(o.m,o.i)).join('');
   }
   list.innerHTML = html;
-}
-
-// 📊 mini-histórico da missão: status dos últimos N dias (ok/late/fail/none), lido de G.history
-function missionRecentDots(m, days){
-  days = days || 14;
-  const byDay = {};
-  (G.history||[]).forEach(e=>{
-    if(e.name !== m.name) return;
-    if(e.type!=='done' && e.type!=='failed') return;
-    const ds = todayStr(e.t);
-    if(!byDay[ds]) byDay[ds] = e;   // primeira entrada do dia (mais recente, pois history é unshift)
-  });
-  const out = [];
-  const now = Date.now();
-  for(let i=days-1;i>=0;i--){
-    const ds = todayStr(now - i*86400000);
-    const e = byDay[ds];
-    if(!e) out.push('none');
-    else if(e.type==='failed') out.push('fail');
-    else out.push(e.late ? 'late' : 'ok');
-  }
-  return out;
-}
-function missionHistoryDots(m){
-  const dots = missionRecentDots(m, 14);
-  if(dots.filter(s=>s!=='none').length < 2) return '';
-  const colorOf = s => s==='ok' ? 'var(--green)' : s==='late' ? '#e0a030' : s==='fail' ? 'var(--danger)' : 'rgba(255,255,255,.14)';
-  return `<div style="margin-top:3px;line-height:0" title="Últimos 14 dias">${dots.map(s=>`<span style="display:inline-block;width:6px;height:6px;margin-right:2px;border-radius:1px;background:${colorOf(s)}"></span>`).join('')}</div>`;
 }
 
 // 🔮 PORTAL DO TEMPO — missões seladas por 7 dias. Ao abrir o selo, ativa e dá +50% XP ao concluir.
@@ -9836,7 +9806,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.07.03 • v104';
+  window.APP_VERSION = '2026.07.04 • v105';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
