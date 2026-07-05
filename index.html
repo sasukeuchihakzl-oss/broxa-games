@@ -7817,6 +7817,29 @@ function restoreCloud(){
     }catch(e){ showToast('Backup da nuvem inválido!','dmg'); }
   }).catch(()=>showToast('Falha ao ler backup','dmg'));
 }
+// ☁️🔄 AUTO-RESTAURAÇÃO: se este aparelho está ZERADO mas a nuvem tem um backup com progresso
+// (navegador reinstalado/dados apagados), restaura SOZINHO — sem o jogador precisar fazer nada.
+function autoCloudRestore(){
+  try{
+    if(!db) { setTimeout(autoCloudRestore, 4000); return; }   // espera o Firebase conectar
+    const myName = G.profile?.name||''; if(!ONLINE_PLAYERS.includes(myName)) return;
+    const meEmpty = (G.level||1)<=1 && (G.totalMissions||0)===0 && !(G.missions||[]).length;
+    if(!meEmpty) return;
+    if(window._autoRestoreTried) return; window._autoRestoreTried = true;   // 1 tentativa por carregamento
+    db.ref('forge_backup/'+myName).once('value').then(s=>{
+      const b = s.val();
+      if(!b || !b.data) return;
+      if(!((b.level||1)>1 || (b.missions||0)>0)) return;   // backup também vazio → nada a restaurar
+      try{
+        const data = JSON.parse(b.data);
+        if(!data || typeof data!=='object' || !data.profile || data.profile.name!==myName) return;
+        localStorage.setItem(SAVE_KEY, b.data);
+        showToast('☁️ Progresso restaurado da nuvem automaticamente! Recarregando…','heal');
+        setTimeout(()=>location.reload(), 1400);
+      }catch(e){}
+    }).catch(()=>{});
+  }catch(e){}
+}
 
 // ===== NERF COLETIVO: amigo furou o dia → todos sofrem (v6 #11) =====
 let dayFailListener = null;
@@ -9520,6 +9543,7 @@ function finishInit() {
   applyHeroState();
   checkDailyReset();
   applyOverdraftFee();   // 💳 cobra a taxa do cheque especial no 1º acesso do dia se estiver negativo
+  setTimeout(autoCloudRestore, 2500);   // ☁️🔄 aparelho zerado? restaura da nuvem sozinho
   G.day = computeDay();
   renderMissions();
   renderPresets();
