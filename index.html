@@ -7769,7 +7769,7 @@ function cloudBackup(force){
   if(!force && G._cloudBackupTs && (nowts - G._cloudBackupTs) < 180000) return;  // throttle 3min
   G._cloudBackupTs = nowts;
   const raw = localStorage.getItem(SAVE_KEY) || '{}';
-  const payload = { data:raw, at:nowts, level:G.level, coins:G.coins, missions:(G.missions||[]).length };
+  const payload = { data:raw, at:nowts, level:G.level, coins:G.coins, missions:(G.missions||[]).length, totalMissions:G.totalMissions||0, xpEarned:G.xpEarned||0 };
   const histSnap = ()=>{   // 🗓 1 snapshot por dia (o 1º do dia = estado final de ontem) em forge_backup_hist, mantém últimos 10
     try{
       const d = todayStr();
@@ -7787,15 +7787,28 @@ function cloudBackup(force){
       .then(()=>{ if(force) showToast('☁️ Backup na nuvem salvo!','heal'); histSnap(); })
       .catch(()=>{ if(force) showToast('Falha no backup na nuvem','dmg'); });
   };
-  // 🛡 NUNCA sobrescrever um backup bom com um save vazio (navegador resetado/reinstalado).
-  // Se este aparelho está zerado mas a nuvem tem progresso, preserva a nuvem (backup manual força).
-  const meEmpty = (G.level||1)<=1 && (G.totalMissions||0)===0 && !(G.missions||[]).length;
-  if(meEmpty && !force){
+  // 🛡 PROTEÇÃO ANTI-REGRESSÃO: nunca sobrescrever um backup MELHOR com um estado PIOR.
+  // Cobre o aparelho zerado (reinstalou navegador) E o save parcial (recuperação incompleta).
+  // Progresso é monotônico: totalMissions e xpEarned só sobem em jogo normal — se a nuvem tem
+  // mais, o local regrediu. Backup MANUAL (force) sempre passa.
+  if(!force){
     db.ref('forge_backup/'+myName).once('value').then(s=>{
       const b = s.val();
-      if(b && ((b.level||1)>1 || (b.missions||0)>0)) return;   // nuvem melhor que o local → não sobrescreve
+      if(b && b.data){
+        let cloud=null; try{ cloud=JSON.parse(b.data); }catch(e){}
+        if(cloud){
+          const cTM=cloud.totalMissions||0, cXP=cloud.xpEarned||0, cLv=cloud.level||1;
+          const lTM=G.totalMissions||0, lXP=G.xpEarned||0, lLv=G.level||1;
+          const cloudAhead = cLv>lLv || cTM>lTM+3 || cXP>lXP+200;   // nuvem claramente à frente
+          if(cloudAhead){
+            if(!window._cloudAheadNotified){ window._cloudAheadNotified=true;
+              showToast('☁️ A nuvem tem MAIS progresso (Nv '+cLv+', '+cTM+' missões). Backup automático pausado p/ proteger seu save. Vá em ⚙ → Restaurar da nuvem.','dmg'); }
+            return;   // 🛑 NÃO sobrescreve o backup bom
+          }
+        }
+      }
       doSet();
-    }).catch(()=>{});
+    }).catch(()=>{ try{ doSet(); }catch(e){} });
     return;
   }
   try{ doSet(); }catch(e){}
@@ -7824,16 +7837,19 @@ function autoCloudRestore(){
   try{
     if(!db) { setTimeout(autoCloudRestore, 4000); return; }   // espera o Firebase conectar
     const myName = G.profile?.name||''; if(!ONLINE_PLAYERS.includes(myName)) return;
-    const meEmpty = (G.level||1)<=1 && (G.totalMissions||0)===0 && !(G.missions||[]).length;
-    if(!meEmpty) return;
     if(window._autoRestoreTried) return; window._autoRestoreTried = true;   // 1 tentativa por carregamento
     db.ref('forge_backup/'+myName).once('value').then(s=>{
       const b = s.val();
       if(!b || !b.data) return;
-      if(!((b.level||1)>1 || (b.missions||0)>0)) return;   // backup também vazio → nada a restaurar
       try{
         const data = JSON.parse(b.data);
         if(!data || typeof data!=='object' || !data.profile || data.profile.name!==myName) return;
+        // Restaura se o aparelho está ZERADO ou claramente ATRÁS da nuvem (recuperação parcial).
+        const cTM=data.totalMissions||0, cXP=data.xpEarned||0, cLv=data.level||1;
+        const lTM=G.totalMissions||0, lXP=G.xpEarned||0, lLv=G.level||1;
+        const meEmpty = lLv<=1 && lTM===0 && !(G.missions||[]).length;
+        const cloudAhead = cLv>lLv || cTM>lTM+3 || cXP>lXP+200;
+        if(!meEmpty && !cloudAhead) return;   // local igual ou melhor → não mexe
         const lastTry = parseInt(localStorage.getItem('fol_ar_ts')||'0');
         if(Date.now() - lastTry < 90000) return;   // ⛔ trava anti-loop: 1 tentativa por 90s
         localStorage.setItem('fol_ar_ts', String(Date.now()));
