@@ -5117,7 +5117,7 @@ function renderShop() {
     html += `<div class="shop-cat-title">${catIcon[cat]||''} ${cat}</div>`;
     html += `<div class="shop-grid-inner">` + items.map(({it,i})=>{
       const rc = rarColor(it.rarity);
-      const can = G.coins >= it.price;
+      const can = canSpend(it.price);
       return `<div class="shop-item ${can?'':'cant'}" style="border-color:${rc}55" onclick="buyItem(${i})" title="${(RARITY[it.rarity]||RARITY.common).name}">
         <div class="rar-tag" style="background:${rc}">${(RARITY[it.rarity]||RARITY.common).name}</div>
         <div class="shop-item-icon"><canvas class="game-icon" width="48" height="48" data-art="${itemArt(it)}" data-rar="${rc}"></canvas></div>
@@ -5865,10 +5865,32 @@ function healPlayer(amount) {
   updateUI();
 }
 
+// ============================================================
+// 💳 CHEQUE ESPECIAL — o saldo pode ficar negativo até -200 LC.
+// Enquanto estiver negativo, cobra uma taxa de 100 LC no 1º acesso de cada dia
+// (nunca empurra abaixo de -200 — o piso é absoluto).
+// ============================================================
+const OVERDRAFT_LIMIT = 200;   // piso do saldo: -200 LC
+const OVERDRAFT_FEE = 100;     // taxa diária enquanto negativo
+function canSpend(cost){ return (G.coins - Math.max(0, cost)) >= -OVERDRAFT_LIMIT; }
+function applyOverdraftFee(){
+  if((G.coins||0) >= 0) return;                    // só cobra enquanto estiver negativo
+  const today = todayStr();
+  if(G.overdraftFeeDate === today) return;         // 1x por dia
+  const room = G.coins + OVERDRAFT_LIMIT;          // quanto ainda cabe antes do piso (-200)
+  const fee = Math.min(OVERDRAFT_FEE, Math.max(0, room));
+  G.overdraftFeeDate = today;
+  if(fee > 0){
+    G.coins -= fee; addLedger('out', fee, '💳 Taxa do cheque especial');
+    setTimeout(()=>{ try{ showToast('💳 Taxa de '+fee+' LC (cheque especial). Saldo: '+G.coins+' LC','dmg'); }catch(e){} }, 1200);
+  }
+  try{ updateUI(); save(); }catch(e){}
+}
+
 function buyItem(i) {
   const item = SHOP_ITEMS[i];
   const atoaFree = G.atoaDate === todayStr();
-  if(!atoaFree && G.coins < item.price){ showToast("LulaCoins insuficientes!", "dmg"); return; }
+  if(!atoaFree && !canSpend(item.price)){ showToast("Estourou o limite do cheque especial (-"+OVERDRAFT_LIMIT+" LC)!", "dmg"); return; }
   if(!atoaFree){
     G.coins -= item.price;
     addLedger('out', item.price, 'Loja: '+item.name);
@@ -8163,6 +8185,7 @@ function save(){
       xpCurveV2:G.xpCurveV2, xpCurveV3:G.xpCurveV3,
       doubleXpUntil:G.doubleXpUntil, xpDay:G.xpDay, xpRecord:G.xpRecord, timeLog:G.timeLog, timeLogName:G.timeLogName||{}, timeLogNameMigrated:G.timeLogNameMigrated||0, sleepGoalH:G.sleepGoalH,
       dailyRankBonusDate:G.dailyRankBonusDate||'',
+      overdraftFeeDate:G.overdraftFeeDate||'',
       catRemap:G.catRemap||{},
       world:G.world
     };
@@ -8218,6 +8241,7 @@ function load(){
     G.themesUnlocked = G.themesUnlocked || ['classic'];
     G.manoBank = G.manoBank || {};
     G.debts = Array.isArray(G.debts) ? G.debts : [];
+    G.overdraftFeeDate = G.overdraftFeeDate || '';
     G.bestStreak = G.bestStreak || 0;
     G.prestige = G.prestige || 0;
     G.prestigePoints = G.prestigePoints || 0;
@@ -8694,7 +8718,7 @@ function renderRanking(){
 function renderRewards(){
   const grid = document.getElementById('rewards-grid');
   grid.innerHTML = REAL_REWARDS.map(r=>{
-    const can = r.variable || G.coins>=r.cost;
+    const can = r.variable || canSpend(r.cost);
     return `<div class="shop-item ${can?'':'cant'}" onclick="redeemReward('${r.id}')">
       <div class="shop-item-icon">${r.emoji}</div>
       <div class="shop-item-name">${r.name}</div>
@@ -8745,7 +8769,7 @@ function openRewardInput(r, fields, compute){
   modal.classList.add('show');
   const getVals = ()=>{ const v={}; fields.forEach(f=>v[f.key]=document.getElementById('ri-'+f.key).value); return v; };
   const upd = ()=>{ const res=compute(getVals()); const el=document.getElementById('ri-cost');
-    el.textContent = res ? ('Custo: '+res.cost+' LC'+(G.coins<res.cost?' (faltam '+(res.cost-G.coins)+')':'')) : 'valor inválido'; };
+    el.textContent = res ? ('Custo: '+res.cost+' LC'+(!canSpend(res.cost)?' (passa do limite -'+OVERDRAFT_LIMIT+')':((G.coins-res.cost)<0?' (usa cheque especial)':''))) : 'valor inválido'; };
   fields.forEach(f=>document.getElementById('ri-'+f.key).addEventListener('input', upd));
   upd();
   document.getElementById('ri-confirm').onclick = ()=>{
@@ -8797,7 +8821,7 @@ function gameConfirm(opts){
   document.getElementById('ask-yes').onclick=()=>{ closeAsk(); if(opts.onYes) opts.onYes(); };
 }
 function finalizeReward(r, cost, label){
-  if(G.coins < cost){ showToast('Faltam '+(cost-G.coins)+' LulaCoins!','dmg'); return; }
+  if(!canSpend(cost)){ showToast('Estourou o limite do cheque especial (-'+OVERDRAFT_LIMIT+' LC)!','dmg'); return; }
   G.coins -= cost; addLedger('out', cost, 'Recompensa: '+label);
   G.rewardsLog.unshift({t:Date.now(), name:label, emoji:r.emoji, cost});
   G.lastPurchases = G.lastPurchases || [];
@@ -9470,6 +9494,7 @@ function finishInit() {
   const hci = document.getElementById('hero-combat-img'); if(hci) hci.src = _img;
   applyHeroState();
   checkDailyReset();
+  applyOverdraftFee();   // 💳 cobra a taxa do cheque especial no 1º acesso do dia se estiver negativo
   G.day = computeDay();
   renderMissions();
   renderPresets();
@@ -9806,7 +9831,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.07.04 • v105';
+  window.APP_VERSION = '2026.07.04 • v106';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
