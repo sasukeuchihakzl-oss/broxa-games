@@ -7768,12 +7768,37 @@ function cloudBackup(force){
   const nowts = Date.now();
   if(!force && G._cloudBackupTs && (nowts - G._cloudBackupTs) < 180000) return;  // throttle 3min
   G._cloudBackupTs = nowts;
-  try{
-    const raw = localStorage.getItem(SAVE_KEY) || '{}';
-    db.ref('forge_backup/'+myName).set({ data:raw, at:nowts, level:G.level, coins:G.coins, missions:(G.missions||[]).length })
-      .then(()=>{ if(force) showToast('☁️ Backup na nuvem salvo!','heal'); })
+  const raw = localStorage.getItem(SAVE_KEY) || '{}';
+  const payload = { data:raw, at:nowts, level:G.level, coins:G.coins, missions:(G.missions||[]).length };
+  const histSnap = ()=>{   // 🗓 1 snapshot por dia (o 1º do dia = estado final de ontem) em forge_backup_hist, mantém últimos 10
+    try{
+      const d = todayStr();
+      if(G._bkHistDate === d) return; G._bkHistDate = d;
+      db.ref('forge_backup_hist/'+myName+'/'+d).set(payload).then(()=>{
+        db.ref('forge_backup_hist/'+myName).once('value').then(s=>{
+          const all = Object.keys(s.val()||{}).sort();
+          while(all.length > 10){ const old = all.shift(); db.ref('forge_backup_hist/'+myName+'/'+old).remove(); }
+        });
+      }).catch(()=>{});
+    }catch(e){}
+  };
+  const doSet = ()=>{
+    db.ref('forge_backup/'+myName).set(payload)
+      .then(()=>{ if(force) showToast('☁️ Backup na nuvem salvo!','heal'); histSnap(); })
       .catch(()=>{ if(force) showToast('Falha no backup na nuvem','dmg'); });
-  }catch(e){}
+  };
+  // 🛡 NUNCA sobrescrever um backup bom com um save vazio (navegador resetado/reinstalado).
+  // Se este aparelho está zerado mas a nuvem tem progresso, preserva a nuvem (backup manual força).
+  const meEmpty = (G.level||1)<=1 && (G.totalMissions||0)===0 && !(G.missions||[]).length;
+  if(meEmpty && !force){
+    db.ref('forge_backup/'+myName).once('value').then(s=>{
+      const b = s.val();
+      if(b && ((b.level||1)>1 || (b.missions||0)>0)) return;   // nuvem melhor que o local → não sobrescreve
+      doSet();
+    }).catch(()=>{});
+    return;
+  }
+  try{ doSet(); }catch(e){}
 }
 function restoreCloud(){
   if(!db){ showToast('Conecte o Firebase!','dmg'); return; }
@@ -9831,7 +9856,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.07.04 • v106';
+  window.APP_VERSION = '2026.07.05 • v107';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
