@@ -7811,6 +7811,7 @@ function restoreCloud(){
     try{
       const data = JSON.parse(b.data);
       if(!data || typeof data!=='object' || !data.profile) throw new Error('inválido');
+      window._restoringCloud = true;   // 🛡 bloqueia save() até o reload
       localStorage.setItem(SAVE_KEY, b.data);
       showToast('☁️ Backup restaurado! Recarregando…','heal');
       setTimeout(()=>location.reload(), 900);
@@ -7833,6 +7834,10 @@ function autoCloudRestore(){
       try{
         const data = JSON.parse(b.data);
         if(!data || typeof data!=='object' || !data.profile || data.profile.name!==myName) return;
+        const lastTry = parseInt(localStorage.getItem('fol_ar_ts')||'0');
+        if(Date.now() - lastTry < 90000) return;   // ⛔ trava anti-loop: 1 tentativa por 90s
+        localStorage.setItem('fol_ar_ts', String(Date.now()));
+        window._restoringCloud = true;             // 🛡 bloqueia save() até o reload
         localStorage.setItem(SAVE_KEY, b.data);
         showToast('☁️ Progresso restaurado da nuvem automaticamente! Recarregando…','heal');
         setTimeout(()=>location.reload(), 1400);
@@ -8204,6 +8209,7 @@ function showToast(msg, type='') {
 // ===== SAVE / LOAD (localStorage) =====
 const SAVE_KEY = 'broxa_forge_save_v4';  // v4: reset geral — começa a valer a partir de amanhã (graceDate)
 function save(){
+  if(window._restoringCloud) return;   // 🛡 restore recém-aplicado: autosave/beforeunload NÃO pode sobrescrever
   try{
     const data = {
       v:2, profile:G.profile, level:G.level, hp:G.hp, maxHp:G.maxHp, xp:G.xp, xpNext:G.xpNext,
@@ -8419,6 +8425,7 @@ function importSave(ev){
       const data = JSON.parse(e.target.result);
       if(!data || typeof data!=='object' || !data.profile) throw new Error('inválido');
       if(!confirm('Importar este save vai SUBSTITUIR seu progresso atual. Continuar?')) return;
+      window._restoringCloud = true;   // 🛡 bloqueia save() até o reload
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
       showToast('📤 Backup importado! Recarregando…','heal');
       setTimeout(()=>location.reload(), 900);
@@ -8445,6 +8452,7 @@ function pasteSaveCode(){
       const data = JSON.parse(raw);
       if(!data || typeof data!=='object' || !data.profile) throw new Error('inválido');
       if(!confirm('Carregar este save vai SUBSTITUIR seu progresso atual. Continuar?')) return;
+      window._restoringCloud = true;   // 🛡 bloqueia save() até o reload
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
       showToast('📝 Save carregado! Recarregando…','heal');
       setTimeout(()=>location.reload(), 900);
@@ -9880,7 +9888,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.07.05 • v107';
+  window.APP_VERSION = '2026.07.05 • v108';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
