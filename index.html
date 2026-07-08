@@ -1069,6 +1069,37 @@
   .modal-title{ font-family:var(--pixel); font-size:11px; color:var(--gold); text-align:center; margin-bottom:12px; text-shadow:var(--ink); }
   .modal-actions{ display:flex; gap:8px; justify-content:center; margin-top:12px; }
 
+  /* ☎️ TELA DE LIGAÇÃO — notificação em tela cheia, estilo "chamada recebida" (app aberto) */
+  #call-overlay{
+    position:fixed; inset:0; z-index:2000000000; display:none;
+    flex-direction:column; align-items:center; justify-content:space-between;
+    padding:calc(46px + env(safe-area-inset-top)) 24px calc(46px + env(safe-area-inset-bottom)) 24px;
+    background:radial-gradient(circle at 50% 28%, #1c1236, #05040a 72%);
+    color:#fff; text-align:center; animation:callIn .25s ease;
+  }
+  #call-overlay.show{ display:flex; }
+  @keyframes callIn{ from{ opacity:0; } to{ opacity:1; } }
+  .call-top{ display:flex; flex-direction:column; align-items:center; gap:14px; margin-top:20px; }
+  .call-sub{ font-family:var(--vt); font-size:20px; letter-spacing:1px; color:#c9b8ff; }
+  .call-name{ font-family:var(--pixel); font-size:16px; color:#ffe08a; letter-spacing:1px; text-shadow:0 2px 8px rgba(0,0,0,.6); }
+  .call-avatar-wrap{ position:relative; width:150px; height:150px; margin-top:8px; }
+  .call-avatar{ width:150px; height:150px; border-radius:50%; object-fit:cover; border:3px solid rgba(255,255,255,.85); background:#14102a; box-shadow:0 0 0 6px rgba(170,120,255,.15); }
+  .call-avatar-wrap::before, .call-avatar-wrap::after{
+    content:''; position:absolute; inset:-6px; border-radius:50%;
+    border:2px solid rgba(170,120,255,.5); animation:callPulse 1.8s ease-out infinite;
+  }
+  .call-avatar-wrap::after{ animation-delay:.9s; }
+  @keyframes callPulse{ 0%{ transform:scale(1); opacity:.7; } 100%{ transform:scale(1.55); opacity:0; } }
+  .call-body{ font-family:var(--vt); font-size:18px; color:#e8dfc0; max-width:340px; line-height:1.4; margin-top:4px; }
+  .call-actions{ display:flex; gap:56px; align-items:flex-start; }
+  .call-action-col{ display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .call-btn{ width:74px; height:74px; border-radius:50%; border:none; font-size:30px; cursor:pointer; color:#fff; box-shadow:0 6px 18px rgba(0,0,0,.5); transition:transform .1s; }
+  .call-btn:active{ transform:scale(.92); }
+  .call-decline{ background:#e0342f; }
+  .call-accept{ background:#22b04a; animation:callWiggle 1s ease-in-out infinite; }
+  @keyframes callWiggle{ 0%,100%{ transform:rotate(0); } 25%{ transform:rotate(-12deg); } 75%{ transform:rotate(12deg); } }
+  .call-btn-label{ font-family:var(--vt); font-size:15px; color:#b6a880; }
+
   .cust-wrap{ display:flex; gap:14px; }
   .cust-preview{
     flex:0 0 auto; display:flex; align-items:center; justify-content:center;
@@ -6990,7 +7021,7 @@ function checkRivalOverdue(){
       if(!rivalMissionLate(m)) return;
       const key=n+'|'+m.n+'|'+today;
       if(_lateSeen[key]) return; _lateSeen[key]=1;
-      gameNotify('⚠️ '+n+' atrasou uma missão!', `${m.c||''} ${m.n} (era ${m.t}) — cobra ele! Se não cumprir, todos perdem. 😱`, {tag:'late-'+n, renotify:true});
+      gameNotify('⚠️ '+n+' atrasou uma missão!', `${m.c||''} ${m.n} (era ${m.t}) — cobra ele! Se não cumprir, todos perdem. 😱`, {tag:'late-'+n, renotify:true, call:true, caller:'⚠️ '+n+' ATRASOU', avatar:MENTOR_IMG_ANGRY});
     });
   });
 }
@@ -8006,11 +8037,87 @@ function requestNotifPerm() {
   }
 }
 
+// ☎️ ===== TELA DE LIGAÇÃO EM TELA CHEIA (chamada recebida — app aberto, Android) =====
+// Cobre TODA a tela do jogo, toca um toque de telefone e VIBRA como uma ligação.
+// (Vibração = Android. iOS não vibra via web, mas o alvo aqui é Android.)
+let _callCtx=null, _callRingInt=null, _callVibTimer=null, _callOnAccept=null;
+// destrava o áudio no 1º toque do usuário (Android/Chrome exige gesto pra tocar depois)
+function _callUnlockAudio(){
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+    if(!_callCtx) _callCtx=new AC();
+    if(_callCtx.state==='suspended') _callCtx.resume();
+  }catch(e){}
+}
+document.addEventListener('pointerdown', _callUnlockAudio, {once:false});
+function _callStartRing(){
+  _callUnlockAudio();
+  const ctx=_callCtx; if(!ctx) return;
+  const ring=()=>{
+    if(!ctx || ctx.state!=='running') return;
+    const t0=ctx.currentTime;
+    [[0,480],[0.42,620]].forEach(([off,freq])=>{
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.type='sine'; o.frequency.value=freq;
+      g.gain.setValueAtTime(0, t0+off);
+      g.gain.linearRampToValueAtTime(0.30, t0+off+0.05);
+      g.gain.setValueAtTime(0.30, t0+off+0.30);
+      g.gain.linearRampToValueAtTime(0, t0+off+0.40);
+      o.connect(g).connect(ctx.destination); o.start(t0+off); o.stop(t0+off+0.42);
+    });
+  };
+  ring(); _callRingInt=setInterval(ring, 2000);
+}
+function _callStopRing(){ if(_callRingInt){ clearInterval(_callRingInt); _callRingInt=null; } }
+function _callStartVibe(){
+  if(!navigator.vibrate) return;   // Android vibra; iOS ignora
+  const buzz=()=>{ try{ navigator.vibrate([600,350,600,350,600]); }catch(e){} };
+  buzz(); _callVibTimer=setInterval(buzz, 2600);
+}
+function _callStopVibe(){ if(_callVibTimer){ clearInterval(_callVibTimer); _callVibTimer=null; } try{ navigator.vibrate && navigator.vibrate(0); }catch(e){} }
+
+function showIncomingCall(opts){
+  opts=opts||{};
+  let el=document.getElementById('call-overlay');
+  if(!el){ el=document.createElement('div'); el.id='call-overlay'; document.body.appendChild(el); }
+  const caller=opts.caller||'BROXA', avatar=opts.avatar||MENTOR_IMG_ANGRY, body=opts.body||'';
+  el.innerHTML=`
+    <div class="call-top">
+      <div class="call-sub">chamada recebida…</div>
+      <div class="call-avatar-wrap"><img class="call-avatar" src="${avatar}" alt=""></div>
+      <div class="call-name">${caller}</div>
+      ${body?`<div class="call-body">${body}</div>`:''}
+    </div>
+    <div class="call-actions">
+      <div class="call-action-col"><button class="call-btn call-decline" id="call-decline">✕</button><div class="call-btn-label">Recusar</div></div>
+      <div class="call-action-col"><button class="call-btn call-accept" id="call-accept">✓</button><div class="call-btn-label">Atender</div></div>
+    </div>`;
+  el.classList.add('show');
+  _callOnAccept=opts.onAccept||null;
+  _callStartRing(); _callStartVibe();
+  document.getElementById('call-decline').onclick=()=>dismissCall(false);
+  document.getElementById('call-accept').onclick=()=>dismissCall(true);
+  clearTimeout(el._auto); el._auto=setTimeout(()=>dismissCall(false), 45000);  // desiste após 45s
+}
+function dismissCall(accepted){
+  const el=document.getElementById('call-overlay'); if(!el) return;
+  el.classList.remove('show'); clearTimeout(el._auto);
+  _callStopRing(); _callStopVibe();
+  const cb=_callOnAccept; _callOnAccept=null;
+  if(accepted && typeof cb==='function'){ try{ cb(); }catch(e){} }
+}
+
 // notificação que FUNCIONA NO CELULAR: usa o service worker (PWA);
 // no PC cai pro Notification normal. Use sempre esta no lugar de `new Notification`.
 function gameNotify(title, body, extra){
+  extra = extra || {};
+  // ☎️ se for URGENTE (call:true) e o app estiver ABERTO, escala pra ligação em tela cheia
+  if(extra.call && document.visibilityState==='visible'){
+    try{ showIncomingCall({ caller: extra.caller||title, avatar: extra.avatar, body: body||'', onAccept: extra.onAccept }); }catch(e){}
+  }
   if(!('Notification' in window) || Notification.permission !== 'granted') return;
-  const opts = Object.assign({ body:body||'', icon:'icon-192.png', badge:'icon-192.png' }, extra||{});
+  const { call, caller, avatar, onAccept, ...notifOpts } = extra;   // tira campos internos da ligação
+  const opts = Object.assign({ body:body||'', icon:'icon-192.png', badge:'icon-192.png' }, notifOpts);
   try{
     if(navigator.serviceWorker && navigator.serviceWorker.ready){
       navigator.serviceWorker.ready
@@ -8046,7 +8153,7 @@ function checkMissionReminders(){
     const parts = m.time.split(':'); const target = (+parts[0])*60 + (+parts[1]);
     if(hm >= target && hm <= target+1 && m._notifDate !== today){
       m._notifDate = today;
-      gameNotify('⏰ Hora da missão!', `${m.cat} ${m.name} — bora fazer agora!`, {tag:'mission-time'});
+      gameNotify('⏰ Hora da missão!', `${m.cat} ${m.name} — bora fazer agora!`, {tag:'mission-time', call:true, caller:'⏰ HORA DA MISSÃO', avatar:MENTOR_IMG_ANGRY});
     }
   });
 }
@@ -8997,7 +9104,7 @@ function checkWakeNerf(){
   // lembrete (notificação) a partir das 7h, antes das 9h, 1x por dia
   if(h>=7 && h<WAKE_DEADLINE_H && G.wakeRemindDate!==today){
     G.wakeRemindDate = today;
-    gameNotify('☀️ Bom dia! Aperta o "Acordei"', `Antes das ${WAKE_DEADLINE_H}h, senão perde 100 XP!`, {tag:'wake', renotify:true});
+    gameNotify('☀️ Bom dia! Aperta o "Acordei"', `Antes das ${WAKE_DEADLINE_H}h, senão perde 100 XP!`, {tag:'wake', renotify:true, call:true, caller:'☀️ BOM DIA — ACORDEI', avatar:MENTOR_IMG_ANGRY});
     save();
   }
   if(h < WAKE_DEADLINE_H) return;                  // ainda não deu 9h → só lembra
