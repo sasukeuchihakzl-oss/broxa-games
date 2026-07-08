@@ -3611,6 +3611,27 @@ function setSleepGoal(){
     const n=parseFloat(v); if(!isNaN(n)&&n>=0&&n<=24){ G.sleepGoalH=n; save(); renderTimeTab(); showToast('😴 Sono ajustado p/ '+n+'h','info'); }
   }});
 }
+// 🍩 rosca (donut) do dia: cada segmento = fração das 24h. segs=[{label,min,color}]
+function _dayDonut(segs){
+  const list = segs.filter(s=>s.min>0);
+  const total = list.reduce((s,x)=>s+x.min,0) || 1;
+  const R=52, SW=22, C=2*Math.PI*R, cx=70, cy=70;
+  let off=0;
+  const arcs = list.map(s=>{
+    const dash = (s.min/total)*C;
+    const a = `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${s.color}" stroke-width="${SW}"
+        stroke-dasharray="${dash.toFixed(2)} ${(C-dash).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}"
+        transform="rotate(-90 ${cx} ${cy})"><title>${s.label}: ${fmtHM(s.min)}</title></circle>`;
+    off += dash; return a;
+  }).join('');
+  const top = list.slice().sort((a,b)=>b.min-a.min)[0];
+  return `<svg viewBox="0 0 140 140" width="184" height="184" style="display:block;margin:2px auto">
+    <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="${SW}"/>
+    ${arcs}
+    <text x="${cx}" y="${cy-3}" text-anchor="middle" fill="var(--text)" font-size="20" font-weight="bold">24h</text>
+    <text x="${cx}" y="${cy+15}" text-anchor="middle" fill="var(--muted)" font-size="9">${top?top.label:''}</text>
+  </svg>`;
+}
 function renderTimeTab(){
   const el = document.getElementById('time-content'); if(!el) return;
   const t = todayStr();
@@ -3630,6 +3651,23 @@ function renderTimeTab(){
     {label:'⬜ Tarefas restantes', min:pendMin,  color:'#2e7d46'},
     {label:'🎮 Livre',           min:freeMin,  color:'#f0c040'}
   ];
+  // 🍩 rosca do dia por CATEGORIA: sono + cada categoria das missões de hoje + livre (soma 24h)
+  const _catMap={};
+  [...doneToday, ...planToday].forEach(m=>{ const c=m.cat||'🎯'; _catMap[c]=(_catMap[c]||0)+missionDurMin(m); });
+  const donutSegs = [
+    {label:'😴 Sono', min:sleepMin, color:'#5b76d6'},
+    ...Object.entries(_catMap).sort((a,b)=>b[1]-a[1]).map(([c,mn])=>({ label: catEmoji(c)+' '+((CATEGORIES[c]&&CATEGORIES[c].name)||c), min:mn, color:catColor(c) })),
+    {label:'🎮 Livre', min:freeMin, color:'#f0c040'}
+  ];
+  const donutLegend = donutSegs.filter(s=>s.min>0).map(s=>`<div style="display:flex;align-items:center;gap:6px;font-size:12.5px">
+      <span style="width:11px;height:11px;border-radius:3px;background:${s.color};display:inline-block;flex:0 0 auto"></span>
+      <span style="flex:1">${s.label}</span><b>${fmtHM(s.min)}</b> <span style="color:var(--muted)">${(s.min/1440*100).toFixed(0)}%</span>
+    </div>`).join('');
+  const donutBlock = `<div style="background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px">
+      <div style="font-size:12.5px;color:var(--muted);margin-bottom:4px;text-align:center">🕐 Seu dia em 24h — o que cada parte foi comprometida</div>
+      ${_dayDonut(donutSegs)}
+      <div style="display:flex;flex-direction:column;gap:5px;margin-top:8px">${donutLegend}</div>
+    </div>`;
   const pct = (m)=> (m/1440*100).toFixed(1);
   // barra empilhada do dia (24h)
   let dayBar = `<div style="display:flex;height:30px;border-radius:8px;overflow:hidden;border:1px solid var(--border)">`;
@@ -3694,6 +3732,7 @@ function renderTimeTab(){
   el.innerHTML = `${dx}
     <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:10px">Suas <b>24h</b> de hoje com a <b>meta de tarefas do dia inteira calculada de uma vez</b> — assim você já sabe quanto tempo livre sobra. Sono é editável.</div>
     ${goalBox}
+    ${donutBlock}
     ${dayBar}
     <div style="display:flex;flex-direction:column;gap:5px;margin-top:10px">${legend}</div>
     <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
