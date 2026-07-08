@@ -2459,6 +2459,13 @@
     </div>
     <div id="bio-hint" class="config-hint" style="margin-top:6px"></div>
 
+    <div class="section-title">🔔 AVISOS &amp; LIGAÇÃO</div>
+    <div class="sys-grid" style="grid-template-columns:1fr 1fr">
+      <button class="pixel-btn btn-gold" id="push-toggle-btn" onclick="togglePush()">🔔 ATIVAR AVISOS<br>(APP FECHADO)</button>
+      <button class="pixel-btn btn-purple" onclick="testCall()">📞 TESTAR<br>LIGAÇÃO</button>
+    </div>
+    <div id="push-hint" class="config-hint" style="margin-top:6px"></div>
+
     <div class="section-title">💾 GERENCIAR SAVE</div>
     <div class="sys-grid">
       <button class="pixel-btn btn-green" onclick="manualSave()">💾 SALVAR<br>AGORA</button>
@@ -8107,6 +8114,54 @@ function dismissCall(accepted){
   if(accepted && typeof cb==='function'){ try{ cb(); }catch(e){} }
 }
 
+// 🔔 ===== PUSH (avisos com o app FECHADO) — inscrição no cliente + guarda no Firebase =====
+// A chave pública VAPID identifica o remetente; a PRIVADA fica só no Worker da Cloudflare.
+const VAPID_PUBLIC = 'BMYoy5zKUXZA_18LJNky0ikv8YN47xiQhqWXoRT2AnuIJG7a6ufUkaXxMNfsiaE8IJQCLI3canhRl53vtZMmpdA';
+function _urlB64ToU8(base64){
+  const pad='='.repeat((4 - base64.length % 4) % 4);
+  const b64=(base64+pad).replace(/-/g,'+').replace(/_/g,'/');
+  const raw=atob(b64); const arr=new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++) arr[i]=raw.charCodeAt(i);
+  return arr;
+}
+function pushSupported(){ return ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window); }
+async function _getPushSub(){ if(!pushSupported()) return null; const reg=await navigator.serviceWorker.ready; return reg.pushManager.getSubscription(); }
+async function togglePush(){
+  if(!pushSupported()){ showToast('Este aparelho/navegador não suporta avisos com o app fechado.','dmg'); renderPushBtn(); return; }
+  try{
+    const myName=(G.profile&&G.profile.name)||'';
+    const existing=await _getPushSub();
+    if(existing){ await existing.unsubscribe(); if(db&&myName) db.ref('forge_push/'+myName).remove().catch(()=>{}); showToast('🔕 Avisos com app fechado desativados.','info'); renderPushBtn(); return; }
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){ showToast('Permissão de notificação negada.','dmg'); renderPushBtn(); return; }
+    const reg=await navigator.serviceWorker.ready;
+    const sub=await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:_urlB64ToU8(VAPID_PUBLIC) });
+    const j=JSON.parse(JSON.stringify(sub));
+    if(db&&myName) db.ref('forge_push/'+myName).set({ endpoint:j.endpoint, p256dh:j.keys&&j.keys.p256dh, auth:j.keys&&j.keys.auth, name:myName, ua:navigator.userAgent, at:Date.now() }).catch(()=>{});
+    showToast('🔔 Avisos ativados! Você será avisado mesmo com o app fechado.','heal'); renderPushBtn();
+  }catch(e){ showToast('Não deu pra ativar os avisos ('+((e&&e.message)||e)+').','dmg'); renderPushBtn(); }
+}
+async function renderPushBtn(){
+  const btn=document.getElementById('push-toggle-btn'), hint=document.getElementById('push-hint'); if(!btn) return;
+  if(!pushSupported()){ btn.innerHTML='🔔 AVISOS<br>(sem suporte)'; btn.disabled=true; if(hint) hint.textContent='Este navegador não suporta push. No Android use o Chrome (e instale o app em 📲 Instalar App).'; return; }
+  const sub=await _getPushSub();
+  if(sub){ btn.innerHTML='🔕 DESATIVAR<br>AVISOS'; if(hint) hint.innerHTML='✅ Avisos <b>ativos</b>. Chega aviso com o app fechado (banner do Android); ao tocar, abre na tela de ligação.'; }
+  else { btn.innerHTML='🔔 ATIVAR AVISOS<br>(APP FECHADO)'; if(hint) hint.textContent='Ative pra receber avisos importantes mesmo com o jogo fechado.'; }
+}
+// 📞 testar a tela de ligação na hora
+function testCall(){
+  if(typeof closeSystem==='function'){ try{ closeSystem(); }catch(e){} }
+  showIncomingCall({ caller:'📞 TESTE DE LIGAÇÃO', body:'É assim que uma chamada urgente aparece — tela cheia, tocando e vibrando. Toque em Atender ou Recusar.', onAccept:()=>showToast('✅ Ligação atendida!','heal') });
+}
+// 🔔 clique no aviso push (app estava fechado) → o SW manda 'call' → abre a tela de ligação
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.addEventListener('message', (ev)=>{
+    if(ev.data && ev.data.type==='call'){ try{ showIncomingCall({ caller:ev.data.caller||'⚔ BROXA', body:ev.data.body||'Você tem um aviso urgente!' }); }catch(e){} }
+  });
+}
+// abriu pelo aviso (com ?fol_call=1) → mostra a ligação assim que o jogo carregar
+try{ if(location.search.indexOf('fol_call=1')>=0){ setTimeout(()=>{ try{ showIncomingCall({ caller:'⚔ BROXA', body:'Você tem um aviso urgente — bora!' }); }catch(e){} }, 1800); } }catch(e){}
+
 // notificação que FUNCIONA NO CELULAR: usa o service worker (PWA);
 // no PC cai pro Notification normal. Use sempre esta no lugar de `new Notification`.
 function gameNotify(title, body, extra){
@@ -8530,6 +8585,7 @@ function openSystem(){
     <div class="hist-row"><span>💾 Tamanho do save</span><span>${kb} KB</span></div>
     <div class="hist-row"><span>🔁 Auto-save</span><span style="color:var(--green)">ativo (15s) ✓</span></div>`;
   try{ renderBioToggle(); }catch(e){}
+  try{ renderPushBtn(); }catch(e){}
   document.getElementById('system-modal').classList.add('show');
 }
 function closeSystem(){ document.getElementById('system-modal').classList.remove('show'); }
