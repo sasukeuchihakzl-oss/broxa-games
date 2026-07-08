@@ -3732,7 +3732,6 @@ function renderTimeTab(){
   el.innerHTML = `${dx}
     <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:10px">Suas <b>24h</b> de hoje com a <b>meta de tarefas do dia inteira calculada de uma vez</b> — assim você já sabe quanto tempo livre sobra. Sono é editável.</div>
     ${goalBox}
-    ${donutBlock}
     ${dayBar}
     <div style="display:flex;flex-direction:column;gap:5px;margin-top:10px">${legend}</div>
     <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -3754,7 +3753,9 @@ function renderTimeTab(){
       <span class="section-title" style="flex:1;margin:0">📅 MEU TEMPO MENSAL (por categoria)</span>
       <span id="time-month-caret" style="font-size:13px;color:var(--muted);padding:4px 10px">▼</span>
     </div>
-    <div id="time-month-cats" style="display:none;margin-top:8px"></div>`;
+    <div id="time-month-cats" style="display:none;margin-top:8px"></div>
+    <div class="sep"></div>
+    ${donutBlock}`;
 }
 
 // helpers do tempo mensal por CATEGORIA (v103)
