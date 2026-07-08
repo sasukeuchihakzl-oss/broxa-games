@@ -5431,17 +5431,20 @@ function duplicateMission(i){
   const origVals = effVals(src.diff, src.aiXp, src.aiValue);
   gameAsk({
     title: '➕ Missão auxiliar',
-    label: src.name+'\nOriginal: '+fmtHM(origDur)+' · '+origVals.lc+' LC · +'+origVals.xp+' XP\n\nQuanto tempo vai durar a auxiliar? (minutos)',
+    label: src.name+'\nOriginal: '+fmtHM(origDur)+' · '+origVals.lc+' LC · +'+origVals.xp+' XP'
+           +'\n(taxa: '+(origVals.xp/origDur).toFixed(2)+' XP/min · '+(origVals.lc/origDur).toFixed(2)+' LC/min)'
+           +'\n\nQuanto tempo vai durar a auxiliar? (minutos)',
     type: 'number',
     value: String(origDur),
     okText: 'CRIAR',
     onOk: (v)=>{
       const newDur = parseInt(v);
       if(isNaN(newDur) || newDur<=0){ showToast('Digite um tempo válido (minutos)!','dmg'); return; }
-      const ratio = newDur / origDur;
-      const newXp = Math.max(1, Math.round(origVals.xp * ratio));
-      const newLc = Math.max(1, Math.round(origVals.lc * ratio));
-      const newPen = (src.penXp!=null) ? Math.max(1, Math.round(src.penXp * ratio)) : null;
+      // 💯 cálculo por minuto REAL: taxa por minuto da mãe × novo tempo, arredondando
+      //    PRA CIMA (qualquer fração sobe — 11.5 XP vira 12; segundos a mais não mudam).
+      const newXp = Math.max(1, Math.ceil(origVals.xp / origDur * newDur));
+      const newLc = Math.max(1, Math.ceil(origVals.lc / origDur * newDur));
+      const newPen = (src.penXp!=null) ? Math.max(1, Math.ceil(src.penXp / origDur * newDur)) : null;
 
       const { base } = baseNameOf(src.name);
       let max = 1;
@@ -5452,10 +5455,13 @@ function duplicateMission(i){
       copy.name = newName; copy.id = Date.now(); copy.done = false; copy.started = false;
       copy.stats = {done:0,failed:0}; copy.createdAt = Date.now(); delete copy._failed;
       copy.durMin = newDur; copy.aiXp = newXp; copy.aiValue = newLc; copy.penXp = newPen;
+      // 🎯 auxiliar/complementar é SEMPRE única — não herda a recorrência da mãe
+      copy.recur = ''; copy.recurring = false; copy.days = null;
+      copy.date = ''; copy.future = false; copy.sealedAt = null;
       G.missions.unshift(copy);
       registerCatalog(newName, newXp, newLc);
       renderMissions(); save();
-      showToast(`➕ "${newName}" criada! ${fmtHM(newDur)} · ${newLc} LC · +${newXp} XP`,'heal');
+      showToast(`➕ "${newName}" criada (única)! ${fmtHM(newDur)} · ${newLc} LC · +${newXp} XP`,'heal');
     }
   });
 }
@@ -8967,10 +8973,25 @@ function wakeUp(){
   else { showToast('☀️ Bom dia! (mas passou das 9h hoje)','info'); }
   renderWakeButton(); updateUI(); save();
 }
+// ☀️ AUTO-ACORDEI: se abrir o app de manhã cedo (6h–9h), marca o "Acordei" sozinho —
+// assim não precisa lembrar de apertar o botão e não perde os 100 XP à toa.
+const WAKE_AUTO_FROM_H = 6;   // janela: das 6h até a hora limite (9h)
+function autoWakeMorning(){
+  const today = todayStr();
+  if(G.wokeUpDate === today) return false;                       // já acordou hoje
+  if(G.wakeStartDate && today < G.wakeStartDate) return false;   // "Acordei" ainda não vale
+  const h = new Date().getHours();
+  if(h < WAKE_AUTO_FROM_H || h >= WAKE_DEADLINE_H) return false; // fora da janela 6h–9h
+  G.wokeUpDate = today;
+  showToast('☀️ Bom dia! "Acordei" marcado automático (você abriu o app cedo) 💪','heal');
+  renderWakeButton(); updateUI(); save();
+  return true;
+}
 // verifica o "Acordei": lembra antes das 9h e aplica -100 XP se passar sem acordar (1x/dia)
 function checkWakeNerf(){
   const today = todayStr();
   if(G.wakeStartDate && today < G.wakeStartDate){ renderWakeButton(); return; }  // ainda não começou a valer
+  if(autoWakeMorning()) return;   // ☀️ abriu entre 6h–9h → marcou sozinho, nada a cobrar
   const h = new Date().getHours();
   if(G.wokeUpDate === today) return;               // já acordou hoje → nada a fazer
   // lembrete (notificação) a partir das 7h, antes das 9h, 1x por dia
