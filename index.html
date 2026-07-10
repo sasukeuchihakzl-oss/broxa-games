@@ -2459,6 +2459,12 @@
     </div>
     <div id="push-hint" class="config-hint" style="margin-top:6px"></div>
 
+    <div class="section-title">🔊 SONS DO JOGO</div>
+    <div class="sys-grid" style="grid-template-columns:1fr">
+      <button class="pixel-btn btn-green" id="sfx-toggle-btn" onclick="toggleSfx()">🔊 SONS: LIGADOS</button>
+    </div>
+    <div class="config-hint" style="margin-top:6px">Sonzinhos suaves ao tocar nos botões, concluir missão, comprar e subir de nível.</div>
+
     <div class="section-title">💾 GERENCIAR SAVE</div>
     <div class="sys-grid">
       <button class="pixel-btn btn-green" onclick="manualSave()">💾 SALVAR<br>AGORA</button>
@@ -2474,6 +2480,9 @@
       <button class="pixel-btn btn-cyan" onclick="cloudBackup(true)">☁️ SALVAR<br>NA NUVEM</button>
       <button class="pixel-btn btn-gold" onclick="restoreCloud()">♻️ RESTAURAR<br>DA NUVEM</button>
     </div>
+    <div class="section-title" style="margin-top:10px">📅 SAVES DOS ÚLTIMOS 10 DIAS</div>
+    <div class="config-hint" style="margin-bottom:6px">O jogo guarda o estado FINAL de cada dia (neste aparelho e na nuvem). Se perder o progresso, restaure aqui o dia que quiser.</div>
+    <div id="daily-saves-list" class="hist-box"></div>
     <div class="config-hint" style="margin-top:8px">O jogo salva sozinho a cada 8s (e faz backup na nuvem a cada ~3min). Use <b>Restaurar da Nuvem</b> se trocar de aparelho ou perder o progresso. <b>Exportar/Copiar</b> também servem de backup manual.</div>
     <div class="modal-actions">
       <button class="pixel-btn btn-gold" onclick="closeSystem()" style="width:100%">FECHAR</button>
@@ -2549,6 +2558,7 @@ const G = {
   graceDate: '',          // v6.1: penalidades só valem a partir desta data (amanhã)
   customTemplates: [],    // v6.1: missões prontas criadas pelo usuário
   shopBuyCounts: {},      // v116: quantas vezes comprou cada recompensa (id -> n), p/ rank de compras
+  sfxOn: true,            // v118: sons de interface (clique/moeda/missão/level up)
   allowDeleteMissions: false,   // v73: excluir missão desligado por padrão; liga no painel ADM
   allDoneToday: false,
   perfectDayDate: '',     // dia em que o alarde de "100% concluído" já tocou
@@ -5702,6 +5712,7 @@ function completeMission(i) {
   { ensureWorld(); G.world.built=(G.world.built||0)+1; if((G.world.decay||0)>0 && Math.random()<0.5) G.world.decay--;   // fazer o bem limpa um pouco da podridão
     const cheers=['🎉','💪','✨','🏗️']; WORLD._evt={emoji:cheers[Math.random()*cheers.length|0], ts:Date.now(), done:false}; WORLD._cheer={cat:m.cat, ts:Date.now()};
     if(navigator.vibrate) try{ navigator.vibrate([25,40,55]); }catch(_){}}   // 📳 tumtum de vitória no celular
+  try{ sfx('complete'); }catch(e){}   // 🔊 arpejo de missão concluída
   ensureSeason(); G.seasonMissions = (G.seasonMissions||0) + 1;   // temporada (v4 #14)
   ensureWeek(); G.weekMissions = (G.weekMissions||0) + 1;         // destaque semanal (v4.1)
 
@@ -5923,6 +5934,7 @@ function gainXP(amount) {
     banner.classList.add('show');
     setTimeout(()=>banner.classList.remove('show'), evolved?5000:3500);
     showToast(`🆙 LEVEL UP! Nível ${G.level}!`);
+    try{ sfx('levelup'); }catch(e){}   // 🔊 fanfarra de level up
     spawnPanelSparks();
   }
   updateUI();
@@ -5979,7 +5991,8 @@ function applyOverdraftFee(){
 function buyItem(i) {
   const item = SHOP_ITEMS[i];
   const atoaFree = G.atoaDate === todayStr();
-  if(!atoaFree && !canSpend(item.price)){ showToast("Estourou o limite do cheque especial (-"+OVERDRAFT_LIMIT+" LC)!", "dmg"); return; }
+  if(!atoaFree && !canSpend(item.price)){ try{ sfx('error'); }catch(e){} showToast("Estourou o limite do cheque especial (-"+OVERDRAFT_LIMIT+" LC)!", "dmg"); return; }
+  try{ sfx('coin'); }catch(e){}   // 🔊 moedinha
   if(!atoaFree){
     G.coins -= item.price;
     addLedger('out', item.price, 'Loja: '+item.name);
@@ -7883,15 +7896,14 @@ function cloudBackup(force){
   G._cloudBackupTs = nowts;
   const raw = localStorage.getItem(SAVE_KEY) || '{}';
   const payload = { data:raw, at:nowts, level:G.level, coins:G.coins, missions:(G.missions||[]).length, totalMissions:G.totalMissions||0, xpEarned:G.xpEarned||0 };
-  const histSnap = ()=>{   // 🗓 1 snapshot por dia (o 1º do dia = estado final de ontem) em forge_backup_hist, mantém últimos 10
-    try{
+  const histSnap = ()=>{   // 🗓 snapshot POR DIA em forge_backup_hist: atualiza o do dia a cada backup,
+    try{                   // então quando o dia vira, a entrada dele congela = estado FINAL do dia. Mantém 10.
       const d = todayStr();
-      if(G._bkHistDate === d) return; G._bkHistDate = d;
-      db.ref('forge_backup_hist/'+myName+'/'+d).set(payload).then(()=>{
-        db.ref('forge_backup_hist/'+myName).once('value').then(s=>{
-          const all = Object.keys(s.val()||{}).sort();
-          while(all.length > 10){ const old = all.shift(); db.ref('forge_backup_hist/'+myName+'/'+old).remove(); }
-        });
+      db.ref('forge_backup_hist/'+myName+'/'+d).set(payload).catch(()=>{});
+      if(G._bkHistDate === d) return; G._bkHistDate = d;   // poda só 1x por dia
+      db.ref('forge_backup_hist/'+myName).once('value').then(s=>{
+        const all = Object.keys(s.val()||{}).sort();
+        while(all.length > 10){ const old = all.shift(); db.ref('forge_backup_hist/'+myName+'/'+old).remove(); }
       }).catch(()=>{});
     }catch(e){}
   };
@@ -8398,7 +8410,7 @@ function save(){
       duelSeen:G.duelSeen, nudgeSeen:G.nudgeSeen, giftSeen:G.giftSeen, dayFixSeen:G.dayFixSeen||0, reactSeen:G.reactSeen,
       weekMissions:G.weekMissions, weekMark:G.weekMark,
       xpEarned:G.xpEarned, dayFailSeen:G.dayFailSeen,
-      graceDate:G.graceDate, customTemplates:G.customTemplates, shopBuyCounts:G.shopBuyCounts||{}, allowDeleteMissions:G.allowDeleteMissions,
+      graceDate:G.graceDate, customTemplates:G.customTemplates, shopBuyCounts:G.shopBuyCounts||{}, sfxOn:(G.sfxOn!==false), allowDeleteMissions:G.allowDeleteMissions,
       manoBank:G.manoBank, debts:G.debts,
       migratedDefaults:G.migratedDefaults, nextReminderLast:G.nextReminderLast,
       wokeUpDate:G.wokeUpDate, wakeNerfDate:G.wakeNerfDate, wakeRemindDate:G.wakeRemindDate, wakeStartDate:G.wakeStartDate,
@@ -8409,12 +8421,167 @@ function save(){
       catRemap:G.catRemap||{},
       world:G.world
     };
-    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    const rawSave = JSON.stringify(data);
+    localStorage.setItem(SAVE_KEY, rawSave);
+    saveDailySnapshot(rawSave);   // 📅 snapshot do dia (últimos 10 dias) — recuperação rápida
     G._lastSaveTs = Date.now();
     flashSaved();
     syncOnline();
     cloudBackup(false);   // backup na nuvem (throttle 3min) — proteção contra perda
   }catch(e){}
+}
+
+// ===== 📅 SAVES DIÁRIOS (últimos 10 dias) =====
+// Cada dia tem o seu snapshot; enquanto o dia corre ele é atualizado a cada save,
+// então quando o dia vira, o snapshot dele fica congelado = estado FINAL daquele dia.
+// Guarda neste aparelho (localStorage) e também na nuvem (forge_backup_hist, via cloudBackup).
+const SAVE_HIST_KEY = 'fol_save_hist';
+function _readSaveHist(){ try{ const h=JSON.parse(localStorage.getItem(SAVE_HIST_KEY)||'{}'); return (h&&typeof h==='object')?h:{}; }catch(e){ return {}; } }
+function saveDailySnapshot(raw){
+  try{
+    const hist = _readSaveHist();
+    const d = todayStr();
+    // 🛡 anti-regressão: não deixa um estado claramente PIOR sobrescrever o snapshot do dia
+    const prev = hist[d];
+    if(prev && ((prev.xpEarned||0) > (G.xpEarned||0)+200 || (prev.totalMissions||0) > (G.totalMissions||0)+3)) return;
+    hist[d] = { data:raw, at:Date.now(), level:G.level, coins:G.coins, totalMissions:G.totalMissions||0, xpEarned:G.xpEarned||0 };
+    const days = Object.keys(hist).sort();
+    while(days.length > 10){ delete hist[days.shift()]; }
+    localStorage.setItem(SAVE_HIST_KEY, JSON.stringify(hist));
+  }catch(e){}
+}
+// aplica um snapshot (raw = JSON do save) com todas as proteções anti-loop
+function _applySnapshot(raw, label){
+  try{
+    const data = JSON.parse(raw);
+    if(!data || typeof data!=='object' || !data.profile) throw new Error('inválido');
+    window._restoringCloud = true;   // 🛡 bloqueia save()/beforeunload até o reload
+    localStorage.setItem(SAVE_KEY, raw);
+    showToast('📅 Save de '+label+' restaurado! Recarregando…','heal');
+    setTimeout(()=>location.reload(), 900);
+  }catch(e){ showToast('Snapshot inválido!','dmg'); }
+}
+function restoreDailySave(date){
+  const hist = _readSaveHist();
+  const s = hist[date];
+  if(!s || !s.data){ showToast('Snapshot não encontrado.','dmg'); return; }
+  gameConfirm({
+    title:'📅 Restaurar '+date+'?',
+    label:`Nv ${s.level||'?'} · ${s.totalMissions||0} missões · ${s.coins||0} LC\n\nIsso SUBSTITUI seu progresso atual neste aparelho.`,
+    okText:'RESTAURAR',
+    onYes:()=>_applySnapshot(s.data, date)
+  });
+}
+function restoreCloudDailySave(date){
+  if(!db){ showToast('Conecte o Firebase!','dmg'); return; }
+  const myName=G.profile?.name||'';
+  db.ref('forge_backup_hist/'+myName+'/'+date).once('value').then(snap=>{
+    const s = snap.val();
+    if(!s || !s.data){ showToast('Snapshot da nuvem não encontrado.','dmg'); return; }
+    gameConfirm({
+      title:'☁️📅 Restaurar '+date+' (nuvem)?',
+      label:`Nv ${s.level||'?'} · ${s.totalMissions||0} missões · ${s.coins||0} LC\n\nIsso SUBSTITUI seu progresso atual neste aparelho.`,
+      okText:'RESTAURAR',
+      onYes:()=>_applySnapshot(s.data, date+' (nuvem)')
+    });
+  }).catch(()=>showToast('Falha ao ler a nuvem','dmg'));
+}
+// ===== 🔊 SONS DE UI (inspirado em Stardew Valley: curtos, macios, satisfatórios) =====
+// Tudo sintetizado via WebAudio — sem arquivos. Volumes baixos de propósito.
+let _sfxCtx = null;
+function _sfxUnlock(){
+  try{
+    const AC = window.AudioContext||window.webkitAudioContext; if(!AC) return;
+    if(!_sfxCtx) _sfxCtx = new AC();
+    if(_sfxCtx.state==='suspended') _sfxCtx.resume();
+  }catch(e){}
+}
+document.addEventListener('pointerdown', _sfxUnlock);
+// nota única: freq inicial→final, duração, volume, tipo de onda, atraso
+function _sfxNote(f0, f1, dur, vol, type, delay){
+  const ctx=_sfxCtx; if(!ctx || ctx.state!=='running') return;
+  const t0 = ctx.currentTime + (delay||0);
+  const o = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
+  o.type = type||'triangle';
+  o.frequency.setValueAtTime(f0, t0);
+  if(f1 && f1!==f0) o.frequency.exponentialRampToValueAtTime(Math.max(40,f1), t0+dur);
+  lp.type='lowpass'; lp.frequency.value=3200;   // tira o "agudo digital" — som macio
+  g.gain.setValueAtTime(0, t0);
+  g.gain.linearRampToValueAtTime(vol, t0+0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+  o.connect(lp).connect(g).connect(ctx.destination);
+  o.start(t0); o.stop(t0+dur+0.02);
+}
+function sfx(kind){
+  if(G && G.sfxOn===false) return;   // 🔇 desligado nas configurações
+  try{
+    _sfxUnlock();
+    switch(kind){
+      case 'click':    // toque macio de menu (thock de madeira)
+        _sfxNote(620, 380, 0.07, 0.10, 'triangle'); break;
+      case 'tab':      // trocar aba: um tiquinho mais agudo
+        _sfxNote(760, 520, 0.06, 0.09, 'triangle'); break;
+      case 'coin':     // moedinha: dois pings subindo
+        _sfxNote(1046, 1046, 0.055, 0.07, 'sine');
+        _sfxNote(1568, 1568, 0.075, 0.06, 'sine', 0.06); break;
+      case 'complete': // missão concluída: arpejo alegre (dó-mi-sol)
+        _sfxNote(523, 523, 0.09, 0.09, 'triangle');
+        _sfxNote(659, 659, 0.09, 0.09, 'triangle', 0.08);
+        _sfxNote(784, 784, 0.14, 0.10, 'triangle', 0.16); break;
+      case 'levelup':  // level up: fanfarra curtinha (dó-mi-sol-dó↑)
+        _sfxNote(523, 523, 0.10, 0.09, 'triangle');
+        _sfxNote(659, 659, 0.10, 0.09, 'triangle', 0.09);
+        _sfxNote(784, 784, 0.10, 0.09, 'triangle', 0.18);
+        _sfxNote(1046,1046, 0.22, 0.11, 'triangle', 0.27); break;
+      case 'error':    // ação inválida: "bonk" grave e curto
+        _sfxNote(220, 140, 0.11, 0.08, 'square'); break;
+    }
+  }catch(e){}
+}
+// clique global: qualquer botão/controle tocável faz o "thock" de menu
+document.addEventListener('pointerdown', function(ev){
+  try{
+    const t = ev.target.closest && ev.target.closest('button, .shop-item, .preset-item, .inv-slot, .swatch, .theme-card, .habit-btn, .mission-check, select');
+    if(!t) return;
+    sfx(t.classList && t.classList.contains('tab-btn') ? 'tab' : 'click');
+  }catch(e){}
+}, {passive:true});
+function toggleSfx(){
+  G.sfxOn = (G.sfxOn===false);   // liga se estava desligado, desliga se estava ligado
+  save(); renderSfxToggle();
+  if(G.sfxOn!==false){ sfx('complete'); showToast('🔊 Sons ligados!','heal'); }
+  else showToast('🔇 Sons desligados.','info');
+}
+function renderSfxToggle(){
+  const b = document.getElementById('sfx-toggle-btn'); if(!b) return;
+  const on = G.sfxOn!==false;
+  b.innerHTML = on ? '🔊 SONS: LIGADOS' : '🔇 SONS: DESLIGADOS';
+  b.classList.toggle('btn-green', on);
+  b.classList.toggle('btn-red', !on);
+}
+
+// lista local + nuvem lado a lado no ⚙ SISTEMA & SAVE
+function renderDailySaves(){
+  const el = document.getElementById('daily-saves-list'); if(!el) return;
+  const hist = _readSaveHist();
+  const localDays = Object.keys(hist).sort().reverse();
+  const row = (d, s, cloud) => `<div class="hist-row">
+    <span>${cloud?'☁️':'📱'} <b>${d}</b> <span style="color:var(--muted);font-size:11px">Nv ${s.level||'?'} · ${s.totalMissions||0} 📋 · ${s.coins||0} LC</span></span>
+    <button class="pixel-btn btn-gold btn-sm" style="font-size:6px" onclick="${cloud?'restoreCloudDailySave':'restoreDailySave'}('${d}')">♻️ RESTAURAR</button>
+  </div>`;
+  let html = localDays.map(d=>row(d, hist[d], false)).join('');
+  el.innerHTML = html || '<div style="color:var(--muted);font-size:12px">Ainda sem snapshots — eles aparecem conforme os dias passam.</div>';
+  // nuvem: busca async e anexa os dias que NÃO existem localmente (recuperação pós-reinstalação)
+  const myName = G.profile?.name||'';
+  if(db && ONLINE_PLAYERS.includes(myName)){
+    db.ref('forge_backup_hist/'+myName).once('value').then(snap=>{
+      const cloudHist = snap.val()||{};
+      const extra = Object.keys(cloudHist).sort().reverse().filter(d=>!hist[d] && cloudHist[d] && cloudHist[d].data);
+      if(extra.length){
+        el.innerHTML = (html||'') + extra.map(d=>row(d, cloudHist[d], true)).join('');
+      }
+    }).catch(()=>{});
+  }
 }
 function load(){
   try{
@@ -8490,6 +8657,7 @@ function load(){
     G.graceDate = G.graceDate || '';
     G.customTemplates = Array.isArray(G.customTemplates) ? G.customTemplates : [];
     G.shopBuyCounts = (G.shopBuyCounts && typeof G.shopBuyCounts==='object') ? G.shopBuyCounts : {};
+    G.sfxOn = (G.sfxOn!==false);   // default ligado (saves antigos não têm o campo)
     if(!Array.isArray(G.dungeonProgress)) G.dungeonProgress = [0,0,0,0,0,0];
     equipSlots(); // normaliza equipamento (compat saves antigos: número → {weapon,armor,accessory})
     return true;
@@ -8571,6 +8739,8 @@ function openSystem(){
     <div class="hist-row"><span>🔁 Auto-save</span><span style="color:var(--green)">ativo (15s) ✓</span></div>`;
   try{ renderBioToggle(); }catch(e){}
   try{ renderPushBtn(); }catch(e){}
+  try{ renderDailySaves(); }catch(e){}
+  try{ renderSfxToggle(); }catch(e){}
   document.getElementById('system-modal').classList.add('show');
 }
 function closeSystem(){ document.getElementById('system-modal').classList.remove('show'); }
@@ -9102,7 +9272,8 @@ function gameConfirm(opts){
   document.getElementById('ask-yes').onclick=()=>{ closeAsk(); if(opts.onYes) opts.onYes(); };
 }
 function finalizeReward(r, cost, label){
-  if(!canSpend(cost)){ showToast('Estourou o limite do cheque especial (-'+OVERDRAFT_LIMIT+' LC)!','dmg'); return; }
+  if(!canSpend(cost)){ try{ sfx('error'); }catch(e){} showToast('Estourou o limite do cheque especial (-'+OVERDRAFT_LIMIT+' LC)!','dmg'); return; }
+  try{ sfx('coin'); }catch(e){}   // 🔊 moedinha
   G.coins -= cost; addLedger('out', cost, 'Recompensa: '+label);
   G.rewardsLog.unshift({t:Date.now(), name:label, emoji:r.emoji, cost});
   G.lastPurchases = G.lastPurchases || [];
@@ -9854,6 +10025,8 @@ function finishInit() {
 // ===== 🔔 NOVIDADES DO JOGO (changelog no sino) =====
 // Itens mais novos primeiro. id crescente — o maior é o mais recente.
 const GAME_NEWS = [
+  { id:18, v:'v118', date:'10/07', icon:'📅', title:'Saves dos últimos 10 dias', body:'O jogo agora guarda o estado FINAL de cada dia — os últimos 10 dias ficam salvos separados, neste aparelho E na nuvem. Perdeu progresso? Vá em ⚙ SISTEMA & SAVE → "📅 Saves dos últimos 10 dias" e restaure o dia que quiser em 1 toque.' },
+  { id:17, v:'v118', date:'10/07', icon:'🔊', title:'Sons satisfatórios', body:'Sonzinhos suaves estilo Stardew Valley: toque macio nos botões, moedinha ao comprar, arpejo ao concluir missão e fanfarra no level up. Dá pra desligar em ⚙ SISTEMA & SAVE → "🔊 Sons do jogo".' },
   { id:16, v:'v117', date:'10/07', icon:'💳', title:'Cheque especial mais folgado', body:'Limite subiu de -200 pra -400 LC. E a taxa diária de 100 LC agora só começa a cobrar a partir do dia SEGUINTE em que você ficou negativo — o dia em que você entra no negativo é de graça.' },
   { id:15, v:'v117', date:'10/07', icon:'🛠️', title:'ADM: corrigir o "Dia X" de outro jogador', body:'Painel do mestre ganhou um jeito de corrigir remotamente o contador "Dia X" de qualquer jogador (aplica no próximo acesso dele).' },
   { id:14, v:'v116', date:'09/07', icon:'☎️', title:'Tela de ligação removida', body:'Tirado o aviso urgente em tela cheia (chamada tocando e vibrando) — os avisos com o app fechado continuam funcionando normalmente, só sem aquele susto.' },
@@ -10140,7 +10313,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.07.10 • v117';
+  window.APP_VERSION = '2026.07.10 • v118';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
