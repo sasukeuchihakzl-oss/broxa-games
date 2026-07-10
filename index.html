@@ -2467,7 +2467,7 @@
     <div class="sys-grid" style="grid-template-columns:1fr;margin-top:6px">
       <button class="pixel-btn btn-cyan" id="music-vol-btn" onclick="cycleMusicVol()">🔉 VOLUME DA MÚSICA: MÉDIO</button>
     </div>
-    <div class="config-hint" style="margin-top:6px">Sonzinhos suaves nos botões/missões/compras — e musiquinha de fundo estilo Pokémon/Stardew que muda com a hora do dia (🌅 manhã alegre, ☀️ tarde tranquila, 🌙 noite relaxante, ⚔️ tensa na dungeon).</div>
+    <div class="config-hint" style="margin-top:6px">Sonzinhos suaves nos botões/missões/compras — e música de fundo que muda com a hora do dia (🌅 manhã alegre, ☀️ tarde tranquila, 🌙 noite relaxante, ⚔️ tensa na dungeon).</div>
 
     <div class="section-title">💾 GERENCIAR SAVE</div>
     <div class="sys-grid">
@@ -10167,10 +10167,9 @@ function finishInit() {
 // ===== 🔔 NOVIDADES DO JOGO (changelog no sino) =====
 // Itens mais novos primeiro. id crescente — o maior é o mais recente.
 const GAME_NEWS = [
-  { id:20, v:'v120', date:'10/07', icon:'🎵', title:'Música de fundo!', body:'Musiquinha chiptune relaxante estilo Pokémon/Stardew Valley tocando em loop — e ela muda com a hora do dia: 🌅 manhã alegre, ☀️ tarde tranquila, 🌙 noite relaxante e ⚔️ tema tenso na dungeon. Controle o volume ou desligue em ⚙ SISTEMA & SAVE → "🔊 Sons do jogo".' },
-  { id:19, v:'v119', date:'10/07', icon:'😈', title:'Sons dos mentores', body:'Quando o mentor bravo aparece, toca um sting grave e ameaçador. E quando a mentora exclusiva do Craudo aparece, toca um chime romântico e suave. 💕' },
+  { id:20, v:'v120', date:'10/07', icon:'🎵', title:'Música de fundo!', body:'Música ambiente tocando em loop, mudando com a hora do dia: 🌅 manhã alegre, ☀️ tarde tranquila, 🌙 noite relaxante e ⚔️ tema tenso na dungeon. Controle o volume ou desligue em ⚙ SISTEMA & SAVE → "🔊 Sons do jogo".' },
   { id:18, v:'v118', date:'10/07', icon:'📅', title:'Saves dos últimos 10 dias', body:'O jogo agora guarda o estado FINAL de cada dia — os últimos 10 dias ficam salvos separados, neste aparelho E na nuvem. Perdeu progresso? Vá em ⚙ SISTEMA & SAVE → "📅 Saves dos últimos 10 dias" e restaure o dia que quiser em 1 toque.' },
-  { id:17, v:'v118', date:'10/07', icon:'🔊', title:'Sons satisfatórios', body:'Sonzinhos suaves estilo Stardew Valley: toque macio nos botões, moedinha ao comprar, arpejo ao concluir missão e fanfarra no level up. Dá pra desligar em ⚙ SISTEMA & SAVE → "🔊 Sons do jogo".' },
+  { id:17, v:'v118', date:'10/07', icon:'🔊', title:'Sons satisfatórios', body:'Toque macio nos botões, moedinha ao comprar, arpejo ao concluir missão e fanfarra no level up. Dá pra desligar em ⚙ SISTEMA & SAVE → "🔊 Sons do jogo".' },
   { id:16, v:'v117', date:'10/07', icon:'💳', title:'Cheque especial mais folgado', body:'Limite subiu de -200 pra -400 LC. E a taxa diária de 100 LC agora só começa a cobrar a partir do dia SEGUINTE em que você ficou negativo — o dia em que você entra no negativo é de graça.' },
   { id:15, v:'v117', date:'10/07', icon:'🛠️', title:'ADM: corrigir o "Dia X" de outro jogador', body:'Painel do mestre ganhou um jeito de corrigir remotamente o contador "Dia X" de qualquer jogador (aplica no próximo acesso dele).' },
   { id:14, v:'v116', date:'09/07', icon:'☎️', title:'Tela de ligação removida', body:'Tirado o aviso urgente em tela cheia (chamada tocando e vibrando) — os avisos com o app fechado continuam funcionando normalmente, só sem aquele susto.' },
@@ -10457,7 +10456,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.07.10 • v120';
+  window.APP_VERSION = '2026.07.10 • v121';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
