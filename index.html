@@ -2460,10 +2460,14 @@
     <div id="push-hint" class="config-hint" style="margin-top:6px"></div>
 
     <div class="section-title">🔊 SONS DO JOGO</div>
-    <div class="sys-grid" style="grid-template-columns:1fr">
+    <div class="sys-grid" style="grid-template-columns:1fr 1fr">
       <button class="pixel-btn btn-green" id="sfx-toggle-btn" onclick="toggleSfx()">🔊 SONS: LIGADOS</button>
+      <button class="pixel-btn btn-green" id="music-toggle-btn" onclick="toggleMusic()">🎵 MÚSICA: LIGADA</button>
     </div>
-    <div class="config-hint" style="margin-top:6px">Sonzinhos suaves ao tocar nos botões, concluir missão, comprar e subir de nível.</div>
+    <div class="sys-grid" style="grid-template-columns:1fr;margin-top:6px">
+      <button class="pixel-btn btn-cyan" id="music-vol-btn" onclick="cycleMusicVol()">🔉 VOLUME DA MÚSICA: MÉDIO</button>
+    </div>
+    <div class="config-hint" style="margin-top:6px">Sonzinhos suaves nos botões/missões/compras — e musiquinha de fundo estilo Pokémon/Stardew que muda com a hora do dia (🌅 manhã alegre, ☀️ tarde tranquila, 🌙 noite relaxante, ⚔️ tensa na dungeon).</div>
 
     <div class="section-title">💾 GERENCIAR SAVE</div>
     <div class="sys-grid">
@@ -2559,6 +2563,8 @@ const G = {
   customTemplates: [],    // v6.1: missões prontas criadas pelo usuário
   shopBuyCounts: {},      // v116: quantas vezes comprou cada recompensa (id -> n), p/ rank de compras
   sfxOn: true,            // v118: sons de interface (clique/moeda/missão/level up)
+  musicOn: true,          // v120: música de fundo chiptune (por hora do dia)
+  musicVol: 1,            // v120: volume da música (0.6 baixo · 1 médio · 1.6 alto)
   allowDeleteMissions: false,   // v73: excluir missão desligado por padrão; liga no painel ADM
   allDoneToday: false,
   perfectDayDate: '',     // dia em que o alarde de "100% concluído" já tocou
@@ -8412,7 +8418,7 @@ function save(){
       duelSeen:G.duelSeen, nudgeSeen:G.nudgeSeen, giftSeen:G.giftSeen, dayFixSeen:G.dayFixSeen||0, reactSeen:G.reactSeen,
       weekMissions:G.weekMissions, weekMark:G.weekMark,
       xpEarned:G.xpEarned, dayFailSeen:G.dayFailSeen,
-      graceDate:G.graceDate, customTemplates:G.customTemplates, shopBuyCounts:G.shopBuyCounts||{}, sfxOn:(G.sfxOn!==false), allowDeleteMissions:G.allowDeleteMissions,
+      graceDate:G.graceDate, customTemplates:G.customTemplates, shopBuyCounts:G.shopBuyCounts||{}, sfxOn:(G.sfxOn!==false), musicOn:(G.musicOn!==false), musicVol:G.musicVol||1, allowDeleteMissions:G.allowDeleteMissions,
       manoBank:G.manoBank, debts:G.debts,
       migratedDefaults:G.migratedDefaults, nextReminderLast:G.nextReminderLast,
       wokeUpDate:G.wokeUpDate, wakeNerfDate:G.wakeNerfDate, wakeRemindDate:G.wakeRemindDate, wakeStartDate:G.wakeStartDate,
@@ -8564,11 +8570,134 @@ function toggleSfx(){
   else showToast('🔇 Sons desligados.','info');
 }
 function renderSfxToggle(){
-  const b = document.getElementById('sfx-toggle-btn'); if(!b) return;
-  const on = G.sfxOn!==false;
-  b.innerHTML = on ? '🔊 SONS: LIGADOS' : '🔇 SONS: DESLIGADOS';
-  b.classList.toggle('btn-green', on);
-  b.classList.toggle('btn-red', !on);
+  const b = document.getElementById('sfx-toggle-btn');
+  if(b){
+    const on = G.sfxOn!==false;
+    b.innerHTML = on ? '🔊 SONS: LIGADOS' : '🔇 SONS: DESLIGADOS';
+    b.classList.toggle('btn-green', on);
+    b.classList.toggle('btn-red', !on);
+  }
+  const mb = document.getElementById('music-toggle-btn');
+  if(mb){
+    const mOn = G.musicOn!==false;
+    mb.innerHTML = mOn ? '🎵 MÚSICA: LIGADA' : '🎵 MÚSICA: DESLIGADA';
+    mb.classList.toggle('btn-green', mOn);
+    mb.classList.toggle('btn-red', !mOn);
+  }
+  const vb = document.getElementById('music-vol-btn');
+  if(vb){
+    const v = G.musicVol||1;
+    vb.innerHTML = '🔉 VOLUME DA MÚSICA: ' + (v<1 ? 'BAIXO' : v>1 ? 'ALTO' : 'MÉDIO');
+  }
+}
+
+// ===== 🎵 MÚSICA DE FUNDO (BGM) — chiptune relaxante estilo Pokémon FireRed / Stardew Valley =====
+// Tudo sintetizado via WebAudio (sem arquivos). 4 faixas em loop, trocando pela hora do dia:
+// 🌅 manhã (6-12h) alegre · ☀️ tarde (12-19h) tranquila · 🌙 noite (19-6h) relaxante · ⚔️ dungeon (em combate).
+// Notas em MIDI ([beat, midi, duração em beats]); cada faixa tem 3 vozes: melodia, baixo e "pad" (colchão).
+const BGM_TRACKS = {
+  morning: { bpm:100, loopBeats:16, voices:[
+    { type:'square',   vol:0.028, lp:1600, notes:[[0,72,1],[1,76,1],[2,79,1],[3,76,1],[4,77,1],[5,76,1],[6,74,1],[7,72,1],[8,74,1],[9,76,1],[10,77,1],[11,74,1],[12,76,1.5],[13.5,74,0.5],[14,72,2]] },
+    { type:'triangle', vol:0.050, lp:700,  notes:[[0,48,1],[1,55,1],[2,48,1],[3,55,1],[4,53,1],[5,60,1],[6,53,1],[7,60,1],[8,55,1],[9,62,1],[10,55,1],[11,62,1],[12,48,1],[13,55,1],[14,48,1],[15,55,1]] },
+    { type:'sine',     vol:0.015, lp:1200, notes:[[0,64,4],[4,65,4],[8,67,4],[12,64,4]] }
+  ]},
+  afternoon: { bpm:84, loopBeats:16, voices:[
+    { type:'triangle', vol:0.038, lp:1400, notes:[[0,71,1.5],[1.5,69,0.5],[2,67,2],[4,67,1],[5,71,1],[6,76,2],[8,76,1],[9,74,1],[10,72,2],[12,69,1.5],[13.5,71,0.5],[14,74,2]] },
+    { type:'triangle', vol:0.050, lp:600,  notes:[[0,43,2],[2,50,2],[4,40,2],[6,47,2],[8,48,2],[10,55,2],[12,50,2],[14,45,2]] },
+    { type:'sine',     vol:0.014, lp:1100, notes:[[0,59,4],[4,55,4],[8,64,4],[12,66,4]] }
+  ]},
+  night: { bpm:66, loopBeats:16, voices:[
+    { type:'sine',     vol:0.038, lp:1200, notes:[[0,76,3],[3,72,1],[4,69,3],[7,72,1],[8,76,2],[10,79,2],[12,74,3],[15,71,1]] },
+    { type:'triangle', vol:0.045, lp:500,  notes:[[0,45,4],[4,41,4],[8,48,4],[12,43,4]] },
+    { type:'sine',     vol:0.014, lp:900,  notes:[[0,60,4],[4,57,4],[8,64,4],[12,59,4]] }
+  ]},
+  dungeon: { bpm:120, loopBeats:8, voices:[
+    { type:'square',   vol:0.026, lp:1500, notes:[[0,64,0.5],[0.5,64,0.5],[1,67,0.5],[1.5,64,0.5],[2,71,1],[3,69,0.5],[3.5,67,0.5],[4,66,0.5],[4.5,66,0.5],[5,69,0.5],[5.5,66,0.5],[6,71,1.5]] },
+    { type:'triangle', vol:0.048, lp:600,  notes:[[0,40,0.4],[0.5,40,0.4],[1,40,0.4],[1.5,40,0.4],[2,40,0.4],[2.5,40,0.4],[3,40,0.4],[3.5,40,0.4],[4,42,0.4],[4.5,42,0.4],[5,42,0.4],[5.5,42,0.4],[6,47,0.4],[6.5,47,0.4],[7,47,0.4],[7.5,47,0.4]] },
+    { type:'sine',     vol:0.012, lp:800,  notes:[[0,55,4],[4,54,4]] }
+  ]}
+};
+let _bgm = { name:'', nextTime:0, timer:null, live:[] };
+let _bgmGain = null;
+function _bgmEnsureGain(){
+  if(!_sfxCtx) return null;
+  if(!_bgmGain){ _bgmGain = _sfxCtx.createGain(); _bgmGain.connect(_sfxCtx.destination); }
+  _bgmGain.gain.value = G.musicVol||1;
+  return _bgmGain;
+}
+function _bgmMidiFreq(m){ return 440*Math.pow(2,(m-69)/12); }
+function _bgmNote(voice, midi, tStart, durSec){
+  const ctx=_sfxCtx;
+  const o=ctx.createOscillator(), g=ctx.createGain(), lp=ctx.createBiquadFilter();
+  o.type=voice.type; o.frequency.value=_bgmMidiFreq(midi);
+  lp.type='lowpass'; lp.frequency.value=voice.lp||1500;
+  g.gain.setValueAtTime(0, tStart);
+  g.gain.linearRampToValueAtTime(voice.vol, tStart+0.02);
+  g.gain.setValueAtTime(voice.vol, tStart+Math.max(0.03, durSec*0.72));
+  g.gain.linearRampToValueAtTime(0.0001, tStart+durSec);
+  o.connect(lp).connect(g).connect(_bgmGain);
+  o.start(tStart); o.stop(tStart+durSec+0.05);
+  _bgm.live.push({o, end:tStart+durSec+0.1});
+}
+function _bgmStopAll(){
+  _bgm.live.forEach(n=>{ try{ n.o.stop(); }catch(e){} });
+  _bgm.live = [];
+}
+function bgmTrackFor(){
+  if(G.inCombat) return 'dungeon';
+  const h = new Date().getHours();
+  if(h>=6 && h<12)  return 'morning';
+  if(h>=12 && h<19) return 'afternoon';
+  return 'night';
+}
+function _bgmTick(){
+  try{
+    if(G.musicOn===false) return;
+    if(!_sfxCtx || _sfxCtx.state!=='running') return;
+    if(document.hidden){ if(_bgm.live.length) _bgmStopAll(); return; }   // some quando o app sai da frente
+    _bgmEnsureGain();
+    const now = _sfxCtx.currentTime;
+    _bgm.live = _bgm.live.filter(n=>n.end>now);   // poda osciladores que já terminaram
+    const want = bgmTrackFor();
+    if(want !== _bgm.name){ _bgmStopAll(); _bgm.name = want; _bgm.nextTime = now + 0.15; }
+    if(_bgm.nextTime < now) _bgm.nextTime = now + 0.1;   // voltou de aba escondida → realinha
+    const t = BGM_TRACKS[_bgm.name]; if(!t) return;
+    const spb = 60/t.bpm;
+    // agenda o loop inteiro quando estiver a menos de 1s do começo dele
+    while(_bgm.nextTime < now + 1.0){
+      const t0 = _bgm.nextTime;
+      t.voices.forEach(v=> v.notes.forEach(([beat, midi, durB])=> _bgmNote(v, midi, t0+beat*spb, Math.max(0.08, durB*spb*0.92))));
+      _bgm.nextTime = t0 + t.loopBeats*spb;
+    }
+  }catch(e){}
+}
+function bgmStart(){
+  if(_bgm.timer) return;   // já rodando
+  _sfxUnlock();
+  _bgm.timer = setInterval(_bgmTick, 250);
+}
+function bgmStop(){
+  if(_bgm.timer){ clearInterval(_bgm.timer); _bgm.timer=null; }
+  _bgmStopAll(); _bgm.name=''; _bgm.nextTime=0;
+}
+// a música começa no 1º toque na tela (regra de autoplay dos navegadores)
+// pointerdown + click + touchstart: cobre qualquer navegador/gesto
+function _bgmKick(){ if(G.musicOn!==false) bgmStart(); }
+document.addEventListener('pointerdown', _bgmKick, {passive:true});
+document.addEventListener('click', _bgmKick, {passive:true});
+document.addEventListener('touchstart', _bgmKick, {passive:true});
+function toggleMusic(){
+  G.musicOn = (G.musicOn===false);
+  save(); renderSfxToggle();
+  if(G.musicOn!==false){ bgmStart(); showToast('🎵 Música ligada!','heal'); }
+  else { bgmStop(); showToast('🎵 Música desligada.','info'); }
+}
+function cycleMusicVol(){
+  const v = G.musicVol||1;
+  G.musicVol = v<1 ? 1 : v>1 ? 0.6 : 1.6;   // baixo → médio → alto → baixo
+  if(_bgmGain) _bgmGain.gain.value = G.musicVol;
+  save(); renderSfxToggle();
+  showToast('🔉 Volume da música: '+(G.musicVol<1?'baixo':G.musicVol>1?'ALTO':'médio'),'info');
 }
 
 // lista local + nuvem lado a lado no ⚙ SISTEMA & SAVE
@@ -8669,6 +8798,8 @@ function load(){
     G.customTemplates = Array.isArray(G.customTemplates) ? G.customTemplates : [];
     G.shopBuyCounts = (G.shopBuyCounts && typeof G.shopBuyCounts==='object') ? G.shopBuyCounts : {};
     G.sfxOn = (G.sfxOn!==false);   // default ligado (saves antigos não têm o campo)
+    G.musicOn = (G.musicOn!==false);
+    G.musicVol = G.musicVol||1;
     if(!Array.isArray(G.dungeonProgress)) G.dungeonProgress = [0,0,0,0,0,0];
     equipSlots(); // normaliza equipamento (compat saves antigos: número → {weapon,armor,accessory})
     return true;
@@ -10036,6 +10167,7 @@ function finishInit() {
 // ===== 🔔 NOVIDADES DO JOGO (changelog no sino) =====
 // Itens mais novos primeiro. id crescente — o maior é o mais recente.
 const GAME_NEWS = [
+  { id:20, v:'v120', date:'10/07', icon:'🎵', title:'Música de fundo!', body:'Musiquinha chiptune relaxante estilo Pokémon/Stardew Valley tocando em loop — e ela muda com a hora do dia: 🌅 manhã alegre, ☀️ tarde tranquila, 🌙 noite relaxante e ⚔️ tema tenso na dungeon. Controle o volume ou desligue em ⚙ SISTEMA & SAVE → "🔊 Sons do jogo".' },
   { id:19, v:'v119', date:'10/07', icon:'😈', title:'Sons dos mentores', body:'Quando o mentor bravo aparece, toca um sting grave e ameaçador. E quando a mentora exclusiva do Craudo aparece, toca um chime romântico e suave. 💕' },
   { id:18, v:'v118', date:'10/07', icon:'📅', title:'Saves dos últimos 10 dias', body:'O jogo agora guarda o estado FINAL de cada dia — os últimos 10 dias ficam salvos separados, neste aparelho E na nuvem. Perdeu progresso? Vá em ⚙ SISTEMA & SAVE → "📅 Saves dos últimos 10 dias" e restaure o dia que quiser em 1 toque.' },
   { id:17, v:'v118', date:'10/07', icon:'🔊', title:'Sons satisfatórios', body:'Sonzinhos suaves estilo Stardew Valley: toque macio nos botões, moedinha ao comprar, arpejo ao concluir missão e fanfarra no level up. Dá pra desligar em ⚙ SISTEMA & SAVE → "🔊 Sons do jogo".' },
@@ -10325,7 +10457,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.07.10 • v119';
+  window.APP_VERSION = '2026.07.10 • v120';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
