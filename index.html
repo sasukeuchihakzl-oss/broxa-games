@@ -4038,6 +4038,7 @@ function mentorPeek(){
   mentorBuild();
   if(!wasShown){ void el.offsetWidth; el.style.transform='translate(0,0)'; }   // força reflow p/ animar a entrada
   el.classList.add('show');
+  if(!wasShown){ try{ sfx('mentor1'); }catch(e){} }   // 🔊 sting ameaçador só na entrada
   if(_mentorHideTimer) clearTimeout(_mentorHideTimer);
   _mentorHideTimer = setTimeout(mentorRetreat, MENTOR_VISIBLE_MS);
 }
@@ -4092,6 +4093,7 @@ function mentor2Peek(){
   mentor2Build();
   if(!wasShown){ void el.offsetWidth; el.style.transform='translate(0,0)'; }
   el.classList.add('show');
+  if(!wasShown){ try{ sfx('mentor2'); }catch(e){} }   // 🔊 chime romântico só na entrada
   if(_mentor2HideTimer) clearTimeout(_mentor2HideTimer);
   _mentor2HideTimer = setTimeout(mentor2Retreat, MENTOR_VISIBLE_MS);
 }
@@ -8535,6 +8537,15 @@ function sfx(kind){
         _sfxNote(1046,1046, 0.22, 0.11, 'triangle', 0.27); break;
       case 'error':    // ação inválida: "bonk" grave e curto
         _sfxNote(220, 140, 0.11, 0.08, 'square'); break;
+      case 'mentor1':  // ☠️ mentor bravo aparecendo: sting grave e ameaçador
+        _sfxNote(98, 52, 0.42, 0.16, 'sawtooth');
+        _sfxNote(140, 131, 0.36, 0.10, 'square', 0.03);   // dissonância (trítono) por cima do grave
+        _sfxNote(1400, 900, 0.10, 0.025, 'sine', 0.05); break;   // um arrepio agudo bem baixinho
+      case 'mentor2':  // 💕 mentora do Craudo aparecendo: chime romântico e suave
+        _sfxNote(392, 392, 0.16, 0.07, 'sine');           // sol
+        _sfxNote(494, 494, 0.16, 0.075, 'sine', 0.12);    // si
+        _sfxNote(587, 587, 0.28, 0.085, 'sine', 0.24);    // ré (resolve suave)
+        _sfxNote(1175,1175, 0.10, 0.035, 'sine', 0.42); break;   // "brilho" final (beijinho)
     }
   }catch(e){}
 }
@@ -10025,6 +10036,7 @@ function finishInit() {
 // ===== 🔔 NOVIDADES DO JOGO (changelog no sino) =====
 // Itens mais novos primeiro. id crescente — o maior é o mais recente.
 const GAME_NEWS = [
+  { id:19, v:'v119', date:'10/07', icon:'😈', title:'Sons dos mentores', body:'Quando o mentor bravo aparece, toca um sting grave e ameaçador. E quando a mentora exclusiva do Craudo aparece, toca um chime romântico e suave. 💕' },
   { id:18, v:'v118', date:'10/07', icon:'📅', title:'Saves dos últimos 10 dias', body:'O jogo agora guarda o estado FINAL de cada dia — os últimos 10 dias ficam salvos separados, neste aparelho E na nuvem. Perdeu progresso? Vá em ⚙ SISTEMA & SAVE → "📅 Saves dos últimos 10 dias" e restaure o dia que quiser em 1 toque.' },
   { id:17, v:'v118', date:'10/07', icon:'🔊', title:'Sons satisfatórios', body:'Sonzinhos suaves estilo Stardew Valley: toque macio nos botões, moedinha ao comprar, arpejo ao concluir missão e fanfarra no level up. Dá pra desligar em ⚙ SISTEMA & SAVE → "🔊 Sons do jogo".' },
   { id:16, v:'v117', date:'10/07', icon:'💳', title:'Cheque especial mais folgado', body:'Limite subiu de -200 pra -400 LC. E a taxa diária de 100 LC agora só começa a cobrar a partir do dia SEGUINTE em que você ficou negativo — o dia em que você entra no negativo é de graça.' },
@@ -10313,7 +10325,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.07.10 • v118';
+  window.APP_VERSION = '2026.07.10 • v119';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
