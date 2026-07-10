@@ -1069,37 +1069,6 @@
   .modal-title{ font-family:var(--pixel); font-size:11px; color:var(--gold); text-align:center; margin-bottom:12px; text-shadow:var(--ink); }
   .modal-actions{ display:flex; gap:8px; justify-content:center; margin-top:12px; }
 
-  /* ☎️ TELA DE LIGAÇÃO — notificação em tela cheia, estilo "chamada recebida" (app aberto) */
-  #call-overlay{
-    position:fixed; inset:0; z-index:2000000000; display:none;
-    flex-direction:column; align-items:center; justify-content:space-between;
-    padding:calc(46px + env(safe-area-inset-top)) 24px calc(46px + env(safe-area-inset-bottom)) 24px;
-    background:radial-gradient(circle at 50% 28%, #1c1236, #05040a 72%);
-    color:#fff; text-align:center; animation:callIn .25s ease;
-  }
-  #call-overlay.show{ display:flex; }
-  @keyframes callIn{ from{ opacity:0; } to{ opacity:1; } }
-  .call-top{ display:flex; flex-direction:column; align-items:center; gap:14px; margin-top:20px; }
-  .call-sub{ font-family:var(--vt); font-size:20px; letter-spacing:1px; color:#c9b8ff; }
-  .call-name{ font-family:var(--pixel); font-size:16px; color:#ffe08a; letter-spacing:1px; text-shadow:0 2px 8px rgba(0,0,0,.6); }
-  .call-avatar-wrap{ position:relative; width:150px; height:150px; margin-top:8px; }
-  .call-avatar{ width:150px; height:150px; border-radius:50%; object-fit:cover; border:3px solid rgba(255,255,255,.85); background:#14102a; box-shadow:0 0 0 6px rgba(170,120,255,.15); }
-  .call-avatar-wrap::before, .call-avatar-wrap::after{
-    content:''; position:absolute; inset:-6px; border-radius:50%;
-    border:2px solid rgba(170,120,255,.5); animation:callPulse 1.8s ease-out infinite;
-  }
-  .call-avatar-wrap::after{ animation-delay:.9s; }
-  @keyframes callPulse{ 0%{ transform:scale(1); opacity:.7; } 100%{ transform:scale(1.55); opacity:0; } }
-  .call-body{ font-family:var(--vt); font-size:18px; color:#e8dfc0; max-width:340px; line-height:1.4; margin-top:4px; }
-  .call-actions{ display:flex; gap:56px; align-items:flex-start; }
-  .call-action-col{ display:flex; flex-direction:column; align-items:center; gap:8px; }
-  .call-btn{ width:74px; height:74px; border-radius:50%; border:none; font-size:30px; cursor:pointer; color:#fff; box-shadow:0 6px 18px rgba(0,0,0,.5); transition:transform .1s; }
-  .call-btn:active{ transform:scale(.92); }
-  .call-decline{ background:#e0342f; }
-  .call-accept{ background:#22b04a; animation:callWiggle 1s ease-in-out infinite; }
-  @keyframes callWiggle{ 0%,100%{ transform:rotate(0); } 25%{ transform:rotate(-12deg); } 75%{ transform:rotate(12deg); } }
-  .call-btn-label{ font-family:var(--vt); font-size:15px; color:#b6a880; }
-
   .cust-wrap{ display:flex; gap:14px; }
   .cust-preview{
     flex:0 0 auto; display:flex; align-items:center; justify-content:center;
@@ -1897,6 +1866,7 @@
         <button class="tab-btn" onclick="switchTab('shop',this)">🛒 LOJA</button>
         <button class="tab-btn" onclick="switchTab('rewards',this)">🎁 PRÊMIOS</button>
         <button class="tab-btn" onclick="switchTab('ranking',this)">🏆 RANK</button>
+        <button class="tab-btn" onclick="switchTab('dayrank',this)">📈 RANK DO DIA</button>
         <button class="tab-btn" onclick="switchTab('hall',this)">📸 HALL</button>
         <button class="tab-btn" onclick="switchTab('history',this)">📜 LOG</button>
         <button class="tab-btn" onclick="switchTab('stats',this)">📊 STATS</button>
@@ -2102,6 +2072,24 @@
         <div class="sep"></div>
         <div class="section-title">🎯 PONTO FRACO DO GRUPO</div>
         <div id="rank-weakspot"></div>
+      </div>
+
+      <!-- DAYRANK TAB (rank de XP de hoje + rank de compras da loja) -->
+      <style id="dayrank-style">
+        .shopbuy-row{ border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:8px; background:rgba(255,255,255,0.02); }
+        .shopbuy-row.me{ border-color:var(--gold); background:rgba(255,215,0,.06); }
+        .shopbuy-name{ font-size:13px; font-weight:bold; display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+        .shopbuy-items{ display:flex; flex-wrap:wrap; gap:5px; }
+        .shopbuy-chip{ font-size:11px; background:rgba(0,0,0,.3); border:1px solid var(--border); border-radius:12px; padding:3px 8px; }
+      </style>
+      <div class="tab-content" id="tab-dayrank" style="display:none">
+        <div class="section-title">⭐ XP GANHO HOJE</div>
+        <div class="config-hint" style="margin-bottom:6px">Quem tá na frente de HOJE (zera todo dia à meia-noite).</div>
+        <div class="rank-list" id="dayxp-list"></div>
+        <div class="sep"></div>
+        <div class="section-title">🛍️ RANK DE COMPRAS DA LOJA</div>
+        <div class="config-hint" style="margin-bottom:6px">O que cada um andou comprando com LulaCoins (total desde sempre).</div>
+        <div id="shopbuys-list"></div>
       </div>
 
       <!-- BROXISSE HALL TAB (mural de fotos motivacional) -->
@@ -2368,7 +2356,11 @@
       <button class="pixel-btn btn-purple btn-sm" onclick="admRemoteGift()">🎁 Enviar XP</button>
     </div>
     <button class="pixel-btn btn-cyan btn-sm" style="width:100%;margin:4px 0" onclick="admRemoteClearFail()">🧹 Limpar "furou o dia" do jogador</button>
-    <div style="font-size:11px;color:var(--muted);margin-top:6px">⚠ A conclusão %/falhas dos outros é local no aparelho deles — só dá pra ajustar XP e "furou o dia" remotamente. Pra cravar 100% no save de outro, abra o jogo no aparelho dele e use "Consertar este herói".</div>
+    <div style="display:flex;gap:6px;align-items:center;margin:6px 0">
+      <input type="number" id="adm-day" min="1" placeholder="Dia (ex: 18)" style="flex:1">
+      <button class="pixel-btn btn-purple btn-sm" onclick="admRemoteSetDay()">🛠️ Corrigir Dia</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px">⚠ A conclusão %/falhas dos outros é local no aparelho deles — só dá pra ajustar XP, "furou o dia" e o contador "Dia X" remotamente. Pra cravar 100% no save de outro, abra o jogo no aparelho dele e use "Consertar este herói".</div>
 
     <div class="modal-actions" style="margin-top:10px">
       <button class="pixel-btn btn-gold" onclick="admClose()">FECHAR</button>
@@ -2411,6 +2403,8 @@
     </div>
     <label class="cust-label">Horário-limite (opcional)</label>
     <input type="time" id="edit-m-time" class="cust-input">
+    <label class="cust-label">⏱ Duração (minutos, opcional)</label>
+    <input type="number" id="edit-m-dur" min="0" class="cust-input" placeholder="vazio = estimado pela dificuldade">
     <label class="cust-label">Repetição</label>
     <select id="edit-m-rec" class="cust-input">
       <option value="">Sem repetir (única)</option>
@@ -2459,10 +2453,9 @@
     </div>
     <div id="bio-hint" class="config-hint" style="margin-top:6px"></div>
 
-    <div class="section-title">🔔 AVISOS &amp; LIGAÇÃO</div>
-    <div class="sys-grid" style="grid-template-columns:1fr 1fr">
+    <div class="section-title">🔔 AVISOS</div>
+    <div class="sys-grid" style="grid-template-columns:1fr">
       <button class="pixel-btn btn-gold" id="push-toggle-btn" onclick="togglePush()">🔔 ATIVAR AVISOS<br>(APP FECHADO)</button>
-      <button class="pixel-btn btn-purple" onclick="testCall()">📞 TESTAR<br>LIGAÇÃO</button>
     </div>
     <div id="push-hint" class="config-hint" style="margin-top:6px"></div>
 
@@ -2555,6 +2548,7 @@ const G = {
   dayFailSeen: {},
   graceDate: '',          // v6.1: penalidades só valem a partir desta data (amanhã)
   customTemplates: [],    // v6.1: missões prontas criadas pelo usuário
+  shopBuyCounts: {},      // v116: quantas vezes comprou cada recompensa (id -> n), p/ rank de compras
   allowDeleteMissions: false,   // v73: excluir missão desligado por padrão; liga no painel ADM
   allDoneToday: false,
   perfectDayDate: '',     // dia em que o alarde de "100% concluído" já tocou
@@ -2593,6 +2587,7 @@ const G = {
   duelSeen: 0,
   nudgeSeen: 0,
   giftSeen: 0,
+  dayFixSeen: 0,          // v117: última correção remota de "Dia X" (ADM) já aplicada
   reactSeen: {},
   // v4.1: destaque semanal
   weekMissions: 0,
@@ -2662,7 +2657,7 @@ function nextEvo(lvl){ const i=evoTierIdx(lvl); return EVOLUTIONS[i+1]||null; }
 // ===== RECOMPENSAS DA VIDA REAL (gasta moedas) =====
 const REAL_REWARDS = [
   // baratinhas (do dia a dia)
-  {id:'banhoquente',emoji:'🚿', name:'Banho na Água Quente', cost:100,  desc:'Aquele banho quente gostoso'},
+  {id:'banhoquente',emoji:'🚿', name:'Banho na Água Quente', cost:80,  desc:'Aquele banho quente gostoso'},
   {id:'mogar',     emoji:'🤙', name:'Mogar o Craudo',       cost:45,  desc:'Zoar o Craudo'},
   {id:'suco',      emoji:'🥤', name:'Suco/Refri no Almoço',  cost:50,  desc:'Bebida gelada na refeição'},
   {id:'scroll',    emoji:'📱', name:'20min de Scroll no Insta', cost:80, desc:'20 minutos rolando o Instagram'},
@@ -3327,6 +3322,7 @@ function editCustomTemplate(i){
   catSel.value = t.cat;
   document.getElementById('edit-m-diff').value = t.diff;
   document.getElementById('edit-m-time').value = t.time || '';
+  const df=document.getElementById('edit-m-dur'); if(df) df.value = (t.durMin!=null?t.durMin:'');
   document.getElementById('edit-m-rec').value = t.recur || '';
   const pf=document.getElementById('edit-m-pen'); if(pf) pf.value = (t.penXp!=null?t.penXp:'');
   const dr=document.getElementById('edit-m-date-row'); if(dr) dr.style.display='none';   // pré pronta não usa data de calendário
@@ -3344,6 +3340,8 @@ function saveMissionEdit(){
     t.cat  = document.getElementById('edit-m-cat').value;
     t.diff = document.getElementById('edit-m-diff').value;
     t.time = document.getElementById('edit-m-time').value || '';
+    const durRaw0 = parseInt((document.getElementById('edit-m-dur')||{}).value);
+    t.durMin = (!isNaN(durRaw0) && durRaw0>0) ? durRaw0 : null;
     t.recur = document.getElementById('edit-m-rec').value;
     const penRaw0 = parseInt((document.getElementById('edit-m-pen')||{}).value);
     t.penXp = (!isNaN(penRaw0) && penRaw0>0) ? penRaw0 : null;
@@ -5554,10 +5552,12 @@ function saveCurrentAsTemplate(){
   const time = (document.getElementById('mission-time')||{}).value || '';
   const xpRaw = parseInt((document.getElementById('mission-xp')||{}).value);
   const lcRaw = parseInt((document.getElementById('mission-lc')||{}).value);
+  const durRaw = parseInt((document.getElementById('mission-dur')||{}).value);
   if(!Array.isArray(G.customTemplates)) G.customTemplates = [];
   if(G.customTemplates.some(t=>t.name===name)){ showToast('Você já tem uma missão pronta com esse nome!','dmg'); return; }
   const penRaw = parseInt((document.getElementById('mission-pen')||{}).value);
   G.customTemplates.unshift({name, cat, icon:missionIconSel||'', diff, recur, time,
+    durMin:(!isNaN(durRaw)&&durRaw>0)?durRaw:null,
     aiXp:(!isNaN(xpRaw)&&xpRaw>0)?xpRaw:null, aiValue:(!isNaN(lcRaw)&&lcRaw>0)?lcRaw:null, penXp:(!isNaN(penRaw)&&penRaw>0)?penRaw:null});
   save(); renderPresets();
   // garante que a seção fique visível
@@ -5567,7 +5567,7 @@ function saveCurrentAsTemplate(){
 function addCustomPreset(i){
   const t = (G.customTemplates||[])[i]; if(!t) return;
   if(G.missions.some(m=>m.name===t.name)){ showToast('Essa missão já está na lista!','dmg'); return; }
-  G.missions.unshift({name:t.name, cat:t.cat, icon:t.icon||'', diff:t.diff, time:t.time||'', date:'', recur:t.recur||'', recurring:!!t.recur, done:false, id:Date.now(), stats:{done:0,failed:0}, createdAt:Date.now(), aiValue:t.aiValue||null, aiXp:t.aiXp||null, penXp:t.penXp||null});
+  G.missions.unshift({name:t.name, cat:t.cat, icon:t.icon||'', diff:t.diff, time:t.time||'', date:'', recur:t.recur||'', recurring:!!t.recur, done:false, id:Date.now(), stats:{done:0,failed:0}, createdAt:Date.now(), durMin:t.durMin||null, aiValue:t.aiValue||null, aiXp:t.aiXp||null, penXp:t.penXp||null});
   renderMissions(); save();
   showToast('✅ '+t.name+' adicionada!','info');
 }
@@ -5596,6 +5596,7 @@ function renderPresets(){
         <span class="preset-cat">${t.icon||t.cat}</span>
         <span class="preset-name" onclick="addCustomPreset(${i})" style="cursor:pointer">${t.name}</span>
         <span class="preset-tag diff-${t.diff}">${d.label}</span>
+        ${t.durMin?`<span class="preset-rec">⏱ ${fmtHM(t.durMin)}</span>`:''}
         <span class="preset-rec">${recurLabel(t.recur, t)||'única'}</span>
         <span class="preset-add" onclick="addCustomPreset(${i})" style="cursor:pointer">+</span>
         <span class="preset-edit" title="Editar pré pronta" onclick="editCustomTemplate(${i})">✎</span>
@@ -5950,18 +5951,22 @@ function healPlayer(amount) {
 }
 
 // ============================================================
-// 💳 CHEQUE ESPECIAL — o saldo pode ficar negativo até -200 LC.
-// Enquanto estiver negativo, cobra uma taxa de 100 LC no 1º acesso de cada dia
-// (nunca empurra abaixo de -200 — o piso é absoluto).
+// 💳 CHEQUE ESPECIAL — o saldo pode ficar negativo até -400 LC.
+// Enquanto estiver negativo, cobra uma taxa de 100 LC por dia — mas só a
+// partir do 1º dia INTEIRO em que o saldo já amanheceu negativo (o dia em
+// que você entrou no negativo é de graça; a taxa só entra no dia seguinte).
+// (nunca empurra abaixo de -400 — o piso é absoluto).
 // ============================================================
-const OVERDRAFT_LIMIT = 200;   // piso do saldo: -200 LC
-const OVERDRAFT_FEE = 100;     // taxa diária enquanto negativo
+const OVERDRAFT_LIMIT = 400;   // piso do saldo: -400 LC
+const OVERDRAFT_FEE = 100;     // taxa diária enquanto negativo (após o dia de graça)
 function canSpend(cost){ return (G.coins - Math.max(0, cost)) >= -OVERDRAFT_LIMIT; }
 function applyOverdraftFee(){
-  if((G.coins||0) >= 0) return;                    // só cobra enquanto estiver negativo
   const today = todayStr();
+  if((G.coins||0) >= 0){ G.overdraftSinceDate = ''; return; }   // positivo: reseta o dia de graça
+  if(!G.overdraftSinceDate){ G.overdraftSinceDate = today; try{ save(); }catch(e){} return; }   // 1º dia negativo: ainda de graça, não cobra
+  if(G.overdraftSinceDate === today) return;       // ainda no mesmo dia em que ficou negativo
   if(G.overdraftFeeDate === today) return;         // 1x por dia
-  const room = G.coins + OVERDRAFT_LIMIT;          // quanto ainda cabe antes do piso (-200)
+  const room = G.coins + OVERDRAFT_LIMIT;          // quanto ainda cabe antes do piso (-400)
   const fee = Math.min(OVERDRAFT_FEE, Math.max(0, room));
   G.overdraftFeeDate = today;
   if(fee > 0){
@@ -6637,6 +6642,7 @@ function listenRivals() {
   listenDuels();
   listenNudges();
   listenGift();
+  listenDayFix();
   listenVillageGift();
   listenReact();
   listenCatalog();
@@ -6901,6 +6907,7 @@ function syncOnline() {
     profileColor: G.profile?.armor || '#888',
     lastPurchases: (G.lastPurchases || []).slice(0, 15),
     lastPunishments: (G.lastPunishments || []).slice(0, 15),
+    shopBuyCounts: G.shopBuyCounts || {},
     // feed: últimas missões concluídas (p/ a timeline do grupo)
     feed: (G.history||[]).filter(h=>h.type==='done').slice(0,10).map(h=>({n:h.name, c:h.cat, ic:h.icon||'', t:h.t, lc:h.lc||0, xp:h.xp||0})),
     atoaDate: G.atoaDate || '',   // 😴 Broxa Day — pra os manos não marcarem como atrasado
@@ -7068,7 +7075,7 @@ function checkRivalOverdue(){
       if(!rivalMissionLate(m)) return;
       const key=n+'|'+m.n+'|'+today;
       if(_lateSeen[key]) return; _lateSeen[key]=1;
-      gameNotify('⚠️ '+n+' atrasou uma missão!', `${m.c||''} ${m.n} (era ${m.t}) — cobra ele! Se não cumprir, todos perdem. 😱`, {tag:'late-'+n, renotify:true, call:true, caller:'⚠️ '+n+' ATRASOU', avatar:MENTOR_IMG_ANGRY});
+      gameNotify('⚠️ '+n+' atrasou uma missão!', `${m.c||''} ${m.n} (era ${m.t}) — cobra ele! Se não cumprir, todos perdem. 😱`, {tag:'late-'+n, renotify:true});
     });
   });
 }
@@ -7616,6 +7623,28 @@ function sendGift(name, xp, reason){
     .catch(()=>showToast('Falha ao enviar XP','dmg'));
 }
 
+// ===== 🛠️ CORREÇÃO REMOTA DO "DIA X" (ADM) =====
+// Ajusta G.startTs pra que computeDay() bata com o dia informado pelo mestre.
+let dayFixListener = null;
+function listenDayFix(){
+  if(!db) return; const myName=G.profile?.name||''; if(!ONLINE_PLAYERS.includes(myName)) return;
+  if(dayFixListener) dayFixListener.off();
+  dayFixListener = db.ref('forge_dayfix/'+myName);
+  dayFixListener.on('value', snap=>{ const v=snap.val(); if(v) applyDayFix(v); });
+}
+function applyDayFix(v){
+  if(!v || !v.at || !v.day) return;
+  if((G.dayFixSeen||0) >= v.at) return;
+  G.dayFixSeen = v.at;
+  const day = Math.max(1, Math.round(v.day));
+  const midnight = new Date(); midnight.setHours(0,0,0,0);
+  G.startTs = midnight.getTime() - (day-1)*86400000;
+  G.day = computeDay();
+  showToast(`🛠️ O mestre corrigiu seu contador: Dia ${G.day}`, 'info');
+  if(db) db.ref('forge_dayfix/'+(G.profile?.name||'')).remove().catch(()=>{});
+  updateUI(); save();
+}
+
 // ===== 🎁 PRESENTE PRA VILA DO MANO (visita → ajuda a vila dele a crescer) =====
 const VILLAGE_GIFT_COST = 60;   // LulaCoins
 const VILLAGE_GIFT_BUILT = 4;   // quanto soma em G.world.built do destinatário
@@ -8084,76 +8113,6 @@ function requestNotifPerm() {
   }
 }
 
-// ☎️ ===== TELA DE LIGAÇÃO EM TELA CHEIA (chamada recebida — app aberto, Android) =====
-// Cobre TODA a tela do jogo, toca um toque de telefone e VIBRA como uma ligação.
-// (Vibração = Android. iOS não vibra via web, mas o alvo aqui é Android.)
-let _callCtx=null, _callRingInt=null, _callVibTimer=null, _callOnAccept=null;
-// destrava o áudio no 1º toque do usuário (Android/Chrome exige gesto pra tocar depois)
-function _callUnlockAudio(){
-  try{
-    const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
-    if(!_callCtx) _callCtx=new AC();
-    if(_callCtx.state==='suspended') _callCtx.resume();
-  }catch(e){}
-}
-document.addEventListener('pointerdown', _callUnlockAudio, {once:false});
-function _callStartRing(){
-  _callUnlockAudio();
-  const ctx=_callCtx; if(!ctx) return;
-  const ring=()=>{
-    if(!ctx || ctx.state!=='running') return;
-    const t0=ctx.currentTime;
-    [[0,480],[0.42,620]].forEach(([off,freq])=>{
-      const o=ctx.createOscillator(), g=ctx.createGain();
-      o.type='sine'; o.frequency.value=freq;
-      g.gain.setValueAtTime(0, t0+off);
-      g.gain.linearRampToValueAtTime(0.30, t0+off+0.05);
-      g.gain.setValueAtTime(0.30, t0+off+0.30);
-      g.gain.linearRampToValueAtTime(0, t0+off+0.40);
-      o.connect(g).connect(ctx.destination); o.start(t0+off); o.stop(t0+off+0.42);
-    });
-  };
-  ring(); _callRingInt=setInterval(ring, 2000);
-}
-function _callStopRing(){ if(_callRingInt){ clearInterval(_callRingInt); _callRingInt=null; } }
-function _callStartVibe(){
-  if(!navigator.vibrate) return;   // Android vibra; iOS ignora
-  const buzz=()=>{ try{ navigator.vibrate([600,350,600,350,600]); }catch(e){} };
-  buzz(); _callVibTimer=setInterval(buzz, 2600);
-}
-function _callStopVibe(){ if(_callVibTimer){ clearInterval(_callVibTimer); _callVibTimer=null; } try{ navigator.vibrate && navigator.vibrate(0); }catch(e){} }
-
-function showIncomingCall(opts){
-  opts=opts||{};
-  let el=document.getElementById('call-overlay');
-  if(!el){ el=document.createElement('div'); el.id='call-overlay'; document.body.appendChild(el); }
-  const caller=opts.caller||'BROXA', avatar=opts.avatar||MENTOR_IMG_ANGRY, body=opts.body||'';
-  el.innerHTML=`
-    <div class="call-top">
-      <div class="call-sub">chamada recebida…</div>
-      <div class="call-avatar-wrap"><img class="call-avatar" src="${avatar}" alt=""></div>
-      <div class="call-name">${caller}</div>
-      ${body?`<div class="call-body">${body}</div>`:''}
-    </div>
-    <div class="call-actions">
-      <div class="call-action-col"><button class="call-btn call-decline" id="call-decline">✕</button><div class="call-btn-label">Recusar</div></div>
-      <div class="call-action-col"><button class="call-btn call-accept" id="call-accept">✓</button><div class="call-btn-label">Atender</div></div>
-    </div>`;
-  el.classList.add('show');
-  _callOnAccept=opts.onAccept||null;
-  _callStartRing(); _callStartVibe();
-  document.getElementById('call-decline').onclick=()=>dismissCall(false);
-  document.getElementById('call-accept').onclick=()=>dismissCall(true);
-  clearTimeout(el._auto); el._auto=setTimeout(()=>dismissCall(false), 45000);  // desiste após 45s
-}
-function dismissCall(accepted){
-  const el=document.getElementById('call-overlay'); if(!el) return;
-  el.classList.remove('show'); clearTimeout(el._auto);
-  _callStopRing(); _callStopVibe();
-  const cb=_callOnAccept; _callOnAccept=null;
-  if(accepted && typeof cb==='function'){ try{ cb(); }catch(e){} }
-}
-
 // 🔔 ===== PUSH (avisos com o app FECHADO) — inscrição no cliente + guarda no Firebase =====
 // A chave pública VAPID identifica o remetente; a PRIVADA fica só no Worker da Cloudflare.
 const VAPID_PUBLIC = 'BMYoy5zKUXZA_18LJNky0ikv8YN47xiQhqWXoRT2AnuIJG7a6ufUkaXxMNfsiaE8IJQCLI3canhRl53vtZMmpdA';
@@ -8185,34 +8144,16 @@ async function renderPushBtn(){
   const btn=document.getElementById('push-toggle-btn'), hint=document.getElementById('push-hint'); if(!btn) return;
   if(!pushSupported()){ btn.innerHTML='🔔 AVISOS<br>(sem suporte)'; btn.disabled=true; if(hint) hint.textContent='Este navegador não suporta push. No Android use o Chrome (e instale o app em 📲 Instalar App).'; return; }
   const sub=await _getPushSub();
-  if(sub){ btn.innerHTML='🔕 DESATIVAR<br>AVISOS'; if(hint) hint.innerHTML='✅ Avisos <b>ativos</b>. Chega aviso com o app fechado (banner do Android); ao tocar, abre na tela de ligação.'; }
+  if(sub){ btn.innerHTML='🔕 DESATIVAR<br>AVISOS'; if(hint) hint.innerHTML='✅ Avisos <b>ativos</b>. Chega aviso com o app fechado (banner do Android).'; }
   else { btn.innerHTML='🔔 ATIVAR AVISOS<br>(APP FECHADO)'; if(hint) hint.textContent='Ative pra receber avisos importantes mesmo com o jogo fechado.'; }
 }
-// 📞 testar a tela de ligação na hora
-function testCall(){
-  if(typeof closeSystem==='function'){ try{ closeSystem(); }catch(e){} }
-  showIncomingCall({ caller:'📞 TESTE DE LIGAÇÃO', body:'É assim que uma chamada urgente aparece — tela cheia, tocando e vibrando. Toque em Atender ou Recusar.', onAccept:()=>showToast('✅ Ligação atendida!','heal') });
-}
-// 🔔 clique no aviso push (app estava fechado) → o SW manda 'call' → abre a tela de ligação
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.addEventListener('message', (ev)=>{
-    if(ev.data && ev.data.type==='call'){ try{ showIncomingCall({ caller:ev.data.caller||'⚔ BROXA', body:ev.data.body||'Você tem um aviso urgente!' }); }catch(e){} }
-  });
-}
-// abriu pelo aviso (com ?fol_call=1) → mostra a ligação assim que o jogo carregar
-try{ if(location.search.indexOf('fol_call=1')>=0){ setTimeout(()=>{ try{ showIncomingCall({ caller:'⚔ BROXA', body:'Você tem um aviso urgente — bora!' }); }catch(e){} }, 1800); } }catch(e){}
 
 // notificação que FUNCIONA NO CELULAR: usa o service worker (PWA);
 // no PC cai pro Notification normal. Use sempre esta no lugar de `new Notification`.
 function gameNotify(title, body, extra){
   extra = extra || {};
-  // ☎️ se for URGENTE (call:true) e o app estiver ABERTO, escala pra ligação em tela cheia
-  if(extra.call && document.visibilityState==='visible'){
-    try{ showIncomingCall({ caller: extra.caller||title, avatar: extra.avatar, body: body||'', onAccept: extra.onAccept }); }catch(e){}
-  }
   if(!('Notification' in window) || Notification.permission !== 'granted') return;
-  const { call, caller, avatar, onAccept, ...notifOpts } = extra;   // tira campos internos da ligação
-  const opts = Object.assign({ body:body||'', icon:'icon-192.png', badge:'icon-192.png' }, notifOpts);
+  const opts = Object.assign({ body:body||'', icon:'icon-192.png', badge:'icon-192.png' }, extra);
   try{
     if(navigator.serviceWorker && navigator.serviceWorker.ready){
       navigator.serviceWorker.ready
@@ -8248,7 +8189,7 @@ function checkMissionReminders(){
     const parts = m.time.split(':'); const target = (+parts[0])*60 + (+parts[1]);
     if(hm >= target && hm <= target+1 && m._notifDate !== today){
       m._notifDate = today;
-      gameNotify('⏰ Hora da missão!', `${m.cat} ${m.name} — bora fazer agora!`, {tag:'mission-time', call:true, caller:'⏰ HORA DA MISSÃO', avatar:MENTOR_IMG_ANGRY});
+      gameNotify('⏰ Hora da missão!', `${m.cat} ${m.name} — bora fazer agora!`, {tag:'mission-time'});
     }
   });
 }
@@ -8286,7 +8227,7 @@ function checkNextMissionReminder(){
 function switchTab(name, btn) {
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  const tabs = ['missions','dungeons','world','shop','rewards','ranking','hall','history','inventory','stats','screen','future','time'];
+  const tabs = ['missions','dungeons','world','shop','rewards','ranking','dayrank','hall','history','inventory','stats','screen','future','time'];
   tabs.forEach(t=>{
     const el = document.getElementById('tab-'+t);
     if(el){
@@ -8300,6 +8241,7 @@ function switchTab(name, btn) {
   else if(name==='shop') renderShop();
   else if(name==='rewards') renderRewards();
   else if(name==='ranking'){ renderHighlights(); renderTeamMissions(); renderFeed(); renderRanking(); renderRaid(); renderSeason(); renderArena(); }
+  else if(name==='dayrank') renderDayRank();
   else if(name==='hall') renderHall();
   else if(name==='history') renderHistory();
   else if(name==='inventory') renderInventory();
@@ -8453,17 +8395,17 @@ function save(){
       theme:G.theme, themesUnlocked:G.themesUnlocked,
       bestStreak:G.bestStreak, prestige:G.prestige, prestigePoints:G.prestigePoints,
       seasonId:G.seasonId, seasonTitles:G.seasonTitles, seasonMissions:G.seasonMissions,
-      duelSeen:G.duelSeen, nudgeSeen:G.nudgeSeen, giftSeen:G.giftSeen, reactSeen:G.reactSeen,
+      duelSeen:G.duelSeen, nudgeSeen:G.nudgeSeen, giftSeen:G.giftSeen, dayFixSeen:G.dayFixSeen||0, reactSeen:G.reactSeen,
       weekMissions:G.weekMissions, weekMark:G.weekMark,
       xpEarned:G.xpEarned, dayFailSeen:G.dayFailSeen,
-      graceDate:G.graceDate, customTemplates:G.customTemplates, allowDeleteMissions:G.allowDeleteMissions,
+      graceDate:G.graceDate, customTemplates:G.customTemplates, shopBuyCounts:G.shopBuyCounts||{}, allowDeleteMissions:G.allowDeleteMissions,
       manoBank:G.manoBank, debts:G.debts,
       migratedDefaults:G.migratedDefaults, nextReminderLast:G.nextReminderLast,
       wokeUpDate:G.wokeUpDate, wakeNerfDate:G.wakeNerfDate, wakeRemindDate:G.wakeRemindDate, wakeStartDate:G.wakeStartDate,
       xpCurveV2:G.xpCurveV2, xpCurveV3:G.xpCurveV3,
       doubleXpUntil:G.doubleXpUntil, xpDay:G.xpDay, xpRecord:G.xpRecord, timeLog:G.timeLog, timeLogName:G.timeLogName||{}, timeLogNameMigrated:G.timeLogNameMigrated||0, sleepGoalH:G.sleepGoalH,
       dailyRankBonusDate:G.dailyRankBonusDate||'',
-      overdraftFeeDate:G.overdraftFeeDate||'',
+      overdraftFeeDate:G.overdraftFeeDate||'', overdraftSinceDate:G.overdraftSinceDate||'',
       catRemap:G.catRemap||{},
       world:G.world
     };
@@ -8520,6 +8462,7 @@ function load(){
     G.manoBank = G.manoBank || {};
     G.debts = Array.isArray(G.debts) ? G.debts : [];
     G.overdraftFeeDate = G.overdraftFeeDate || '';
+    G.overdraftSinceDate = G.overdraftSinceDate || '';
     G.bestStreak = G.bestStreak || 0;
     G.prestige = G.prestige || 0;
     G.prestigePoints = G.prestigePoints || 0;
@@ -8529,6 +8472,7 @@ function load(){
     G.duelSeen = G.duelSeen || 0;
     G.nudgeSeen = G.nudgeSeen || 0;
     G.giftSeen = G.giftSeen || 0;
+    G.dayFixSeen = G.dayFixSeen || 0;
     G.reactSeen = G.reactSeen || {};
     G.weekMissions = G.weekMissions || 0;
     G.weekMark = G.weekMark || '';
@@ -8545,6 +8489,7 @@ function load(){
     G.dayFailSeen = G.dayFailSeen || {};
     G.graceDate = G.graceDate || '';
     G.customTemplates = Array.isArray(G.customTemplates) ? G.customTemplates : [];
+    G.shopBuyCounts = (G.shopBuyCounts && typeof G.shopBuyCounts==='object') ? G.shopBuyCounts : {};
     if(!Array.isArray(G.dungeonProgress)) G.dungeonProgress = [0,0,0,0,0,0];
     equipSlots(); // normaliza equipamento (compat saves antigos: número → {weapon,armor,accessory})
     return true;
@@ -8995,6 +8940,61 @@ function renderRanking(){
   try{ renderWeakSpot('rank-weakspot'); }catch(e){}
 }
 
+// ===== 📈 RANK DO DIA: XP ganho hoje + rank de compras da loja =====
+function myXpToday(){
+  const t = todayStr();
+  return (G.history||[]).filter(h=>h.type==='done'&&todayStr(new Date(h.t))===t).reduce((s,h)=>s+(h.xp||0),0);
+}
+function renderDayRank(){
+  const myName = G.profile?.name || 'Você';
+  const today = todayStr();
+
+  // ---- XP GANHO HOJE ----
+  const rows = [{ name:myName, xp:myXpToday(), color:G.profile?.armor||'#888', me:true, online:true }]
+    .concat(ONLINE_PLAYERS.filter(n=>n!==myName).map(n=>{
+      const d = onlineData[n];
+      const xp = (d && d.dayDate===today) ? (d.xpToday||0) : 0;
+      return { name:n, xp, color:(d&&d.profileColor)||CHAR_PRESETS[n]?.armor||'#444', me:false, online:!!d };
+    }));
+  rows.sort((a,b)=> b.xp-a.xp);
+  const medals=['🥇','🥈','🥉'];
+  const xpEl = document.getElementById('dayxp-list');
+  if(xpEl){
+    xpEl.innerHTML = rows.map((p,i)=>`
+      <div class="rank-row ${p.me?'me':''}">
+        <span class="rank-pos">${medals[i]||('#'+(i+1))}</span>
+        <span class="rank-dot" style="background:${p.color}"></span>
+        <span class="rank-name">${p.me?'Você':p.name}${!p.online?' 💤':''}</span>
+        <span class="rank-stat">⭐ ${p.xp} XP</span>
+      </div>`).join('') || '<div style="color:var(--muted);font-size:13px">Sem dados ainda.</div>';
+  }
+
+  // ---- RANK DE COMPRAS DA LOJA ----
+  const shopEl = document.getElementById('shopbuys-list');
+  if(shopEl){
+    const shopRows = [{ name:myName, counts:G.shopBuyCounts||{}, color:G.profile?.armor||'#888', me:true }]
+      .concat(ONLINE_PLAYERS.filter(n=>n!==myName).map(n=>{
+        const d = onlineData[n];
+        return { name:n, counts:(d&&d.shopBuyCounts)||{}, color:(d&&d.profileColor)||CHAR_PRESETS[n]?.armor||'#444', me:false };
+      }));
+    const withTotal = shopRows.map(p=>{
+      const entries = Object.entries(p.counts).filter(([,n])=>n>0).sort((a,b)=>b[1]-a[1]);
+      const total = entries.reduce((s,[,n])=>s+n, 0);
+      return Object.assign({}, p, { entries, total });
+    }).filter(p=>p.total>0).sort((a,b)=>b.total-a.total);
+    shopEl.innerHTML = withTotal.map(p=>{
+      const itemsHtml = p.entries.map(([id,n])=>{
+        const r = REAL_REWARDS.find(x=>x.id===id);
+        return `<span class="shopbuy-chip">${n}x ${r?(r.emoji+' '+r.name):id}</span>`;
+      }).join('');
+      return `<div class="shopbuy-row ${p.me?'me':''}">
+        <div class="shopbuy-name"><span class="rank-dot" style="background:${p.color}"></span>${p.me?'Você':p.name} <span style="color:var(--muted);font-weight:normal;font-size:11px">(${p.total} compras)</span></div>
+        <div class="shopbuy-items">${itemsHtml}</div>
+      </div>`;
+    }).join('') || '<div style="color:var(--muted);font-size:13px">Sem compras registradas ainda.</div>';
+  }
+}
+
 // ===== RECOMPENSAS DA VIDA REAL =====
 function renderRewards(){
   const grid = document.getElementById('rewards-grid');
@@ -9109,6 +9109,8 @@ function finalizeReward(r, cost, label){
   G.lastPurchases.unshift({t:Date.now(), emoji:r.emoji, name:label, cost, type:'reward'});
   if(G.lastPurchases.length > 20) G.lastPurchases.pop();
   if(G.rewardsLog.length>200) G.rewardsLog.pop();
+  G.shopBuyCounts = G.shopBuyCounts || {};
+  G.shopBuyCounts[r.id] = (G.shopBuyCounts[r.id]||0) + 1;
   if(r.id==='atoa'){
     G.atoaDate = todayStr();
     showToast(`😴 Broxa Day ativado! Hoje: sem cobrança de XP (missão/acordar) e loja de graça.`,'heal');
@@ -9200,7 +9202,7 @@ function checkWakeNerf(){
   // lembrete (notificação) a partir das 7h, antes das 9h, 1x por dia
   if(h>=7 && h<WAKE_DEADLINE_H && G.wakeRemindDate!==today){
     G.wakeRemindDate = today;
-    gameNotify('☀️ Bom dia! Aperta o "Acordei"', `Antes das ${WAKE_DEADLINE_H}h, senão perde 100 XP!`, {tag:'wake', renotify:true, call:true, caller:'☀️ BOM DIA — ACORDEI', avatar:MENTOR_IMG_ANGRY});
+    gameNotify('☀️ Bom dia! Aperta o "Acordei"', `Antes das ${WAKE_DEADLINE_H}h, senão perde 100 XP!`, {tag:'wake', renotify:true});
     save();
   }
   if(h < WAKE_DEADLINE_H) return;                  // ainda não deu 9h → só lembra
@@ -9852,6 +9854,12 @@ function finishInit() {
 // ===== 🔔 NOVIDADES DO JOGO (changelog no sino) =====
 // Itens mais novos primeiro. id crescente — o maior é o mais recente.
 const GAME_NEWS = [
+  { id:16, v:'v117', date:'10/07', icon:'💳', title:'Cheque especial mais folgado', body:'Limite subiu de -200 pra -400 LC. E a taxa diária de 100 LC agora só começa a cobrar a partir do dia SEGUINTE em que você ficou negativo — o dia em que você entra no negativo é de graça.' },
+  { id:15, v:'v117', date:'10/07', icon:'🛠️', title:'ADM: corrigir o "Dia X" de outro jogador', body:'Painel do mestre ganhou um jeito de corrigir remotamente o contador "Dia X" de qualquer jogador (aplica no próximo acesso dele).' },
+  { id:14, v:'v116', date:'09/07', icon:'☎️', title:'Tela de ligação removida', body:'Tirado o aviso urgente em tela cheia (chamada tocando e vibrando) — os avisos com o app fechado continuam funcionando normalmente, só sem aquele susto.' },
+  { id:13, v:'v116', date:'09/07', icon:'🏆', title:'Nova aba: RANK DO DIA', body:'Aba própria com o rank de XP ganho HOJE (quem tá na frente agora) e o rank de compras da loja (o que cada um andou comprando). Tirado da aba RANK principal, que já tava gigante.' },
+  { id:12, v:'v116', date:'09/07', icon:'⏱️', title:'Duração nas missões pré-prontas', body:'Agora dá pra definir/editar a duração (minutos) de uma missão pré-pronta — ela já entra com o tempo certo quando você adicionar de novo.' },
+  { id:11, v:'v116', date:'09/07', icon:'🚿', title:'Banho quente mais barato', body:'O Banho na Água Quente caiu de 100 pra 80 LulaCoins.' },
   { id:10, v:'v110', date:'07/07', icon:'➕', title:'Missões complementares únicas', body:'Ao tocar no ➕ de uma missão, a auxiliar criada é ÚNICA (vale uma vez só), mesmo que a original seja recorrente. E o XP/LC é calculado certinho por minuto: você escolhe a duração e o valor sai proporcional (arredondado pra cima).' },
   { id:9, v:'v110', date:'07/07', icon:'☀️', title:'Acordei automático', body:'Abriu o app de manhã entre 6h e 9h? O "Acordei" é marcado sozinho — chega de perder 100 XP por esquecer de apertar o botão.' },
   { id:8, v:'v107', date:'05/07', icon:'☁️', title:'Progresso protegido na nuvem', body:'O jogo guarda backup na nuvem e restaura sozinho se você trocar de aparelho ou reinstalar o app. E nunca deixa um save menor apagar um maior — seu progresso fica seguro.' },
@@ -10058,7 +10066,7 @@ function init() {
       dungeonProgress:[0,0,0,0,0,0], dungeonsCleared:0, raidApplied:'',
       history:[], ledger:[], rewardsLog:[], startTs:0, lastResetDate:'',
       didToday:false, discordWebhook:'', currentZone:0,
-      perfectStreak:0, xpEarned:0, dayFailSeen:{}, graceDate:'', customTemplates:[], allDoneToday:false, skillsUnlocked:[], skillCooldowns:{},
+      perfectStreak:0, xpEarned:0, dayFailSeen:{}, graceDate:'', customTemplates:[], shopBuyCounts:{}, allDoneToday:false, skillsUnlocked:[], skillCooldowns:{},
       furyTurns:0, sacredShield:false, notifLastSent:0, lastPurchases:[], lastPunishments:[],
       dailyCh:null, todayCounters:null, dayLog:[], theme:'classic', themesUnlocked:['classic']
     });
@@ -10132,7 +10140,7 @@ init();
 </div>
 <script>
   // ===== versão do app (mude junto com o VERSION do sw.js) =====
-  window.APP_VERSION = '2026.07.05 • v108';
+  window.APP_VERSION = '2026.07.10 • v117';
 
   (function(){
     var btn = document.getElementById('pwa-install-btn');
@@ -10326,6 +10334,16 @@ init();
       try{ db.ref('forge_dayfail/'+d+'/'+name).remove(); }catch(e){}
     });
     try{ showToast(`🧹 "Furou o dia" de ${name} limpo (hoje/ontem)`,'heal'); }catch(e){}
+  };
+  window.admRemoteSetDay = function(){
+    const name = (document.getElementById('adm-target')||{}).value;
+    const v = parseInt((document.getElementById('adm-day')||{}).value,10);
+    if(!name) return;
+    if(isNaN(v) || v<=0){ try{ showToast('Dia inválido','dmg'); }catch(e){} return; }
+    if(typeof db==='undefined' || !db){ try{ showToast('Firebase não conectado','dmg'); }catch(e){} return; }
+    db.ref('forge_dayfix/'+name).set({ day:v, at:Date.now() })
+      .then(()=>{ try{ showToast(`🛠️ Dia ${v} enviado pra ${name} (aplica no próximo acesso dele)`,'heal'); }catch(e){} })
+      .catch(()=>{ try{ showToast('Falha ao enviar','dmg'); }catch(e){} });
   };
 
   // atalho de teclado p/ desktop: Ctrl+Shift+A

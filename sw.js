@@ -5,7 +5,7 @@
    - Mesma origem (GET): cache-first com atualização em segundo plano (stale-while-revalidate).
    - Firebase / fontes (cross-origin): passa direto pela rede (não cacheia dados ao vivo).
    Pra forçar atualização do app, suba o número da versão abaixo. */
-const VERSION = 'fol-v115';
+const VERSION = 'fol-v117';
 const SHELL = [
   './',
   './index.html',
@@ -70,7 +70,7 @@ self.addEventListener('fetch', (e) => {
 });
 
 // 🔔 PUSH — aviso com o app FECHADO. O Worker da Cloudflare envia um payload JSON:
-//    { title, body, caller, call:true, tag, url, vibrate:[...] }
+//    { title, body, tag, url }
 self.addEventListener('push', (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; }
@@ -82,25 +82,20 @@ self.addEventListener('push', (e) => {
     badge: './icon-192.png',
     tag: d.tag || 'broxa-push',
     renotify: true,
-    requireInteraction: true,                       // fica na tela até tocar (Android)
-    vibrate: d.vibrate || [600,300,600,300,600],    // vibra como chamada (Android)
-    data: { url: d.url || './?fol_call=1', caller: d.caller || title, body: d.body || '' }
+    data: { url: d.url || './' }
   };
   e.waitUntil(self.registration.showNotification(title, opts));
 });
 
-// tocar no aviso → abre/foca o app e pede pra abrir a TELA DE LIGAÇÃO
+// tocar no aviso → abre/foca o app
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
   const data = e.notification.data || {};
   e.waitUntil((async () => {
     const all = await clients.matchAll({ type:'window', includeUncontrolled:true });
     for (const c of all) {
-      if ('focus' in c) {
-        try { c.postMessage({ type:'call', caller:data.caller, body:data.body }); } catch(_){}
-        return c.focus();
-      }
+      if ('focus' in c) return c.focus();
     }
-    if (clients.openWindow) return clients.openWindow(data.url || './?fol_call=1');
+    if (clients.openWindow) return clients.openWindow(data.url || './');
   })());
 });
